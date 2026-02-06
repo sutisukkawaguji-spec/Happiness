@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Happy Meter | Executive Intelligence</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+
+    <style>
+        :root {
+            --bg-gradient: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
+            --glass-bg: rgba(255, 255, 255, 0.95);
+            --primary: #6c5ce7;
+            --accent: #fd79a8;
+        }
+        body { background-image: var(--bg-gradient); font-family: 'Kanit', sans-serif; min-height: 100vh; color: #444; padding-bottom: 100px; overflow-x: hidden; }
+        .glass-card { background: var(--glass-bg); backdrop-filter: blur(15px); border-radius: 24px; box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07); padding: 20px; margin-bottom: 20px; border: 1px solid rgba(255,255,255,0.6); }
+
+        /* Profile & Aura */
+        .profile-container { position: relative; display: inline-block; margin-bottom: 15px; }
+        .profile-img { width: 90px; height: 90px; border-radius: 50%; border: 3px solid #fff; position: relative; z-index: 2; object-fit: cover; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        .aura-glow { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 100px; height: 100px; border-radius: 50%; z-index: 1; filter: blur(15px); opacity: 0.7; transition: 0.5s; }
+        .aura-normal { background: #dfe6e9; }
+        .aura-active { background: #0984e3; box-shadow: 0 0 20px #0984e3; }
+
+        /* Energy Bars */
+        .power-bar-label { font-size: 0.75rem; font-weight: 600; color: #666; display: flex; justify-content: space-between; margin-bottom: 2px;}
+        .progress { height: 8px; border-radius: 5px; background: #e0e0e0; margin-bottom: 10px; }
+        .bar-happy { background: linear-gradient(90deg, #ffeaa7, #fdcb6e); }
+        .bar-virtue { background: linear-gradient(90deg, #81ecec, #00cec9); }
+
+        /* Inputs & Friend List */
+        .mood-container { display: flex; justify-content: space-around; background: #fff; padding: 10px; border-radius: 20px; }
+        .mood-btn { border: none; background: none; font-size: 2.2rem; opacity: 0.4; transition: 0.2s; filter: grayscale(1); }
+        .mood-btn.active { opacity: 1; transform: scale(1.2); filter: grayscale(0); }
+        .friend-list { max-height: 250px; overflow-y: auto; }
+        .friend-item { display: flex; align-items: center; padding: 8px; border-radius: 12px; background: rgba(255,255,255,0.5); margin-bottom: 6px; cursor: pointer; transition: 0.2s; border: 1px solid transparent; }
+        .friend-item.selected { background: #fff; border-color: var(--primary); box-shadow: 0 2px 8px rgba(108, 92, 231, 0.2); }
+        .friend-avatar { width: 40px; height: 40px; border-radius: 50%; margin-right: 10px; object-fit: cover;}
+
+        /* Radar Chart */
+        .radar-wrapper { position: relative; height: 320px; width: 320px; margin: 20px auto; }
+        .radar-icon { position: absolute; width: 32px; height: 32px; background: #fff; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 1rem; color: #555; box-shadow: 0 2px 5px rgba(0,0,0,0.1); z-index: 10; }
+        .ri-top { top: 0; left: 50%; transform: translateX(-50%); color: #0984e3; } 
+        .ri-tr  { top: 25%; right: 0; color: #6c5ce7; }
+        .ri-br  { bottom: 15%; right: 5%; color: #fdcb6e; } 
+        .ri-bl  { bottom: 15%; left: 5%; color: #ff7675; } 
+        .ri-tl  { top: 25%; left: 0; color: #00b894; } 
+
+        /* Manager Dashboard */
+        .stat-card { background: #fff; padding: 15px; border-radius: 15px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .stat-num { font-size: 1.5rem; font-weight: bold; }
+        .staff-row { cursor: pointer; transition: 0.2s; border-left: 5px solid transparent; }
+        .staff-row:hover { background: #f8f9fa; transform: translateX(5px); }
+        .status-critical { border-left-color: #ff7675; background: rgba(255, 118, 117, 0.05); }
+        .status-warning { border-left-color: #ffeaa7; background: rgba(255, 234, 167, 0.1); }
+        .status-normal { border-left-color: #55efc4; }
+        .helper-avatar { width: 30px; height: 30px; border-radius: 50%; border: 2px solid #fff; margin-right: -10px; }
+
+        /* Others */
+        .img-preview-container { width: 100%; height: 200px; background-color: #f0f2f5; border-radius: 12px; margin-top: 10px; display: none; background-size: cover; background-position: center; border: 2px dashed #ccc; }
+        .badge-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        .badge-item { background: #fff; border-radius: 15px; padding: 15px 5px; text-align: center; cursor: pointer; transition: 0.3s; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .badge-item:hover { transform: translateY(-3px); }
+        .badge-icon { font-size: 2rem; margin-bottom: 5px; }
+        .info-btn { color: #aaa; cursor: pointer; margin-left: 5px; transition: 0.2s; }
+        .info-btn:hover { color: var(--primary); }
+        
+        .bottom-nav { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); width: 95%; max-width: 450px; background: #fff; border-radius: 50px; padding: 10px; display: flex; justify-content: space-between; box-shadow: 0 10px 30px rgba(0,0,0,0.1); z-index: 999; }
+        .nav-item { text-align: center; flex: 1; color: #ccc; cursor: pointer; font-size: 1.2rem; transition: 0.3s; padding: 5px; border-radius: 20px; }
+        .nav-item.active { color: var(--primary); background: rgba(108, 92, 231, 0.1); }
+        .nav-item span { display: block; font-size: 0.6rem; margin-top: 2px; }
+        
+        #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.9); z-index: 2000; display: flex; justify-content: center; align-items: center; flex-direction: column; }
+        .page-section { display: none; animation: fadeIn 0.3s; }
+        .page-section.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+
+<div id="loading">
+    <div class="spinner-border text-primary" role="status"></div>
+    <p class="mt-3 text-muted">กำลังเชื่อมต่อระบบ...</p>
+</div>
+
+<div class="container mt-3">
+
+    <div id="header-user" class="glass-card text-center pb-2">
+        <div class="row align-items-center">
+            <div class="col-4">
+                <div class="profile-container">
+                    <div id="userAura" class="aura-glow aura-active"></div>
+                    <img id="userImg" src="https://via.placeholder.com/90" class="profile-img">
+                </div>
+            </div>
+            <div class="col-8 text-start">
+                <h4 id="userName" class="fw-bold mb-1">...</h4>
+                <small id="userRole" class="text-muted d-block mb-2">...</small>
+                <div class="power-bar-label"><span>ความสุข</span><i class="fas fa-bolt text-warning"></i></div>
+                <div class="progress"><div class="progress-bar bar-happy" style="width: 80%"></div></div>
+                <div class="power-bar-label"><span>ความดี</span><i class="fas fa-star text-info"></i></div>
+                <div class="progress"><div class="progress-bar bar-virtue" style="width: 50%"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="page-record" class="page-section active">
+        <div class="glass-card">
+            <label class="form-label fw-bold">ความรู้สึกวันนี้</label>
+            <div class="mood-container mb-3">
+                <button class="mood-btn" onclick="setMood(1, this)">😞</button>
+                <button class="mood-btn" onclick="setMood(2, this)">😐</button>
+                <button class="mood-btn active" onclick="setMood(3, this)">😁</button>
+            </div>
+            
+            <label class="form-label fw-bold d-flex align-items-center">หมวดความดี <i class="fas fa-circle-question info-btn fa-lg" onclick="showVirtueInfo()"></i></label>
+            <select class="form-select mb-3" id="virtueSelect" style="border-radius: 12px;">
+                <option value="volunteer">🤝 จิตอาสา (Volunteer)</option>
+                <option value="sufficiency">🌱 พอเพียง (Sufficiency)</option>
+                <option value="discipline">📏 วินัย (Discipline)</option>
+                <option value="integrity">💎 สุจริต (Integrity)</option>
+                <option value="gratitude">🙏 กตัญญู (Gratitude)</option>
+            </select>
+
+            <div class="mb-3">
+                <textarea class="form-control mb-2" rows="2" placeholder="วันนี้ทำอะไรมา..." id="noteInput" style="border-radius: 12px;"></textarea>
+                <div class="d-flex gap-2 overflow-auto pb-2">
+                    <span class="badge bg-white text-dark border p-2" onclick="addEmoji('❤️')">❤️</span>
+                    <span class="badge bg-white text-dark border p-2" onclick="addEmoji('✌️')">✌️</span>
+                    <span class="badge bg-white text-dark border p-2" onclick="addEmoji('🔥')">🔥</span>
+                    <span class="badge bg-white text-dark border p-2" onclick="addEmoji('🙏')">🙏</span>
+                </div>
+                <button class="btn btn-outline-secondary w-100 rounded-3 mt-2" onclick="document.getElementById('fileCam').click()"><i class="fas fa-camera me-2"></i>ถ่ายภาพ/เลือกรูป</button>
+                <input type="file" id="fileCam" hidden accept="image/*" onchange="previewImage(this)">
+                <div id="previewArea" class="img-preview-container"></div>
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <label class="form-label fw-bold mb-0">ทำร่วมกับใคร?</label>
+                <button class="btn btn-sm btn-outline-primary rounded-pill px-3" id="btnSelectAll" onclick="selectAllFriends()"><i class="fas fa-check-double me-1"></i>All</button>
+            </div>
+            <div class="friend-list" id="friendListContainer"></div>
+            <button class="btn btn-primary w-100 py-3 rounded-4 shadow mt-3 fw-bold" onclick="submitData()">บันทึกความดี</button>
+        </div>
+    </div>
+
+    <div id="page-stats" class="page-section">
+        <div class="glass-card text-center">
+            <h5 class="fw-bold">สมดุลพลังของคุณ</h5>
+            <div class="radar-wrapper">
+                <div class="radar-icon ri-top"><i class="fas fa-ruler-combined"></i></div>
+                <div class="radar-icon ri-tr"><i class="fas fa-gem"></i></div>
+                <div class="radar-icon ri-br"><i class="fas fa-hands-praying"></i></div>
+                <div class="radar-icon ri-bl"><i class="fas fa-hand-holding-heart"></i></div>
+                <div class="radar-icon ri-tl"><i class="fas fa-leaf"></i></div>
+                <canvas id="userRadarChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div id="page-badges" class="page-section">
+        <div class="glass-card">
+            <h5 class="fw-bold mb-3"><i class="fas fa-medal text-warning me-2"></i>คลังเหรียญสะสม</h5>
+            <div class="badge-grid">
+                <div class="badge-item" onclick="viewBadge('ผู้ให้ใจบุญ', 'ช่วยเพื่อนครบ 10 ครั้ง', '🤝')"><div class="badge-icon">🤝</div><small>ผู้ให้ใจบุญ</small></div>
+                <div class="badge-item" onclick="viewBadge('เจ้าแห่งเวลา', 'ไม่เคยสายเลย 1 เดือน', '⏰')"><div class="badge-icon">⏰</div><small>เจ้าแห่งเวลา</small></div>
+                <div class="badge-item badge-mystery" onclick="openMysteryBox()"><div class="badge-icon">🎁</div><small class="text-danger">เปิดกล่อง!</small></div>
+                <div class="badge-item badge-locked"><div class="badge-icon">🔒</div><small>???</small></div>
+                <div class="badge-item badge-locked"><div class="badge-icon">🔒</div><small>???</small></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="page-manager" class="page-section">
+        <div class="glass-card">
+            <h5 class="fw-bold mb-3"><i class="fas fa-chart-line text-primary me-2"></i>Executive Dashboard</h5>
+            <div class="row g-2 mb-3">
+                <div class="col-6"><div class="stat-card"><div class="stat-num text-warning">88%</div><div class="stat-label">Happy Index</div></div></div>
+                <div class="col-6"><div class="stat-card"><div class="stat-num text-info">--</div><div class="stat-label">Issues</div></div></div>
+            </div>
+            <div class="mb-4 position-relative">
+                <small class="fw-bold text-muted">แนวโน้มความสุข (4 สัปดาห์ล่าสุด)</small>
+                <canvas id="managerLineChart" height="150"></canvas>
+                <div id="trendAlert" class="badge bg-danger position-absolute top-0 end-0 mt-4" style="display:none;"><i class="fas fa-arrow-down"></i> ขาลง</div>
+            </div>
+            <h6 class="fw-bold border-bottom pb-2 d-flex justify-content-between">สถานะบุคลากร <small class="text-muted" style="font-size:0.6rem">🔴วิกฤต 🟠ระวัง 🟢ปกติ</small></h6>
+            <div id="staffListArea"></div>
+        </div>
+    </div>
+
+</div>
+
+<div class="bottom-nav">
+    <div class="nav-item active" onclick="switchTab('record', this)"><i class="fas fa-plus-circle"></i><span>บันทึก</span></div>
+    <div class="nav-item" onclick="switchTab('stats', this)"><i class="fas fa-chart-pie"></i><span>สถิติ</span></div>
+    <div class="nav-item" onclick="switchTab('badges', this)"><i class="fas fa-medal"></i><span>เหรียญ</span></div>
+    <div class="nav-item" onclick="switchTab('manager', this)"><i class="fas fa-user-tie"></i><span>ผู้บริหาร</span></div>
+</div>
+
+<script>
+    // --- ⚠️ CONFIGURATION: เปลี่ยนข้อมูลตรงนี้ ⚠️ ---
+    const LIFF_ID = '2009069961-FRS5kHE4'; // ใส่ LIFF ID ของคุณ
+    const GAS_URL = 'https://script.google.com/macros/s/AKfycbxRvEyRoQaxOUWR_6pTslNmCrM7IiZTRYzDDUtPtDmrhGehUq6zQpfm9MKp_CYzVmrX/exec'; // ใส่ URL จาก Apps Script (ที่ลงท้าย /exec)
+
+    // Global Vars
+    let currentUser = null;
+    let selectedMood = 3;
+    let selectedImageBase64 = null;
+    let chartData = []; // Will be fetched
+
+    // --- MAIN FUNCTION ---
+    async function main() {
+        // 1. ลองเริ่มระบบ LIFF
+        try {
+            await liff.init({ liffId: LIFF_ID });
+            
+            // ถ้าไม่ได้ Login ให้สั่ง Login
+            if (!liff.isLoggedIn()) { 
+                liff.login(); 
+                return; 
+            }
+            
+            // ถ้า Login สำเร็จ ดึงข้อมูลจริง
+            const profile = await liff.getProfile();
+            await checkUser(profile.userId, profile);
+            
+        } catch (err) {
+            // 🚨 จุดสำคัญ: ถ้า LIFF พัง หรือเปิดใน PC แล้วมีปัญหา ให้เข้าโหมดจำลองทันที
+            console.error('LIFF Error:', err);
+            activateDemoMode(); // <-- เรียกใช้ฟังก์ชันแก้ขัด
+        }
+        
+        // โหลดข้อมูลเพื่อนและ Dashboard เสมอ
+        fetchFriendsList();
+        fetchManagerData();
+    }
+
+    // --- เพิ่มฟังก์ชันนี้ลงไป: โหมดจำลองสำหรับดูหน้าตาบน PC ---
+    function activateDemoMode() {
+        console.warn('Entering Demo Mode');
+        document.getElementById('loading').style.display = 'none'; // ปิดหน้า Loading
+        
+        // สมมติข้อมูลขึ้นมาโชว์เลย ไม่ต้องรอ LINE
+        currentUser = { 
+            name: "Test User (PC)", 
+            role: "Admin", 
+            score: 999, 
+            img: "https://via.placeholder.com/90",
+            userId: "U_TEST_1234"
+        };
+        
+        renderProfile();
+        // บังคับเปิดหน้า Record
+        switchTab('record', document.querySelector('.nav-item.active'));
+        
+        // แจ้งเตือนมุมจอว่าใช้โหมดทดสอบ
+        Swal.fire({
+            icon: 'info',
+            title: 'Test Mode',
+            text: 'ระบบกำลังทำงานในโหมดจำลอง (ไม่ได้เชื่อมต่อ LINE จริง)',
+            toast: true, position: 'top-end', showConfirmButton: false, timer: 3000
+        });
+    }
+
+    // เรียกใช้งาน
+    main();
+
+    // --- USER LOGIC ---
+    function checkUser(userId, profile) {
+        fetch(GAS_URL, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'check_user', userId: userId })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.exists) {
+                currentUser = { ...data.user, userId: userId };
+                renderProfile();
+            } else {
+                // Auto Register
+                registerUser(userId, profile);
+            }
+            document.getElementById('loading').style.display = 'none';
+        });
+    }
+
+    function registerUser(userId, profile) {
+        fetch(GAS_URL, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'register_user', userId: userId, userName: profile.displayName, userImg: profile.pictureUrl })
+        }).then(() => checkUser(userId, profile));
+    }
+
+    function renderProfile() {
+        if(!currentUser) return;
+        document.getElementById('userName').innerText = currentUser.name;
+        document.getElementById('userRole').innerText = currentUser.role || 'พนักงาน';
+        document.getElementById('userImg').src = currentUser.img || 'https://via.placeholder.com/90';
+        initUserRadar(); // Update chart
+    }
+
+    // --- DATA FETCHING ---
+    function fetchFriendsList() {
+        fetch(GAS_URL + '?action=get_users')
+        .then(res => res.json())
+        .then(users => {
+            const fList = document.getElementById('friendListContainer');
+            fList.innerHTML = '';
+            users.forEach(f => {
+                const div = document.createElement('div');
+                div.className = 'friend-item';
+                div.dataset.id = f.lineId; // Use lineId for tagging
+                div.innerHTML = `<img src="${f.img}" class="friend-avatar"><h6>${f.name}</h6><div class="ms-auto"><i class="far fa-circle text-muted"></i></div>`;
+                div.onclick = function() { this.classList.toggle('selected'); }
+                fList.appendChild(div);
+            });
+        });
+    }
+
+    function fetchManagerData() {
+        fetch(GAS_URL + '?action=get_dashboard')
+        .then(res => res.json())
+        .then(data => {
+            chartData = data.trend || [8,8,8,8];
+            renderManagerChart();
+            checkTrendAndSuggest();
+            renderStaffList(data.users);
+        });
+    }
+
+    // --- MANAGER FEATURES ---
+    function renderStaffList(users) {
+        const sList = document.getElementById('staffListArea');
+        sList.innerHTML = '';
+        users.sort((a,b) => a.score - b.score); // Sort by score (asc)
+        
+        users.forEach(f => {
+            let statusClass = 'status-normal', icon = '🟢';
+            // Logic สมมติการตัดเกรดจากคะแนน (ในระบบจริงอาจต้องมี field happiness แยก)
+            let happyScore = (f.score % 10) + 1; // จำลองคะแนนความสุข 1-10 จาก Score
+            
+            if(happyScore < 5) { statusClass = 'status-critical'; icon = '🔴'; }
+            else if(happyScore < 7) { statusClass = 'status-warning'; icon = '🟠'; }
+            
+            const div = document.createElement('div');
+            div.className = `d-flex align-items-center p-2 staff-row border-bottom ${statusClass}`;
+            div.onclick = () => showStaffDetail(f, happyScore);
+            div.innerHTML = `
+                <img src="${f.img}" style="width:40px; height:40px; border-radius:50%; margin-right:10px;">
+                <div class="flex-grow-1"><div class="fw-bold text-dark" style="font-size:0.95rem;">${f.name}</div><small class="text-muted">${f.role}</small></div>
+                <div class="text-end"><span class="fw-bold">${happyScore}</span> <small>${icon}</small></div>
+            `;
+            sList.appendChild(div);
+        });
+    }
+
+    function checkTrendAndSuggest() {
+        const last = chartData[chartData.length - 1];
+        const prev = chartData[chartData.length - 2];
+        if (last < prev) {
+            document.getElementById('trendAlert').style.display = 'block';
+            Swal.fire({
+                title: '⚠️ แนวโน้มขาลง',
+                html: 'ความสุขมวลรวมลดลง<br>แนะนำ: จัดกิจกรรม Team Building ด่วน',
+                icon: 'warning',
+                confirmButtonColor: '#ff7675'
+            });
+        }
+    }
+
+    function showStaffDetail(user, score) {
+        // Logic จำลอง Helpers
+        let helperHtml = (score < 7) 
+            ? `<div class="mt-3 bg-light p-2 rounded text-start"><small class="text-danger">ยังไม่มีเพื่อนดูแล</small><button class="btn btn-sm btn-outline-danger w-100 mt-2">มอบหมายงาน</button></div>` 
+            : `<div class="mt-3 bg-light p-2 rounded text-start"><small class="text-success">มีเพื่อนดูแลแล้ว</small></div>`;
+            
+        Swal.fire({
+            html: `
+                <img src="${user.img}" style="width:90px; height:90px; border-radius:50%; margin-bottom:10px;"><br>
+                <h5 class="fw-bold">${user.name}</h5>
+                <span class="badge bg-secondary mb-3">${user.role}</span>
+                <div class="row g-2 text-center"><div class="col-6"><div class="border rounded p-2"><h6>ความสุข</h6><span class="${score<5?'text-danger':''}">${score}/10</span></div></div><div class="col-6"><div class="border rounded p-2"><h6>คะแนนสะสม</h6><span>${user.score}</span></div></div></div>
+                ${helperHtml}
+            `,
+            showConfirmButton: false, showCloseButton: true
+        });
+    }
+
+    // --- FORM & SUBMIT ---
+    function setMood(val, btn) {
+        selectedMood = val;
+        document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    }
+    
+    function addEmoji(emoji) { document.getElementById('noteInput').value += emoji + ' '; }
+    
+    function previewImage(input) {
+        if (input.files && input.files[0]) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                selectedImageBase64 = e.target.result; // เก็บ Base64 ไว้ส่ง
+                const preview = document.getElementById('previewArea');
+                preview.style.backgroundImage = `url(${e.target.result})`;
+                preview.style.display = 'block';
+            }
+            reader.readAsDataURL(input.files[0]);
+        }
+    }
+
+    function selectAllFriends() {
+        const items = document.querySelectorAll('.friend-item');
+        const btn = document.getElementById('btnSelectAll');
+        const isSelect = btn.innerHTML.includes('All');
+        items.forEach(i => isSelect ? i.classList.add('selected') : i.classList.remove('selected'));
+        btn.innerHTML = isSelect ? '<i class="fas fa-times me-1"></i>Cancel' : '<i class="fas fa-check-double me-1"></i>All';
+        btn.classList.toggle('btn-outline-primary'); btn.classList.toggle('btn-outline-danger');
+    }
+
+    function submitData() {
+        if(!currentUser) return alert('กรุณารอโหลดข้อมูลสักครู่');
+        
+        // Get Selected Friends
+        const tagged = Array.from(document.querySelectorAll('.friend-item.selected'))
+                            .map(el => el.dataset.id).join(',');
+
+        const payload = {
+            action: 'submit_activity',
+            userId: currentUser.userId,
+            happyLevel: selectedMood,
+            virtueTag: document.getElementById('virtueSelect').value,
+            note: document.getElementById('noteInput').value,
+            taggedFriends: tagged,
+            image: selectedImageBase64 // ระวัง: Base64 อาจยาวเกิน ถ้าใช้รูปใหญ่ควรย่อก่อนส่ง
+        };
+
+        const btn = document.querySelector('button[onclick="submitData()"]');
+        btn.disabled = true; btn.innerText = 'กำลังบันทึก...';
+
+        fetch(GAS_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            body: JSON.stringify(payload)
+        }).then(() => {
+            Swal.fire({ icon: 'success', title: 'บันทึกสำเร็จ!', showConfirmButton: false, timer: 1500 });
+            setTimeout(() => location.reload(), 1500);
+        }).catch(err => {
+            alert('Error sending data');
+            btn.disabled = false;
+        });
+    }
+
+    // --- NAVIGATION ---
+    function switchTab(pageId, el) {
+        document.querySelectorAll('.page-section').forEach(p => p.classList.remove('active'));
+        document.getElementById('page-' + pageId).classList.add('active');
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        el.classList.add('active');
+        
+        document.getElementById('header-user').style.display = (pageId === 'manager') ? 'none' : 'block';
+        if(pageId === 'manager') fetchManagerData(); // Load real data
+    }
+
+    // --- CHARTS & UI UTILS ---
+    function initUserRadar() {
+        new Chart(document.getElementById('userRadarChart'), {
+            type: 'radar',
+            data: { labels: ['วินัย', 'สุจริต', 'กตัญญู', 'จิตอาสา', 'พอเพียง'], datasets: [{ data: [9, 8, 6, 7, 5], backgroundColor: 'rgba(108, 92, 231, 0.4)', borderColor: '#6c5ce7' }] },
+            options: { maintainAspectRatio: false, scales: { r: { ticks: { display: false }, pointLabels: { display: false } } }, plugins: { legend: { display: false } } }
+        });
+    }
+
+    function renderManagerChart() {
+        const ctx = document.getElementById('managerLineChart');
+        // Destroy old if exists (simplified for demo)
+        new Chart(ctx, {
+            type: 'line',
+            data: { labels: ['W1', 'W2', 'W3', 'W4'], datasets: [{ label: 'Happy Trend', data: chartData, borderColor: '#ff7675', backgroundColor: 'rgba(255, 118, 117, 0.1)', fill: true, tension: 0.4 }] },
+            options: { plugins: { legend: { display: false } }, scales: { y: { min: 5, max: 10 } } }
+        });
+    }
+
+    function showVirtueInfo() {
+        Swal.fire({ title: 'คำอธิบายหมวดความดี', html: '<div class="text-start fs-6"><p><b class="text-danger">🤝 จิตอาสา:</b> ช่วยเหลือผู้อื่น</p><p><b class="text-success">🌱 พอเพียง:</b> ประหยัด</p><p><b class="text-primary">📏 วินัย:</b> ตรงเวลา</p><p><b style="color:#6c5ce7">💎 สุจริต:</b> ซื่อสัตย์</p><p><b class="text-warning">🙏 กตัญญู:</b> รู้คุณคน</p></div>', confirmButtonColor: '#6c5ce7' });
+    }
+    function openMysteryBox() { confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } }); Swal.fire({ title: 'ยินดีด้วย!', imageUrl: 'https://cdn-icons-png.flaticon.com/512/2583/2583344.png', imageWidth: 100, imageHeight: 100, confirmButtonColor: '#6c5ce7' }); }
+    function viewBadge(t,d,i) { Swal.fire({ title: i + ' ' + t, text: d, confirmButtonColor: '#6c5ce7' }); }
+
+</script>
+</body>
+</html>
