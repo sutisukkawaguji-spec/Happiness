@@ -52,7 +52,7 @@
         .feed-avatar { width: 45px; height: 45px; border-radius: 50%; object-fit: cover; margin-right: 10px; border: 2px solid #f0f0f0; }
         .feed-user h6 { margin: 0; font-weight: bold; font-size: 0.95rem; }
         .feed-user small { color: #999; font-size: 0.75rem; }
-        .feed-img { width: 100%; border-radius: 12px; margin-bottom: 10px; display: block; object-fit: cover; max-height: 400px; background: #f8f9fa; }
+        .feed-img { width: 100%; border-radius: 12px; margin-bottom: 10px; display: block; object-fit: cover; max-height: 400px; background: #f8f9fa; cursor: pointer; }
         .feed-badge { background: rgba(108, 92, 231, 0.1); color: var(--primary); padding: 2px 8px; border-radius: 10px; font-size: 0.7rem; font-weight: 600; }
         .feed-content { font-size: 0.9rem; color: #555; line-height: 1.5; }
         .feed-actions { border-top: 1px solid #f0f0f0; margin-top: 10px; padding-top: 10px; display: flex; gap: 15px; }
@@ -169,7 +169,7 @@
 
     <div id="page-stories" class="page-section">
         <h5 class="fw-bold mb-3 px-2">เรื่องราวความดีล่าสุด</h5>
-        <div id="feedContainer">
+        <div id="feedContainer" style="min-height: 200px;">
             <div class="text-center py-5 text-muted">
                 <div class="spinner-border spinner-border-sm mb-2"></div><br>กำลังโหลดเรื่องราว...
             </div>
@@ -258,7 +258,7 @@
     function activateDemoMode() {
         console.warn('Entering Demo Mode');
         document.getElementById('loading').style.display = 'none';
-        currentUser = { name: "Test User (PC)", role: "Admin", score: 999, img: "https://via.placeholder.com/90", userId: "U_TEST_1234" };
+        currentUser = { name: "Test User (PC)", role: "Admin", score: 999, level: 99, badges: ['badge_volunteer', 'badge_time'], img: "https://via.placeholder.com/90", userId: "U_TEST_1234" };
         renderProfile();
         switchTab('record', document.querySelector('.nav-item.active'));
         Swal.fire({ icon: 'info', title: 'Test Mode', text: 'ระบบจำลอง (ไม่เชื่อมต่อ LINE)', toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
@@ -271,7 +271,11 @@
         fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'check_user', userId: userId }) })
         .then(res => res.json())
         .then(data => {
-            if (data.exists) { currentUser = { ...data.user, userId: userId }; renderProfile(); } 
+            if (data.exists) { 
+                // Merge data from server with local userId
+                currentUser = { ...data.user, userId: userId }; 
+                renderProfile(); 
+            } 
             else { registerUser(userId, profile); }
             document.getElementById('loading').style.display = 'none';
         });
@@ -285,22 +289,17 @@
     function renderProfile() {
         if(!currentUser) return;
         document.getElementById('userName').innerText = currentUser.name;
-        
-        // 👇 อัปเดตบรรทัดนี้: ให้โชว์ Level ด้วย
         document.getElementById('userRole').innerHTML = `${currentUser.role || 'พนักงาน'} &bull; <span class="text-primary fw-bold">Lv.${currentUser.level || 1}</span>`;
-        
         document.getElementById('userImg').src = currentUser.img || 'https://via.placeholder.com/90';
         initUserRadar();
-        
-        // 👇 เรียกฟังก์ชันวาดเหรียญ
-        renderBadges();
+        renderBadges(); // Call badge rendering
     }
 
     function renderBadges() {
         const container = document.getElementById('badgeContainer');
-        const myBadges = currentUser.badges || []; // รายชื่อเหรียญที่ได้แล้ว
+        if(!container) return;
+        const myBadges = currentUser.badges || []; 
         
-        // กำหนดรายการเหรียญทั้งหมดในระบบ
         const allBadges = [
             { id: 'badge_volunteer', icon: '🤝', name: 'ผู้ให้ใจบุญ', desc: 'ทำจิตอาสาครบ 3 ครั้ง' },
             { id: 'badge_time',      icon: '⏰', name: 'เจ้าแห่งเวลา', desc: 'มีวินัยครบ 3 ครั้ง' },
@@ -309,19 +308,11 @@
         ];
 
         container.innerHTML = '';
-        
         allBadges.forEach(b => {
-            // เช็คว่าเรามีเหรียญนี้หรือยัง?
             const isUnlocked = myBadges.includes(b.id);
             const boxClass = isUnlocked ? 'badge-item' : 'badge-item badge-locked';
             const iconShow = isUnlocked ? b.icon : (b.secret ? '❓' : '🔒');
-            
-            const html = `
-                <div class="${boxClass}" onclick="viewBadge('${b.name}', '${b.desc}', '${iconShow}')">
-                    <div class="badge-icon">${iconShow}</div>
-                    <small>${b.name}</small>
-                </div>
-            `;
+            const html = `<div class="${boxClass}" onclick="viewBadge('${b.name}', '${b.desc}', '${iconShow}')"><div class="badge-icon">${iconShow}</div><small>${b.name}</small></div>`;
             container.innerHTML += html;
         });
     }
@@ -377,7 +368,14 @@
             feed.forEach(post => {
                 let timeAgo = "-";
                 try { timeAgo = new Date(post.timestamp).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute:'2-digit' }); } catch(e) {}
-                const imgHtml = (post.image && post.image.startsWith('http')) ? `<img src="${post.image}" class="feed-img" onclick="viewImage('${post.image}')">` : '';
+                
+                // Fix Mixed Content by replacing http with https for googleusercontent
+                let imgUrl = post.image;
+                if(imgUrl && imgUrl.startsWith('http:')) {
+                    imgUrl = imgUrl.replace('http:', 'https:');
+                }
+
+                const imgHtml = (imgUrl && imgUrl.length > 10) ? `<img src="${imgUrl}" class="feed-img" onclick="viewImage('${imgUrl}')">` : '';
                 const moodEmoji = post.happy == 3 ? '😁' : (post.happy == 2 ? '😐' : '😞');
                 const html = `
                     <div class="glass-card feed-card p-3">
@@ -536,4 +534,3 @@
 </script>
 </body>
 </html>
-
