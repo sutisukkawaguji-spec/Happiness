@@ -404,16 +404,55 @@
     
     function addEmoji(emoji) { document.getElementById('noteInput').value += emoji + ' '; }
     
+    // ฟังก์ชัน: เลือกรูป + ย่อรูปอัตโนมัติ (เพื่อไม่ให้ไฟล์ใหญ่เกินไป)
     function previewImage(input) {
         if (input.files && input.files[0]) {
+            const file = input.files[0];
             const reader = new FileReader();
+            
             reader.onload = function(e) {
-                selectedImageBase64 = e.target.result; // เก็บ Base64 ไว้ส่ง
-                const preview = document.getElementById('previewArea');
-                preview.style.backgroundImage = `url(${e.target.result})`;
-                preview.style.display = 'block';
+                const img = new Image();
+                img.src = e.target.result;
+                
+                img.onload = function() {
+                    // สร้าง Canvas เพื่อย่อรูป
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    
+                    // กำหนดขนาดสูงสุด (เช่น ไม่เกิน 800px)
+                    const MAX_WIDTH = 800; 
+                    const MAX_HEIGHT = 800;
+                    let width = img.width;
+                    let height = img.height;
+
+                    // คำนวณสัดส่วนใหม่
+                    if (width > height) {
+                        if (width > MAX_WIDTH) {
+                            height *= MAX_WIDTH / width;
+                            width = MAX_WIDTH;
+                        }
+                    } else {
+                        if (height > MAX_HEIGHT) {
+                            width *= MAX_HEIGHT / height;
+                            height = MAX_HEIGHT;
+                        }
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    // แปลงเป็น Base64 แบบย่อขนาด (ลดคุณภาพเหลือ 0.7)
+                    selectedImageBase64 = canvas.toDataURL('image/jpeg', 0.7); 
+                    alert("แปลงรูปสำเร็จ! รหัสยาว: " + selectedImageBase64.length + " ตัวอักษร"); // <--- เพิ่มบรรทัดนี้
+
+                    // แสดงรูปตัวอย่าง
+                    const preview = document.getElementById('previewArea');
+                    preview.style.backgroundImage = `url(${selectedImageBase64})`;
+                    preview.style.display = 'block';
+                };
             }
-            reader.readAsDataURL(input.files[0]);
+            reader.readAsDataURL(file);
         }
     }
 
