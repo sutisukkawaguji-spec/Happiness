@@ -193,13 +193,7 @@
     <div id="page-badges" class="page-section">
         <div class="glass-card">
             <h5 class="fw-bold mb-3"><i class="fas fa-medal text-warning me-2"></i>คลังเหรียญสะสม</h5>
-            <div class="badge-grid">
-                <div class="badge-item" onclick="viewBadge('ผู้ให้ใจบุญ', 'ช่วยเพื่อนครบ 10 ครั้ง', '🤝')"><div class="badge-icon">🤝</div><small>ผู้ให้ใจบุญ</small></div>
-                <div class="badge-item" onclick="viewBadge('เจ้าแห่งเวลา', 'ไม่เคยสายเลย 1 เดือน', '⏰')"><div class="badge-icon">⏰</div><small>เจ้าแห่งเวลา</small></div>
-                <div class="badge-item badge-mystery" onclick="openMysteryBox()"><div class="badge-icon">🎁</div><small class="text-danger">เปิดกล่อง!</small></div>
-                <div class="badge-item badge-locked"><div class="badge-icon">🔒</div><small>???</small></div>
-                <div class="badge-item badge-locked"><div class="badge-icon">🔒</div><small>???</small></div>
-            </div>
+            <div class="badge-grid" id="badgeContainer"></div>
         </div>
     </div>
 
@@ -291,9 +285,45 @@
     function renderProfile() {
         if(!currentUser) return;
         document.getElementById('userName').innerText = currentUser.name;
-        document.getElementById('userRole').innerText = currentUser.role || 'พนักงาน';
+        
+        // 👇 อัปเดตบรรทัดนี้: ให้โชว์ Level ด้วย
+        document.getElementById('userRole').innerHTML = `${currentUser.role || 'พนักงาน'} &bull; <span class="text-primary fw-bold">Lv.${currentUser.level || 1}</span>`;
+        
         document.getElementById('userImg').src = currentUser.img || 'https://via.placeholder.com/90';
         initUserRadar();
+        
+        // 👇 เรียกฟังก์ชันวาดเหรียญ
+        renderBadges();
+    }
+
+    function renderBadges() {
+        const container = document.getElementById('badgeContainer');
+        const myBadges = currentUser.badges || []; // รายชื่อเหรียญที่ได้แล้ว
+        
+        // กำหนดรายการเหรียญทั้งหมดในระบบ
+        const allBadges = [
+            { id: 'badge_volunteer', icon: '🤝', name: 'ผู้ให้ใจบุญ', desc: 'ทำจิตอาสาครบ 3 ครั้ง' },
+            { id: 'badge_time',      icon: '⏰', name: 'เจ้าแห่งเวลา', desc: 'มีวินัยครบ 3 ครั้ง' },
+            { id: 'badge_rich',      icon: '💎', name: 'เศรษฐีความดี', desc: 'คะแนนรวมเกิน 200 แต้ม' },
+            { id: 'badge_secret',    icon: '🎁', name: 'กล่องปริศนา', desc: 'ความลับ!', secret: true }
+        ];
+
+        container.innerHTML = '';
+        
+        allBadges.forEach(b => {
+            // เช็คว่าเรามีเหรียญนี้หรือยัง?
+            const isUnlocked = myBadges.includes(b.id);
+            const boxClass = isUnlocked ? 'badge-item' : 'badge-item badge-locked';
+            const iconShow = isUnlocked ? b.icon : (b.secret ? '❓' : '🔒');
+            
+            const html = `
+                <div class="${boxClass}" onclick="viewBadge('${b.name}', '${b.desc}', '${iconShow}')">
+                    <div class="badge-icon">${iconShow}</div>
+                    <small>${b.name}</small>
+                </div>
+            `;
+            container.innerHTML += html;
+        });
     }
 
     // --- DATA FETCHING ---
@@ -506,3 +536,4 @@
 </script>
 </body>
 </html>
+
