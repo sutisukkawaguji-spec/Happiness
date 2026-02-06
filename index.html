@@ -579,7 +579,7 @@
 
     // --- NAVIGATION ---
     function switchTab(pageId, el) {
-        // 🔒 ระบบรักษาความปลอดภัย: เช็คสิทธิ์ผู้บริหาร
+        // 1. เช็คสิทธิ์ผู้บริหาร (Manager Check)
         if (pageId === 'manager') {
             if (!currentUser || (currentUser.role !== 'Manager' && currentUser.role !== 'Admin')) {
                 Swal.fire({
@@ -592,16 +592,20 @@
             }
         }
 
-         p.classList.remove('active'));
+        // 2. สลับหน้าจอ (UI Switch)
         document.querySelectorAll('.page-section').forEach(p => p.classList.remove('active'));
         document.getElementById('page-' + pageId).classList.add('active');
+        
+        // 3. สลับปุ่มเมนู
         document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
         el.classList.add('active');
         
+        // 4. ซ่อน/แสดง Header
         document.getElementById('header-user').style.display = (pageId === 'manager') ? 'none' : 'block';
         
+        // 5. โหลดข้อมูลตามหน้า (Data Fetching)
         if(pageId === 'manager') fetchManagerData();
-        if(pageId === 'stories') fetchFeed(); // ✅ ต้องเติมบรรทัดนี้ครับ!
+        if(pageId === 'stories') fetchFeed(); // <--- บรรทัดสำคัญที่ขาดไป
     }
 
     // --- CHARTS & UI UTILS ---
@@ -725,6 +729,7 @@
 </script>
 </body>
 </html>
+
 
 
 
