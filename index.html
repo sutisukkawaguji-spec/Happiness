@@ -592,15 +592,17 @@
             }
         }
 
+         p.classList.remove('active'));
         document.querySelectorAll('.page-section').forEach(p => p.classList.remove('active'));
         document.getElementById('page-' + pageId).classList.add('active');
         document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
         el.classList.add('active');
         
         document.getElementById('header-user').style.display = (pageId === 'manager') ? 'none' : 'block';
+        
         if(pageId === 'manager') fetchManagerData();
-        if(pageId === 'stories') fetchFeed(); // <--
-    } // <--- เพิ่มปีกกานี้ให้แล้วครับ
+        if(pageId === 'stories') fetchFeed(); // ✅ ต้องเติมบรรทัดนี้ครับ!
+    }
 
     // --- CHARTS & UI UTILS ---
     function initUserRadar() {
@@ -723,6 +725,7 @@
 </script>
 </body>
 </html>
+
 
 
 
