@@ -288,11 +288,16 @@
 
     function renderProfile() {
         if(!currentUser) return;
+
+        // 👇👇 เพิ่มบรรทัดนี้เข้าไปครับ (บรรทัดสายลับ) 👇👇
+        alert("🕵️ Check Data:\nScore: " + currentUser.score + "\nLevel: " + currentUser.level + "\nBadges: " + currentUser.badges);
+        // 👆👆---------------------------------------👆👆
+
         document.getElementById('userName').innerText = currentUser.name;
-        document.getElementById('userRole').innerHTML = `${currentUser.role || 'พนักงาน'} &bull; <span class="text-primary fw-bold">Lv.${currentUser.level || 1}</span>`;
+        document.getElementById('userRole').innerHTML = `${currentUser.role || 'พนักงาน'} • <span class="text-primary fw-bold">Lv.${currentUser.level || 1}</span>`;
         document.getElementById('userImg').src = currentUser.img || 'https://via.placeholder.com/90';
         initUserRadar();
-        renderBadges(); // Call badge rendering
+        renderBadges();
     }
 
     function renderBadges() {
@@ -534,3 +539,4 @@
 </script>
 </body>
 </html>
+
