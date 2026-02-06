@@ -83,6 +83,20 @@
         .page-section { display: none; animation: fadeIn 0.3s; }
         .page-section.active { display: block; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* --- Feed / Stories Styling --- */
+        .feed-card { background: #fff; border-radius: 20px; padding: 15px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        .feed-header { display: flex; align-items: center; margin-bottom: 10px; }
+        .feed-avatar { width: 45px; height: 45px; border-radius: 50%; object-fit: cover; margin-right: 10px; border: 2px solid #f0f0f0; }
+        .feed-user h6 { margin: 0; font-weight: bold; font-size: 0.95rem; }
+        .feed-user small { color: #999; font-size: 0.75rem; }
+        .feed-img { width: 100%; border-radius: 12px; margin-bottom: 10px; display: block; object-fit: cover; max-height: 400px; background: #f8f9fa; }
+        .feed-badge { background: rgba(108, 92, 231, 0.1); color: var(--primary); padding: 2px 8px; border-radius: 10px; font-size: 0.7rem; font-weight: 600; }
+        .feed-content { font-size: 0.9rem; color: #555; line-height: 1.5; }
+        .feed-actions { border-top: 1px solid #f0f0f0; margin-top: 10px; padding-top: 10px; display: flex; gap: 15px; }
+        .action-btn { color: #aaa; font-size: 0.9rem; cursor: pointer; transition: 0.2s; }
+        .action-btn:hover { color: var(--accent); }
+        .action-btn.liked { color: #ff7675; }
     </style>
 </head>
 <body>
@@ -121,7 +135,14 @@
                 <button class="mood-btn" onclick="setMood(2, this)">😐</button>
                 <button class="mood-btn active" onclick="setMood(3, this)">😁</button>
             </div>
-            
+    <div id="page-stories" class="page-section">
+        <h5 class="fw-bold mb-3 px-2">เรื่องราวความดีล่าสุด</h5>
+        <div id="feedContainer">
+            <div class="text-center py-5 text-muted">
+                <div class="spinner-border spinner-border-sm mb-2"></div><br>กำลังโหลดเรื่องราว...
+            </div>
+        </div>
+    </div>        
             <label class="form-label fw-bold d-flex align-items-center">หมวดความดี <i class="fas fa-circle-question info-btn fa-lg" onclick="showVirtueInfo()"></i></label>
             <select class="form-select mb-3" id="virtueSelect" style="border-radius: 12px;">
                 <option value="volunteer">🤝 จิตอาสา (Volunteer)</option>
@@ -205,7 +226,12 @@
     <div class="nav-item" onclick="switchTab('badges', this)"><i class="fas fa-medal"></i><span>เหรียญ</span></div>
     <div class="nav-item" onclick="switchTab('manager', this)"><i class="fas fa-user-tie"></i><span>ผู้บริหาร</span></div>
 </div>
-
+<div class="bottom-nav">
+    <div class="nav-item active" onclick="switchTab('record', this)"><i class="fas fa-plus-circle"></i><span>บันทึก</span></div>
+    <div class="nav-item" onclick="switchTab('stories', this)"><i class="fas fa-images"></i><span>เรื่องราว</span></div> <div class="nav-item" onclick="switchTab('stats', this)"><i class="fas fa-chart-pie"></i><span>สถิติ</span></div>
+    <div class="nav-item" onclick="switchTab('badges', this)"><i class="fas fa-medal"></i><span>เหรียญ</span></div>
+    <div class="nav-item" onclick="switchTab('manager', this)"><i class="fas fa-user-tie"></i><span>ผู้บริหาร</span></div>
+</div>
 <script>
     // --- ⚠️ CONFIGURATION: เปลี่ยนข้อมูลตรงนี้ ⚠️ ---
     const LIFF_ID = '2009069961-FRS5kHE4'; // ใส่ LIFF ID ของคุณ
@@ -573,6 +599,7 @@
         
         document.getElementById('header-user').style.display = (pageId === 'manager') ? 'none' : 'block';
         if(pageId === 'manager') fetchManagerData();
+        if(pageId === 'stories') fetchFeed(); // <--
     } // <--- เพิ่มปีกกานี้ให้แล้วครับ
 
     // --- CHARTS & UI UTILS ---
@@ -600,6 +627,70 @@
     function openMysteryBox() { confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } }); Swal.fire({ title: 'ยินดีด้วย!', imageUrl: 'https://cdn-icons-png.flaticon.com/512/2583/2583344.png', imageWidth: 100, imageHeight: 100, confirmButtonColor: '#6c5ce7' }); }
     function viewBadge(t,d,i) { Swal.fire({ title: i + ' ' + t, text: d, confirmButtonColor: '#6c5ce7' }); }
 
+    // --- FEED LOGIC ---
+    function fetchFeed() {
+        const container = document.getElementById('feedContainer');
+        // โหลดข้อมูลจาก Backend
+        fetch(GAS_URL + '?action=get_feed')
+        .then(res => res.json())
+        .then(feed => {
+            container.innerHTML = '';
+            
+            if (feed.length === 0) {
+                container.innerHTML = '<div class="text-center py-5 text-muted">ยังไม่มีเรื่องราว<br>เป็นคนแรกที่โพสต์สิ!</div>';
+                return;
+            }
+
+            feed.forEach(post => {
+                // แปลง Timestamp เป็น "2 นาทีที่แล้ว"
+                const timeAgo = new Date(post.timestamp).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute:'2-digit' });
+                
+                // เช็คว่ามีรูปไหม
+                const imgHtml = post.image ? `<img src="${post.image}" class="feed-img" onclick="viewImage('${post.image}')">` : '';
+                
+                // แปลงระดับความสุขเป็น Emoji
+                const moodEmoji = post.happy == 3 ? '😁' : (post.happy == 2 ? '😐' : '😞');
+
+                const html = `
+                    <div class="glass-card feed-card p-3">
+                        <div class="feed-header">
+                            <img src="${post.user_img}" class="feed-avatar">
+                            <div class="feed-user">
+                                <h6>${post.user_name}</h6>
+                                <small>${timeAgo} • <span class="feed-badge">${post.virtue}</span></small>
+                            </div>
+                            <div class="ms-auto fs-4">${moodEmoji}</div>
+                        </div>
+                        <div class="feed-content mb-2">${post.note || '-'}</div>
+                        ${imgHtml}
+                        <div class="feed-actions">
+                            <div class="action-btn" onclick="toggleLike(this)"><i class="far fa-heart"></i> ถูกใจ</div>
+                            <div class="action-btn"><i class="far fa-comment"></i> คอมเมนต์</div>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += html;
+            });
+        });
+    }
+
+    function toggleLike(btn) {
+        btn.classList.toggle('liked');
+        const icon = btn.querySelector('i');
+        icon.classList.toggle('fas'); // เปลี่ยนเป็นหัวใจทึบ
+        icon.classList.toggle('far'); // เปลี่ยนเป็นหัวใจโปร่ง
+    }
+
+    function viewImage(url) {
+        Swal.fire({
+            imageUrl: url,
+            imageWidth: '100%',
+            showConfirmButton: false,
+            showCloseButton: true,
+            background: 'transparent'
+        });
+    }
 </script>
 </body>
 </html>
+
