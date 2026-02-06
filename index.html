@@ -465,37 +465,87 @@
         btn.classList.toggle('btn-outline-primary'); btn.classList.toggle('btn-outline-danger');
     }
 
-    function submitData() {
-        if(!currentUser) return alert('กรุณารอโหลดข้อมูลสักครู่');
-        
-        // Get Selected Friends
-        const tagged = Array.from(document.querySelectorAll('.friend-item.selected'))
-                            .map(el => el.dataset.id).join(',');
-
-        const payload = {
-            action: 'submit_activity',
-            userId: currentUser.userId,
-            happyLevel: selectedMood,
-            virtueTag: document.getElementById('virtueSelect').value,
-            note: document.getElementById('noteInput').value,
-            taggedFriends: tagged,
-            image: selectedImageBase64 // ระวัง: Base64 อาจยาวเกิน ถ้าใช้รูปใหญ่ควรย่อก่อนส่ง
-        };
+   async function submitData() {
+        if(!currentUser) return Swal.fire('Error', 'ไม่พบข้อมูลผู้ใช้', 'error');
 
         const btn = document.querySelector('button[onclick="submitData()"]');
-        btn.disabled = true; btn.innerText = 'กำลังบันทึก...';
+        btn.disabled = true; 
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังประมวลผล...';
 
-        fetch(GAS_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            body: JSON.stringify(payload)
-        }).then(() => {
-            Swal.fire({ icon: 'success', title: 'บันทึกสำเร็จ!', showConfirmButton: false, timer: 1500 });
-            setTimeout(() => location.reload(), 1500);
-        }).catch(err => {
-            alert('Error sending data');
+        try {
+            // 1. เตรียมข้อมูลพื้นฐาน
+            const tagged = Array.from(document.querySelectorAll('.friend-item.selected'))
+                                .map(el => el.dataset.id).join(',');
+            
+            let uploadId = null;
+            let totalChunks = 0;
+
+            // 2. ถ้ามีรูปภาพ ให้เริ่มกระบวนการหั่นไฟล์ (Chunk Upload)
+            if (selectedImageBase64) {
+                uploadId = Date.now().toString(); // สร้าง ID สำหรับการอัปโหลดครั้งนี้
+                const CHUNK_SIZE = 50000; // ขนาดชิ้นละ 50KB (ปลอดภัยสำหรับ GAS)
+                totalChunks = Math.ceil(selectedImageBase64.length / CHUNK_SIZE);
+                
+                // วนลูปส่งทีละชิ้น
+                for (let i = 0; i < totalChunks; i++) {
+                    const start = i * CHUNK_SIZE;
+                    const end = Math.min(start + CHUNK_SIZE, selectedImageBase64.length);
+                    const chunk = selectedImageBase64.substring(start, end);
+                    
+                    // อัปเดตปุ่มให้รู้ว่าส่งถึงไหนแล้ว
+                    btn.innerHTML = `<i class="fas fa-cloud-upload-alt"></i> อัปโหลดรูป ${Math.round(((i+1)/totalChunks)*100)}%`;
+
+                    // ส่งชิ้นส่วนไปที่ GAS
+                    await fetch(GAS_URL, {
+                        method: 'POST',
+                        mode: 'no-cors',
+                        body: JSON.stringify({
+                            action: 'upload_chunk',
+                            uploadId: uploadId,
+                            chunkIndex: i,
+                            chunkData: chunk
+                        })
+                    });
+                }
+            }
+
+            // 3. ส่งข้อมูลสุดท้ายเพื่อประกอบร่างและบันทึก
+            btn.innerHTML = 'กำลังบันทึกข้อมูล...';
+            
+            const payload = {
+                action: 'submit_activity',
+                userId: currentUser.userId,
+                userName: currentUser.name, // ส่งชื่อไปตั้งชื่อไฟล์รูป
+                happyLevel: selectedMood,
+                virtueTag: document.getElementById('virtueSelect').value,
+                note: document.getElementById('noteInput').value,
+                taggedFriends: tagged,
+                uploadId: uploadId,   // ส่ง ID ไปบอกให้ประกอบร่าง
+                totalChunks: totalChunks // บอกจำนวนชิ้นทั้งหมด
+            };
+
+            await fetch(GAS_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                body: JSON.stringify(payload)
+            });
+
+            Swal.fire({
+                icon: 'success',
+                title: 'บันทึกสำเร็จ!',
+                text: 'ขอบคุณที่ร่วมแบ่งปันความสุข',
+                showConfirmButton: false,
+                timer: 2000
+            }).then(() => {
+                location.reload();
+            });
+
+        } catch (err) {
+            console.error(err);
+            Swal.fire('Error', 'เกิดข้อผิดพลาดในการส่งข้อมูล', 'error');
             btn.disabled = false;
-        });
+            btn.innerText = 'ลองใหม่อีกครั้ง';
+        }
     }
 
     // --- NAVIGATION ---
