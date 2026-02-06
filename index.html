@@ -630,47 +630,63 @@
     // --- FEED LOGIC ---
     function fetchFeed() {
         const container = document.getElementById('feedContainer');
-        // โหลดข้อมูลจาก Backend
+        container.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><br>กำลังดึงข้อมูล...</div>';
+
+        console.log("Fetching from:", GAS_URL + '?action=get_feed'); // เช็ค URL
+
         fetch(GAS_URL + '?action=get_feed')
-        .then(res => res.json())
+        .then(res => {
+            // เช็คว่า Server ตอบกลับมาไหม
+            if (!res.ok) throw new Error("Server error: " + res.status);
+            return res.json();
+        })
         .then(feed => {
+            // alert("ได้รับข้อมูลมา: " + feed.length + " รายการ"); // <-- บรรทัดนี้จะเด้งบอกจำนวน
+
             container.innerHTML = '';
             
-            if (feed.length === 0) {
-                container.innerHTML = '<div class="text-center py-5 text-muted">ยังไม่มีเรื่องราว<br>เป็นคนแรกที่โพสต์สิ!</div>';
+            if (!feed || feed.length === 0) {
+                container.innerHTML = '<div class="text-center py-5 text-muted"><i class="far fa-newspaper fa-3x mb-3"></i><br>ยังไม่มีเรื่องราว<br>มาเริ่มทำความดีกันเถอะ!</div>';
                 return;
             }
 
             feed.forEach(post => {
-                // แปลง Timestamp เป็น "2 นาทีที่แล้ว"
-                const timeAgo = new Date(post.timestamp).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute:'2-digit' });
+                // ป้องกัน Error เรื่องวันที่
+                let timeAgo = "-";
+                try {
+                    timeAgo = new Date(post.timestamp).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute:'2-digit' });
+                } catch(e) { timeAgo = "เมื่อสักครู่"; }
+
+                const imgHtml = (post.image && post.image.startsWith('http')) 
+                    ? `<img src="${post.image}" class="feed-img" onclick="viewImage('${post.image}')">` 
+                    : '';
                 
-                // เช็คว่ามีรูปไหม
-                const imgHtml = post.image ? `<img src="${post.image}" class="feed-img" onclick="viewImage('${post.image}')">` : '';
-                
-                // แปลงระดับความสุขเป็น Emoji
                 const moodEmoji = post.happy == 3 ? '😁' : (post.happy == 2 ? '😐' : '😞');
 
                 const html = `
                     <div class="glass-card feed-card p-3">
                         <div class="feed-header">
-                            <img src="${post.user_img}" class="feed-avatar">
+                            <img src="${post.user_img || 'https://via.placeholder.com/45'}" class="feed-avatar">
                             <div class="feed-user">
                                 <h6>${post.user_name}</h6>
                                 <small>${timeAgo} • <span class="feed-badge">${post.virtue}</span></small>
                             </div>
                             <div class="ms-auto fs-4">${moodEmoji}</div>
                         </div>
-                        <div class="feed-content mb-2">${post.note || '-'}</div>
+                        <div class="feed-content mb-2">${post.note || ''}</div>
                         ${imgHtml}
                         <div class="feed-actions">
-                            <div class="action-btn" onclick="toggleLike(this)"><i class="far fa-heart"></i> ถูกใจ</div>
-                            <div class="action-btn"><i class="far fa-comment"></i> คอมเมนต์</div>
+                            <div class="action-btn" onclick="this.classList.toggle('text-danger')"><i class="far fa-heart"></i> ถูกใจ</div>
                         </div>
                     </div>
                 `;
                 container.innerHTML += html;
             });
+        })
+        .catch(err => {
+            console.error(err);
+            // ถ้า Error ให้โชว์บนหน้าจอเลย จะได้รู้ว่าเป็นอะไร
+            container.innerHTML = `<div class="alert alert-danger">โหลดไม่สำเร็จ: ${err.message}</div>`;
         });
     }
 
@@ -693,4 +709,5 @@
 </script>
 </body>
 </html>
+
 
