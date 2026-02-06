@@ -630,41 +630,53 @@
     // --- FEED LOGIC ---
     function fetchFeed() {
         const container = document.getElementById('feedContainer');
-        container.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><br>กำลังดึงข้อมูล...</div>';
+        if (!container) {
+            console.error("หา feedContainer ไม่เจอ!");
+            return;
+        }
 
-        console.log("Fetching from:", GAS_URL + '?action=get_feed'); // เช็ค URL
+        // 1. ขึ้นสถานะกำลังโหลด
+        container.innerHTML = `
+            <div class="text-center py-5 text-muted">
+                <div class="spinner-border text-primary"></div><br>
+                กำลังเชื่อมต่อ Server...
+            </div>`;
 
+        // 2. ดึงข้อมูล
         fetch(GAS_URL + '?action=get_feed')
-        .then(res => {
-            // เช็คว่า Server ตอบกลับมาไหม
-            if (!res.ok) throw new Error("Server error: " + res.status);
-            return res.json();
-        })
+        .then(res => res.json())
         .then(feed => {
-            // alert("ได้รับข้อมูลมา: " + feed.length + " รายการ"); // <-- บรรทัดนี้จะเด้งบอกจำนวน
-
-            container.innerHTML = '';
-            
+            // 3. ถ้าไม่มีข้อมูลเลย
             if (!feed || feed.length === 0) {
-                container.innerHTML = '<div class="text-center py-5 text-muted"><i class="far fa-newspaper fa-3x mb-3"></i><br>ยังไม่มีเรื่องราว<br>มาเริ่มทำความดีกันเถอะ!</div>';
+                container.innerHTML = `
+                    <div class="text-center py-5 text-muted border rounded bg-light">
+                        <i class="far fa-newspaper fa-3x mb-3"></i><br>
+                        ยังไม่มีรายการกิจกรรม<br>
+                        <small>ลองไปกด "บันทึก" ดูสิ!</small>
+                    </div>`;
                 return;
             }
 
+            // 4. ถ้ามีข้อมูล ให้วนลูปแสดง
+            container.innerHTML = ''; // ล้างสถานะโหลดออก
+            
             feed.forEach(post => {
-                // ป้องกัน Error เรื่องวันที่
                 let timeAgo = "-";
-                try {
-                    timeAgo = new Date(post.timestamp).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute:'2-digit' });
-                } catch(e) { timeAgo = "เมื่อสักครู่"; }
+                try { 
+                    timeAgo = new Date(post.timestamp).toLocaleDateString('th-TH', { 
+                        day: 'numeric', month: 'short', hour: '2-digit', minute:'2-digit' 
+                    }); 
+                } catch(e) {}
 
-                const imgHtml = (post.image && post.image.startsWith('http')) 
+                // เช็คว่ามีรูปหรือไม่
+                const imgHtml = (post.image && post.image.length > 10) 
                     ? `<img src="${post.image}" class="feed-img" onclick="viewImage('${post.image}')">` 
                     : '';
                 
                 const moodEmoji = post.happy == 3 ? '😁' : (post.happy == 2 ? '😐' : '😞');
 
                 const html = `
-                    <div class="glass-card feed-card p-3">
+                    <div class="glass-card feed-card p-3 animate__animated animate__fadeIn">
                         <div class="feed-header">
                             <img src="${post.user_img || 'https://via.placeholder.com/45'}" class="feed-avatar">
                             <div class="feed-user">
@@ -675,18 +687,20 @@
                         </div>
                         <div class="feed-content mb-2">${post.note || ''}</div>
                         ${imgHtml}
-                        <div class="feed-actions">
-                            <div class="action-btn" onclick="this.classList.toggle('text-danger')"><i class="far fa-heart"></i> ถูกใจ</div>
-                        </div>
                     </div>
                 `;
                 container.innerHTML += html;
             });
         })
         .catch(err => {
+            // 5. ถ้า Error ให้โชว์สีแดงบนหน้าจอ
             console.error(err);
-            // ถ้า Error ให้โชว์บนหน้าจอเลย จะได้รู้ว่าเป็นอะไร
-            container.innerHTML = `<div class="alert alert-danger">โหลดไม่สำเร็จ: ${err.message}</div>`;
+            container.innerHTML = `
+                <div class="alert alert-danger text-center">
+                    <b>โหลดไม่สำเร็จ</b><br>
+                    ${err.message}<br>
+                    <small>ลองเช็ค Deploy Version อีกครั้ง</small>
+                </div>`;
         });
     }
 
@@ -709,5 +723,6 @@
 </script>
 </body>
 </html>
+
 
 
