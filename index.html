@@ -413,59 +413,53 @@
         document.getElementById('userImg').src = currentUser.img || 'https://via.placeholder.com/90';
 
         // ----------------------------------------------------
-        // ✨ คำนวณออร่า (แก้ไขใหม่: ให้ตรงกับ Key ตัวพิมพ์ใหญ่)
+        // ✨ คำนวณออร่า (Dominant Virtue Aura)
         // ----------------------------------------------------
         
-        // 1. ดึงคะแนนความดี 5 ด้าน (ต้องใช้ตัวพิมพ์ใหญ่ตามที่ตั้งใน <select>)
-        const virtueScores = {
-            'Volunteer': currentUser.virtueStats['Volunteer'] || 0,   // จิตอาสา
-            'Sufficiency': currentUser.virtueStats['Sufficiency'] || 0, // พอเพียง
-            'Discipline': currentUser.virtueStats['Discipline'] || 0,  // วินัย
-            'Honesty': currentUser.virtueStats['Honesty'] || 0,   // สุจริต
-            'Grateful': currentUser.virtueStats['Grateful'] || 0    // กตัญญู
+        // 1. ดึงคะแนนความดี 5 ด้านมาเทียบกัน
+        const scores = {
+            'volunteer': currentUser.virtueStats['volunteer'] || 0,
+            'sufficiency': currentUser.virtueStats['sufficiency'] || 0,
+            'discipline': currentUser.virtueStats['discipline'] || 0,
+            'integrity': currentUser.virtueStats['integrity'] || 0,
+            'gratitude': currentUser.virtueStats['gratitude'] || 0
         };
 
-        // 2. หาค่าที่มากที่สุด
+        // 2. หาค่าที่มากที่สุด (Max Value) และชื่อด้านนั้น (Max Key)
         let maxScore = 0;
-        let dominantVirtue = '';
+        let dominantVirtue = 'none';
 
-        for (const [key, value] of Object.entries(virtueScores)) {
+        for (const [key, value] of Object.entries(scores)) {
             if (value > maxScore) {
                 maxScore = value;
-                dominantVirtue = key; // จะได้ค่าเช่น 'Volunteer'
+                dominantVirtue = key;
             }
         }
 
-        // 3. จัดการ Element ออร่า
-        const img = document.getElementById('userImg');
-        let parent = img.parentElement;
+        // 3. สั่งเปลี่ยนสีออร่าที่รูปโปรไฟล์
+        // (สมมติว่ารูปมี ID="userImg" และมี Div ครอบชื่อ class="profile-container")
         
-        // บังคับให้ Parent เป็น Relative เพื่อให้แสงอิงตำแหน่งได้
-        parent.style.position = 'relative';
-        parent.style.display = 'inline-block';
-        
-        // บังคับให้รูปอยู่ข้างบนแสง
-        img.style.position = 'relative';
-        img.style.zIndex = '2';
-
-        // เช็คว่ามีแสงหรือยัง
-        let auraDiv = parent.querySelector('.virtue-aura');
+        // *เช็คก่อนว่ามี Div แสงหรือยัง ถ้ายังให้สร้างใหม่*
+        let auraDiv = document.getElementById('virtueAuraBg');
         if (!auraDiv) {
+            const img = document.getElementById('userImg');
+            // สร้าง div แสงไปซ้อนข้างหลังรูป
             auraDiv = document.createElement('div');
+            auraDiv.id = 'virtueAuraBg';
             auraDiv.className = 'virtue-aura';
-            // แทรกแสงเข้าไปก่อนรูป (เพื่อให้แสงอยู่ข้างหลัง)
-            parent.insertBefore(auraDiv, img);
+            
+            // แทรกเข้าไปก่อนหน้ารูป (เพื่อให้ z-index ทำงาน)
+            img.parentNode.insertBefore(auraDiv, img);
+            img.parentNode.style.position = 'relative'; // บังคับ Parent ให้เป็น relative
         }
 
-        // 4. ล้างสีเก่าออกให้หมด
-        auraDiv.className = 'virtue-aura'; // รีเซ็ตคลาส
-        
-        // 5. ใส่สีใหม่ (แปลง Key เป็นตัวเล็กเพื่อให้ตรงกับ CSS: .aura-volunteer)
-        if (maxScore > 0 && dominantVirtue) {
-            console.log("Aura Active: " + dominantVirtue); // เช็คใน Console ว่าทำงานไหม
-            auraDiv.classList.add('aura-' + dominantVirtue.toLowerCase());
+        // ล้างสีเก่า
+        auraDiv.className = 'virtue-aura'; 
+
+        // ใส่สีใหม่ตามด้านที่เด่นสุด (ถ้าคะแนน > 0)
+        if (maxScore > 0) {
+            auraDiv.classList.add('aura-' + dominantVirtue);
         } else {
-            // ถ้าไม่มีคะแนนเลย ให้ใส่สีเทาจางๆ หรือไม่แสดง
             auraDiv.classList.add('aura-none');
         }
         
@@ -1084,6 +1078,7 @@
 </script>
 </body>
 </html>
+
 
 
 
