@@ -397,17 +397,23 @@
 
     main();
 
-    // --- USER LOGIC ---
+    // ค้นหาฟังก์ชัน checkUser แล้วเปลี่ยนเป็นตัวนี้ครับ
     function checkUser(userId, profile) {
-        // เพิ่ม return เพื่อให้ await ใน main() รอจนกว่าจะเสร็จ
-        return fetch(GAS_URL, { 
+        console.log("กำลังเชื่อมต่อไประบบ..."); // เช็คใน Console
+        
+        // ใช้ fetch แบบระบุ Header เพื่อกัน Browser บล็อก
+        fetch(GAS_URL, { 
             method: 'POST', 
-            // ⚠️ สำคัญ: ใช้ text/plain เพื่อหลีกเลี่ยง CORS Preflight ของ Google
-            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            headers: { "Content-Type": "text/plain;charset=utf-8" }, // 👈 สำคัญมาก! ช่วยให้ผ่าน CORS
             body: JSON.stringify({ action: 'check_user', userId: userId }) 
         })
-        .then(res => res.json())
+        .then(res => {
+            // ถ้าเชื่อมต่อไม่ได้ ให้แสดง Error
+            if (!res.ok) throw new Error("HTTP error " + res.status);
+            return res.json();
+        })
         .then(data => {
+            console.log("รับข้อมูลแล้ว:", data); // เช็คว่าได้ข้อมูลมาไหม
             if (data.exists) { 
                 currentUser = { ...data.user, userId: userId }; 
                 renderProfile(); 
@@ -416,16 +422,15 @@
             } else { 
                 registerUser(userId, profile); 
             }
-            // ปิดหน้า Loading เมื่อสำเร็จ
             document.getElementById('loading').style.display = 'none';
         })
         .catch(err => {
-            console.error("Check User Error:", err);
-            // แจ้งเตือนถ้าเชื่อมต่อไม่ได้
+            console.error('Connection Failed:', err);
+            // แจ้งเตือนบนหน้าจอว่าเชื่อมไม่ได้
             Swal.fire({
                 icon: 'error',
-                title: 'เชื่อมต่อไม่สำเร็จ',
-                text: 'กรุณาตรวจสอบ URL หรือการตั้งค่า Deploy (Anyone)',
+                title: 'เชื่อมต่อระบบไม่สำเร็จ',
+                text: 'กรุณาตรวจสอบ URL หรือการตั้งค่า Deploy (ต้องเป็น Anyone)',
                 footer: err.message
             });
             document.getElementById('loading').style.display = 'none';
@@ -1028,8 +1033,7 @@
                          <i class="${post.likes && post.likes.some(u=>u.name === currentUser.name) ? 'fas' : 'far'} fa-heart me-1"></i> 
                          ${post.likes ? post.likes.length : 0} ถูกใจ
                     </div>
-                `;
-                }
+                `;                
 
                 const html = `
                     <div class="glass-card feed-card p-3 mb-3">
@@ -1126,6 +1130,7 @@
 </script>
 </body>
 </html>
+
 
 
 
