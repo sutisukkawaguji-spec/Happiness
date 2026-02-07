@@ -296,6 +296,22 @@
             <div class="mb-4 position-relative">
                 <small class="fw-bold text-muted">แนวโน้มความสุข (4 สัปดาห์ล่าสุด)</small>
                 <canvas id="managerLineChart" height="150"></canvas>
+                <div class="mb-4 position-relative">
+                </div>
+
+            <div class="mb-4 pt-3 border-top">
+                <h6 class="fw-bold mb-3"><i class="fas fa-layer-group text-success me-2"></i>TRD Core Values Analysis</h6>
+                <div class="row text-center mb-2" id="trdScoreCards">
+                    </div>
+                <div style="height: 200px;">
+                    <canvas id="trdBarChart"></canvas>
+                </div>
+                <small class="text-muted d-block mt-2 text-center" style="font-size: 0.7rem;">
+                    *T=สุจริต | R=วินัย+พอเพียง | D=จิตอาสา+กตัญญู
+                </small>
+            </div>
+            
+            <h6 class="fw-bold border-bottom pb-2 ...">...</h6>
                 <div id="trendAlert" class="badge bg-danger position-absolute top-0 end-0 mt-4" style="display:none;"><i class="fas fa-arrow-down"></i> ขาลง</div>
             </div>
             <h6 class="fw-bold border-bottom pb-2 d-flex justify-content-between">สถานะบุคลากร <small class="text-muted" style="font-size:0.6rem">🔴วิกฤต 🟠ระวัง 🟢ปกติ</small></h6>
@@ -740,13 +756,15 @@
 
     // --- MANAGER FEATURES ---
     function fetchManagerData() {
-        // (ฟังก์ชันนี้ยังไม่มีในโค้ดที่คุณส่งมา ผมเพิ่มให้เพื่อให้ Dashboard ทำงานได้)
         if (!currentUser || (currentUser.role !== 'Manager' && currentUser.role !== 'Admin')) return;
         
         fetch(`${GAS_URL}?action=get_dashboard`)
         .then(res => res.json())
         .then(data => {
-            if(data.users) renderStaffList(data.users);
+            if(data.users) {
+                renderStaffList(data.users);
+                renderTRDChart(data.users); // ✅ เพิ่มบรรทัดนี้ เพื่อวาดกราฟ TRD
+            }
             if(data.trend) {
                  chartData = data.trend;
                  renderManagerChart();
@@ -1228,7 +1246,43 @@ function fetchFeed() {
     }
     
     function viewImage(url) { Swal.fire({ imageUrl: url, imageWidth: '100%', showConfirmButton: false, showCloseButton: true, background: 'transparent' }); }
-    function showVirtueInfo() { Swal.fire({ title: 'คำอธิบายหมวดความดี', html: '<div class="text-start fs-6"><p><b class="text-danger">🤝 จิตอาสา:</b> ช่วยเหลือผู้อื่น</p><p><b class="text-success">🌱 พอเพียง:</b> ประหยัด</p><p><b class="text-primary">📏 วินัย:</b> ตรงเวลา</p><p><b style="color:#6c5ce7">💎 สุจริต:</b> ซื่อสัตย์</p><p><b class="text-warning">🙏 กตัญญู:</b> รู้คุณคน</p></div>', confirmButtonColor: '#6c5ce7' }); }
+    function showVirtueInfo() {
+        Swal.fire({
+            title: '📌 คำนิยามและตัวอย่างกิจกรรม',
+            html: `
+                <div class="text-start fs-6" style="line-height: 1.6;">
+                    <div class="mb-2">
+                        <b class="text-success"><i class="fas fa-leaf me-1"></i> พอเพียง (Sufficiency):</b><br>
+                        <small class="text-muted">พอประมาณ มีเหตุผล มีภูมิคุ้มกัน</small><br>
+                        ✅ Green Office, ปลูกผักสวนครัว, ลดใช้ไฟฟ้า, แบ่งปันวัสดุเหลือใช้
+                    </div>
+                    <div class="mb-2">
+                        <b class="text-primary"><i class="fas fa-user-clock me-1"></i> วินัย (Discipline):</b><br>
+                        <small class="text-muted">เคารพกติกา รับผิดชอบต่อหน้าที่</small><br>
+                        ✅ ตรงต่อเวลา, แต่งกายถูกระเบียบ, Big Cleaning Day, ร่วมกิจกรรมองค์กร
+                    </div>
+                    <div class="mb-2">
+                        <b style="color:#00cec9"><i class="fas fa-shield-alt me-1"></i> สุจริต (Integrity):</b><br>
+                        <small class="text-muted">ซื่อสัตย์ โปร่งใส ยึดมั่นความถูกต้อง</small><br>
+                        ✅ No Gift Policy (งดรับของขวัญ), ปฏิเสธสินบน, ทำงานโปร่งใสตรวจสอบได้
+                    </div>
+                    <div class="mb-2">
+                        <b class="text-danger"><i class="fas fa-hands-helping me-1"></i> จิตอาสา (Volunteer):</b><br>
+                        <small class="text-muted">เสียสละเพื่อส่วนรวม ช่วยเหลือเกื้อกูล</small><br>
+                        ✅ บริจาคโลหิต, ปลูกป่า, บริจาคสิ่งของ, ช่วยงานเพื่อนร่วมงาน
+                    </div>
+                    <div>
+                        <b class="text-warning"><i class="fas fa-praying-hands me-1"></i> กตัญญู (Gratitude):</b><br>
+                        <small class="text-muted">สำนึกรู้คุณองค์กรและแผ่นดิน</small><br>
+                        ✅ ทำบุญตักบาตร, รดน้ำดำหัวผู้ใหญ่, รักษาชื่อเสียงองค์กร, ดูแลทรัพย์สินราชการ
+                    </div>
+                </div>
+            `,
+            confirmButtonText: 'เข้าใจแล้ว',
+            confirmButtonColor: '#6c5ce7',
+            width: '90%' // ปรับให้กว้างขึ้นเพื่อให้่อ่านง่ายในมือถือ
+        });
+    }
     function revealUpgrade(badgeKey, newLevelIdx, title, icon) {
         confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
         Swal.fire({ title: 'ยินดีด้วย! อัปเกรดสำเร็จ', text: `คุณได้รับเหรียญ "${title}"`, imageUrl: `https://dummyimage.com/200x200/eee/000&text=${icon}`, imageWidth: 100, imageHeight: 100, confirmButtonColor: '#6c5ce7', confirmButtonText: 'สุดยอด!' }).then(() => {
@@ -1241,9 +1295,79 @@ function fetchFeed() {
     }
     function viewBadge(t,d,i) { Swal.fire({ title: i + ' ' + t, text: d, confirmButtonColor: '#6c5ce7' }); }
 
+    function renderTRDChart(users) {
+        // 1. คำนวณคะแนนรวม TRD จากผู้ใช้งานทุกคน
+        let scoreT = 0, scoreR = 0, scoreD = 0;
+        
+        users.forEach(u => {
+            const v = u.virtueStats || {};
+            // T: Transparent = สุจริต
+            scoreT += (v['integrity'] || 0);
+            // R: Responsible = วินัย + พอเพียง
+            scoreR += (v['discipline'] || 0) + (v['sufficiency'] || 0);
+            // D: Dedicated = จิตอาสา + กตัญญู
+            scoreD += (v['volunteer'] || 0) + (v['gratitude'] || 0);
+        });
+
+        // 2. แสดงผลเป็นการ์ดตัวเลข
+        const total = scoreT + scoreR + scoreD || 1; // กันหาร 0
+        document.getElementById('trdScoreCards').innerHTML = `
+            <div class="col-4 border-end">
+                <h3 class="fw-bold text-primary mb-0">${scoreT}</h3>
+                <small class="text-muted fw-bold">Transparent</small>
+            </div>
+            <div class="col-4 border-end">
+                <h3 class="fw-bold text-warning mb-0">${scoreR}</h3>
+                <small class="text-muted fw-bold">Responsible</small>
+            </div>
+            <div class="col-4">
+                <h3 class="fw-bold text-danger mb-0">${scoreD}</h3>
+                <small class="text-muted fw-bold">Dedicated</small>
+            </div>
+        `;
+
+        // 3. วาดกราฟแท่ง (Bar Chart)
+        const ctx = document.getElementById('trdBarChart');
+        if(window.myTrdChart) window.myTrdChart.destroy();
+
+        window.myTrdChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Transparent (T)', 'Responsible (R)', 'Dedicated (D)'],
+                datasets: [{
+                    label: 'คะแนนรวม',
+                    data: [scoreT, scoreR, scoreD],
+                    backgroundColor: [
+                        'rgba(52, 152, 219, 0.7)',  // สีฟ้า (T)
+                        'rgba(241, 196, 15, 0.7)',  // สีเหลือง (R)
+                        'rgba(231, 76, 60, 0.7)'    // สีแดง (D)
+                    ],
+                    borderColor: [
+                        'rgba(52, 152, 219, 1)',
+                        'rgba(241, 196, 15, 1)',
+                        'rgba(231, 76, 60, 1)'
+                    ],
+                    borderWidth: 1,
+                    borderRadius: 5,
+                    barThickness: 40
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { beginAtZero: true, grid: { display: false } },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+    }
+
 </script>
 </body>
 </html>
+
 
 
 
