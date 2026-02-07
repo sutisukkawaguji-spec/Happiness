@@ -109,7 +109,13 @@
         }
         .friend-item.selected { background: #fff; border-color: var(--primary); box-shadow: 0 2px 8px rgba(108, 92, 231, 0.2); }
         .friend-avatar { width: 40px; height: 40px; border-radius: 50%; margin-right: 10px; object-fit: cover;}
-
+        .friend-chip.active {
+            background-color: #6c5ce7 !important; /* สีม่วงหลักของแอป */
+            color: white !important;
+            border-color: #6c5ce7 !important;
+            transform: scale(0.95);
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+        }
         /* Feed / Stories Styling */
         .feed-card { background: #fff; border-radius: 20px; padding: 15px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
         .feed-header { display: flex; align-items: center; margin-bottom: 10px; }
@@ -1432,9 +1438,128 @@ function fetchFeed() {
         });
     }
 
+    function submitActivity() {
+        // 1. ตรวจสอบข้อมูลพื้นฐาน
+        const selectEl = document.getElementById('virtueType');
+        const noteEl = document.getElementById('note');
+        const imageInput = document.getElementById('imageInput');
+        
+        if (!selectEl || selectEl.value === "") {
+            return Swal.fire('กรุณาเลือกประเภทกิจกรรม', '', 'warning');
+        }
+        
+        // ดึงค่า Mapping (คุณธรรม 5 ประการ) จากตัวเลือกที่เลือก
+        const selectedOption = selectEl.options[selectEl.selectedIndex];
+        const mapping = selectedOption.dataset.mapping; 
+        const activityText = selectedOption.text;
+        
+        // 2. แสดงสถานะกำลังบันทึก
+        Swal.fire({
+            title: 'กำลังบันทึกข้อมูล...',
+            html: 'กรุณารอสักครู่ ระบบกำลังอัปโหลดข้อมูลความดีของคุณ',
+            allowOutsideClick: false,
+            didOpen: () => { Swal.showLoading(); }
+        });
+
+        // 3. จัดการรูปภาพ (ถ้ามี)
+        let imageData = "";
+        if (imageInput && imageInput.files.length > 0) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                // เมื่ออ่านภาพเสร็จ (Base64) ให้ส่งข้อมูล
+                sendDataToGAS(e.target.result.split(',')[1], mapping, activityText);
+            };
+            reader.readAsDataURL(imageInput.files[0]);
+        } else {
+            // ถ้าไม่มีภาพ ให้ส่งข้อมูลทันที
+            sendDataToGAS("", mapping, activityText);
+        }
+    }
+
+    function sendDataToGAS(base64Image, virtueTag, activityName) {
+        const note = document.getElementById('note') ? document.getElementById('note').value : "";
+        
+        const payload = {
+            action: 'submit_activity',
+            userId: currentUser.userId,
+            userName: currentUser.name,
+            virtueTag: virtueTag,       // ส่งหมวด (เช่น integrity)
+            activity: activityName,     // ส่งชื่อกิจกรรม (เช่น No Gift Policy)
+            note: note,
+            happyLevel: selectedMood,   // ค่าอารมณ์ที่เลือก
+            image: base64Image          // ข้อมูลภาพ Base64
+        };
+
+        fetch(GAS_URL, {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        })
+        .then(res => res.json())
+        .then(result => {
+            if (result.status === 'success') {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'บันทึกสำเร็จ!',
+                    text: 'ความดีของคุณถูกบันทึกเข้าระบบแล้ว',
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => {
+                    location.reload(); // รีโหลดหน้าเพื่อแสดงโพสต์ใหม่ใน Feed
+                });
+            } else {
+                throw new Error(result.message);
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถบันทึกข้อมูลได้: ' + err.message, 'error');
+        });
+    }
+    let selectedFriends = []; // ตัวแปรเก็บรายชื่อเพื่อนที่เลือก
+
+function renderFriendsList(friends) {
+    const container = document.getElementById('friendsSelectionContainer');
+    if (!container) return;
+    container.innerHTML = '';
+
+    friends.forEach(f => {
+        const isSelected = selectedFriends.includes(f.name); // เช็คสถานะเดิม
+        const chip = document.createElement('div');
+        
+        // ใส่ Class พื้นฐาน และ Class active ถ้าเคยถูกเลือกไว้
+        chip.className = `friend-chip p-2 m-1 border rounded-pill d-inline-block ${isSelected ? 'active' : ''}`;
+        chip.style.cursor = 'pointer';
+        chip.style.fontSize = '0.8rem';
+        chip.style.transition = 'all 0.2s';
+        
+        chip.innerHTML = `
+            <img src="${f.img || 'https://dummyimage.com/35x35/cccccc/ffffff&text=F'}" 
+                 class="rounded-circle me-1" width="25" height="25" style="object-fit:cover;">
+            ${f.name}
+        `;
+
+        // ✅ Logic การกด Toggle (เลือก/ยกเลิก)
+        chip.onclick = function() {
+            if (selectedFriends.includes(f.name)) {
+                // ถ้ามีชื่ออยู่แล้ว -> ลบออก (ยกเลิก)
+                selectedFriends = selectedFriends.filter(name => name !== f.name);
+                this.classList.remove('active');
+            } else {
+                // ถ้ายังไม่มี -> เพิ่มเข้าไป (เลือก)
+                selectedFriends.push(f.name);
+                this.classList.add('active');
+            }
+            console.log("เพื่อนที่เลือก:", selectedFriends); // เช็คค่าใน Console
+        };
+
+        container.appendChild(chip);
+    });
+}
+
 </script>
 </body>
 </html>
+
 
 
 
