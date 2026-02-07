@@ -355,11 +355,34 @@
 
     function renderProfile() {
         if(!currentUser) return;
+        
+        // ... (โค้ดแสดงผลเดิมที่มีอยู่แล้ว ปล่อยไว้เหมือนเดิม) ...
         document.getElementById('userName').innerText = currentUser.name;
         document.getElementById('userRole').innerHTML = `${currentUser.role || 'พนักงาน'} • <span class="text-primary fw-bold">Lv.${currentUser.level || 1}</span>`;
         document.getElementById('userImg').src = currentUser.img || 'https://via.placeholder.com/90';
         initUserRadar();
         renderBadges();
+
+        // 👇👇👇 2.1 วางโค้ดเช็คอาการตรงนี้ (Zero-Touch Rescue) 👇👇👇
+        
+        // คำนวณคะแนนปัจจุบัน (1-10)
+        let currentHappyScore = (currentUser.score % 10) + 1;
+
+        // ถ้าคะแนนต่ำกว่า 5 (Red Zone) ให้ยิงสัญญาณไปหลังบ้านเงียบๆ
+        if (currentHappyScore < 5) {
+            console.log("⚠️ Red Zone Detected! Triggering Auto Rescue...");
+            
+            // ส่งสัญญาณไปให้ Google Apps Script จัดการ (ไม่ต้องรอผลลัพธ์)
+            fetch(GAS_URL, { 
+                method: 'POST', 
+                mode: 'no-cors', 
+                body: JSON.stringify({ 
+                    action: 'trigger_auto_rescue', 
+                    userId: currentUser.userId 
+                }) 
+            });
+        }
+        // 👆👆👆 จบโค้ดส่วนเพิ่ม 👆👆👆
     }
 
     // --- CORE FEATURES: ดึงรายชื่อเพื่อน ---
@@ -794,5 +817,6 @@
 </script>
 </body>
 </html>
+
 
 
