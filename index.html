@@ -24,63 +24,12 @@
         body { background-image: var(--bg-gradient); font-family: 'Kanit', sans-serif; min-height: 100vh; color: #444; padding-bottom: 100px; overflow-x: hidden; }
         .glass-card { background: var(--glass-bg); backdrop-filter: blur(15px); border-radius: 24px; box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07); padding: 20px; margin-bottom: 20px; border: 1px solid rgba(255,255,255,0.6); }
 
-        /* --- 🌟 ออร่าความดี 5 ด้าน (Virtue Auras) --- */
-        .profile-container {
-            position: relative;
-            display: inline-block;
-            z-index: 1; /* ให้รูปอยู่ข้างบน */
-        }
-        
-        /* เอฟเฟกต์แสงฟุ้งกระจายด้านหลัง */
-        .virtue-aura {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 110%; /* ใหญ่กว่ารูปนิดนึง */
-            height: 110%;
-            border-radius: 50%;
-            z-index: -1; /* ซ่อนไว้หลังรูป */
-            opacity: 0.7;
-            filter: blur(15px); /* ทำให้ฟุ้งๆ */
-            transition: all 1s ease;
-        }
-        
-        /* 🔵 1. จิตอาสา (Volunteer) - สีฟ้า: ผู้ให้ */
-        .aura-volunteer {
-            background: radial-gradient(circle, rgba(52,152,219,1) 0%, rgba(52,152,219,0) 70%);
-            box-shadow: 0 0 30px rgba(52, 152, 219, 0.8);
-        }
-        
-        /* 🟢 2. พอเพียง (Sufficiency) - สีเขียว: ธรรมชาติ/สมดุล */
-        .aura-sufficiency {
-            background: radial-gradient(circle, rgba(46,204,113,1) 0%, rgba(46,204,113,0) 70%);
-            box-shadow: 0 0 30px rgba(46, 204, 113, 0.8);
-        }
-        
-        /* 🟣 3. วินัย (Discipline) - สีม่วง: เคร่งขรึม/เป๊ะ */
-        .aura-discipline {
-            background: radial-gradient(circle, rgba(155,89,182,1) 0%, rgba(155,89,182,0) 70%);
-            box-shadow: 0 0 30px rgba(155, 89, 182, 0.8);
-        }
-        
-        /* 💎 4. สุจริต (Honesty/Integrity) - สีฟ้าคราม/เพชร: ใสสะอาด */
-        .aura-integrity {
-            background: radial-gradient(circle, rgba(0,210,211,1) 0%, rgba(0,210,211,0) 70%);
-            box-shadow: 0 0 30px rgba(0, 210, 211, 0.8);
-        }
-        
-        /* 🩷 5. กตัญญู (Gratitude) - สีชมพู: ความรัก/หัวใจ */
-        .aura-gratitude {
-            background: radial-gradient(circle, rgba(255,107,129,1) 0%, rgba(255,107,129,0) 70%);
-            box-shadow: 0 0 30px rgba(255, 107, 129, 0.8);
-        }
-        
-        /* ⚪ ไม่มีเด่น (Default) - สีเทาจางๆ */
-        .aura-none {
-            background: transparent;
-            box-shadow: none;
-        }
+        /* Profile & Aura */
+        .profile-container { position: relative; display: inline-block; margin-bottom: 15px; }
+        .profile-img { width: 90px; height: 90px; border-radius: 50%; border: 3px solid #fff; position: relative; z-index: 2; object-fit: cover; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        .aura-glow { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 100px; height: 100px; border-radius: 50%; z-index: 1; filter: blur(15px); opacity: 0.7; transition: 0.5s; }
+        .aura-normal { background: #dfe6e9; }
+        .aura-active { background: #0984e3; box-shadow: 0 0 20px #0984e3; }
 
         /* Energy Bars */
         .power-bar-label { font-size: 0.75rem; font-weight: 600; color: #666; display: flex; justify-content: space-between; margin-bottom: 2px;}
@@ -407,67 +356,10 @@
     function renderProfile() {
         if(!currentUser) return;
 
-        // ... (ส่วนแสดงชื่อ/รูป เดิม) ...
+        // แสดงชื่อ / รูป / เลเวล
         document.getElementById('userName').innerText = currentUser.name;
         document.getElementById('userRole').innerHTML = `${currentUser.role || 'พนักงาน'} • <span class="text-primary fw-bold">Lv.${currentUser.level || 1}</span>`;
         document.getElementById('userImg').src = currentUser.img || 'https://via.placeholder.com/90';
-
-        // ----------------------------------------------------
-        // ✨ คำนวณออร่า (Dominant Virtue Aura)
-        // ----------------------------------------------------
-        
-        // 1. ดึงคะแนนความดี 5 ด้านมาเทียบกัน
-        const scores = {
-            'volunteer': currentUser.virtueStats['volunteer'] || 0,
-            'sufficiency': currentUser.virtueStats['sufficiency'] || 0,
-            'discipline': currentUser.virtueStats['discipline'] || 0,
-            'integrity': currentUser.virtueStats['integrity'] || 0,
-            'gratitude': currentUser.virtueStats['gratitude'] || 0
-        };
-
-        // 2. หาค่าที่มากที่สุด (Max Value) และชื่อด้านนั้น (Max Key)
-        let maxScore = 0;
-        let dominantVirtue = 'none';
-
-        for (const [key, value] of Object.entries(scores)) {
-            if (value > maxScore) {
-                maxScore = value;
-                dominantVirtue = key;
-            }
-        }
-
-        // 3. สั่งเปลี่ยนสีออร่าที่รูปโปรไฟล์
-        // (สมมติว่ารูปมี ID="userImg" และมี Div ครอบชื่อ class="profile-container")
-        
-        // *เช็คก่อนว่ามี Div แสงหรือยัง ถ้ายังให้สร้างใหม่*
-        let auraDiv = document.getElementById('virtueAuraBg');
-        if (!auraDiv) {
-            const img = document.getElementById('userImg');
-            // สร้าง div แสงไปซ้อนข้างหลังรูป
-            auraDiv = document.createElement('div');
-            auraDiv.id = 'virtueAuraBg';
-            auraDiv.className = 'virtue-aura';
-            
-            // แทรกเข้าไปก่อนหน้ารูป (เพื่อให้ z-index ทำงาน)
-            img.parentNode.insertBefore(auraDiv, img);
-            img.parentNode.style.position = 'relative'; // บังคับ Parent ให้เป็น relative
-        }
-
-        // ล้างสีเก่า
-        auraDiv.className = 'virtue-aura'; 
-
-        // ใส่สีใหม่ตามด้านที่เด่นสุด (ถ้าคะแนน > 0)
-        if (maxScore > 0) {
-            auraDiv.classList.add('aura-' + dominantVirtue);
-        } else {
-            auraDiv.classList.add('aura-none');
-        }
-        
-        // ----------------------------------------------------
-
-        initUserRadar(); // วาดกราฟต่อ
-        renderBadges();
-    }
         
         // -------------------------------------------------------
         // 🛠️ จุดที่แก้ไข: ดึงค่าความสุขเฉลี่ย (Average) มาใช้จริง
@@ -1078,7 +970,6 @@
 </script>
 </body>
 </html>
-
 
 
 
