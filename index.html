@@ -391,6 +391,56 @@
         });
     }
 
+    // --------------------------------------------------
+    // 👇👇👇 วางฟังก์ชันนี้เพิ่มเข้าไปตรงนี้ครับ 👇👇👇
+    // --------------------------------------------------
+
+    // --- CORE FEATURES: ดึงรายชื่อเพื่อน ---
+    function fetchFriendsList() {
+        // 1. ป้องกันการทำงานก่อนมีข้อมูล User (สำคัญมาก)
+        if (!currentUser || !currentUser.userId) {
+             console.warn("รอข้อมูล User ก่อนโหลดรายชื่อเพื่อน...");
+             return;
+        }
+
+        console.log("กำลังโหลดรายชื่อเพื่อน...");
+        fetch(`${GAS_URL}?action=get_users`)
+        .then(res => res.json())
+        .then(data => {
+            const container = document.getElementById('friendListArea');
+            if (!container) return; // ถ้าหาที่วางไม่เจอให้จบการทำงาน
+            container.innerHTML = ''; // ล้างรายการเก่าทิ้งก่อน
+            
+            let count = 0;
+            data.forEach(user => {
+                // 🚨 2. จุดสำคัญ: กรองชื่อตัวเองออก (ถ้า Line ID ตรงกับเรา ไม่ต้องสร้างปุ่ม)
+                // แปลงเป็น String ทั้งคู่ก่อนเปรียบเทียบเพื่อความชัวร์
+                if (String(user.lineId) === String(currentUser.userId)) return;
+
+                count++;
+                const div = document.createElement('div');
+                // ใช้ class 'col-6' ของ Bootstrap เพื่อให้แสดง 2 คนต่อแถว
+                div.className = 'col-6 mb-2';
+                div.innerHTML = `
+                    <div class="friend-item p-2 border rounded d-flex align-items-center bg-white shadow-sm" style="cursor:pointer; transition: all 0.2s;" data-id="${user.lineId}" onclick="toggleFriend(this)">
+                        <img src="${user.img || 'https://via.placeholder.com/35'}" class="rounded-circle me-2 border" width="35" height="35" style="object-fit:cover;">
+                        <div class="text-truncate small fw-bold" style="max-width: 120px;">${user.name}</div>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+            console.log(`โหลดเพื่อนสำเร็จ: ${count} คน (ซ่อนชื่อตัวเองแล้ว)`);
+
+            // ถ้าไม่มีเพื่อนคนอื่นเลย ให้แสดงข้อความ
+            if (count === 0) {
+                container.innerHTML = '<div class="col-12 text-center text-muted small py-3">ยังไม่มีเพื่อนคนอื่นในระบบ</div>';
+            }
+        })
+        .catch(err => console.error('Error fetching friends:', err));
+    }
+    // --------------------------------------------------
+    // 👆👆👆 จบฟังก์ชันที่เพิ่มใหม่ 👆👆👆
+    // --------------------------------------------------
     // --- 🎉 ฟังก์ชันเมื่อกดเปิดกล่องอัปเกรด ---
     function revealUpgrade(badgeKey, newLevelIdx, title, icon) {
         // 1. แสดง Effect เฉลิมฉลอง
@@ -435,9 +485,6 @@
             console.error('LIFF Error:', err);
             activateDemoMode();
         }
-        
-        fetchFriendsList();
-        fetchManagerData();
     }
 
     // --- DEMO MODE ---
@@ -458,15 +505,16 @@
         .then(res => res.json())
         .then(data => {
             if (data.exists) { 
-                // Merge data from server with local userId
                 currentUser = { ...data.user, userId: userId }; 
                 renderProfile(); 
-            } 
-            else { registerUser(userId, profile); }
+                // ✅ ย้ายมาใส่ตรงนี้แทน (ทำงานเมื่อรู้แล้วว่าเราคือใคร)
+                fetchManagerData();
+            } else { 
+                registerUser(userId, profile); 
+            }
             document.getElementById('loading').style.display = 'none';
         });
     }
-
     function registerUser(userId, profile) {
         fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'register_user', userId: userId, userName: profile.displayName, userImg: profile.pictureUrl }) })
         .then(() => checkUser(userId, profile));
@@ -795,6 +843,7 @@
 </script>
 </body>
 </html>
+
 
 
 
