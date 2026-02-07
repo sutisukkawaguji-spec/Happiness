@@ -116,7 +116,6 @@
             transform: scale(0.95);
             box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
         }
-                
         /* Feed / Stories Styling */
         .feed-card { background: #fff; border-radius: 20px; padding: 15px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
         .feed-header { display: flex; align-items: center; margin-bottom: 10px; }
@@ -256,13 +255,9 @@
             </div>
 
             <div class="d-flex justify-content-between align-items-center mb-2">
-                <label class="form-label mb-0 fw-bold"><i class="fas fa-users me-1"></i> ร่วมกับใคร</label>
-                <button type="button" id="btnSelectAll" onclick="toggleSelectAll()" class="btn btn-sm btn-outline-secondary rounded-pill px-3">
-                    All
-                </button>
+                <label class="form-label fw-bold mb-0">ทำร่วมกับใคร?</label>
+                <button class="btn btn-sm btn-outline-primary rounded-pill px-3" id="btnSelectAll" onclick="selectAllFriends()"><i class="fas fa-check-double me-1"></i>All</button>
             </div>
-            <div id="friendsSelectionContainer">
-                </div>
             <div class="friend-list row" id="friendListArea"></div> <button class="btn btn-primary w-100 py-3 rounded-4 shadow mt-3 fw-bold" onclick="submitData()">บันทึกความดี</button>
         </div>
     </div>
@@ -1520,94 +1515,50 @@ function fetchFeed() {
             Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถบันทึกข้อมูลได้: ' + err.message, 'error');
         });
     }
+    let selectedFriends = []; // ตัวแปรเก็บรายชื่อเพื่อนที่เลือก
 
-    let selectedFriends = []; // เก็บรายชื่อเพื่อนที่ถูกเลือก
-    let allFriendsData = []; // เก็บข้อมูลเพื่อนทั้งหมดที่ดึงมาได้
-    
-    function renderFriendsList(friends) {
-        allFriendsData = friends; // บันทึกข้อมูลไว้สำหรับปุ่ม All
-        const container = document.getElementById('friendsSelectionContainer');
-        const btnAll = document.getElementById('btnSelectAll'); // มั่นใจว่ามีปุ่ม id นี้
+function renderFriendsList(friends) {
+    const container = document.getElementById('friendsSelectionContainer');
+    if (!container) return;
+    container.innerHTML = '';
+
+    friends.forEach(f => {
+        const isSelected = selectedFriends.includes(f.name); // เช็คสถานะเดิม
+        const chip = document.createElement('div');
         
-        if (!container) return;
-        container.innerHTML = '';
-        container.className = 'friend-chip-list'; // ใช้ Class คอลัมน์เดียว
-    
-        friends.forEach(f => {
-            const isSelected = selectedFriends.includes(f.name);
-            const chip = document.createElement('div');
-            chip.className = `friend-chip ${isSelected ? 'active' : ''}`;
-            
-            // แสดงชื่อเพื่อน + (ชื่อตำแหน่ง/ส่วนงาน)
-            chip.innerHTML = `
-                <img src="${f.img || 'https://dummyimage.com/35x35/cccccc/ffffff&text=User'}" 
-                     class="rounded-circle me-3" width="35" height="35" style="object-fit:cover;">
-                <div class="flex-grow-1 text-start">
-                    <span class="fw-bold">${f.name}</span>
-                </div>
-                <div class="friend-role-text">${f.role || 'พนักงาน'}</div>
-            `;
-    
-            chip.onclick = function() {
-                toggleFriend(f.name, chip);
-            };
-    
-            container.appendChild(chip);
-        });
-    }
-    
-    // ฟังก์ชันสลับสถานะเลือกเพื่อนรายคน
-    function toggleFriend(name, element) {
-        if (selectedFriends.includes(name)) {
-            selectedFriends = selectedFriends.filter(n => n !== name);
-            element.classList.remove('active');
-        } else {
-            selectedFriends.push(name);
-            element.classList.add('active');
-        }
-        updateAllButtonState();
-    }
-    
-    // ✅ ฟังก์ชันปุ่ม เลือกทั้งหมด (Toggle All)
-    function toggleSelectAll() {
-        const btnAll = document.getElementById('btnSelectAll');
+        // ใส่ Class พื้นฐาน และ Class active ถ้าเคยถูกเลือกไว้
+        chip.className = `friend-chip p-2 m-1 border rounded-pill d-inline-block ${isSelected ? 'active' : ''}`;
+        chip.style.cursor = 'pointer';
+        chip.style.fontSize = '0.8rem';
+        chip.style.transition = 'all 0.2s';
         
-        if (selectedFriends.length === allFriendsData.length) {
-            // ถ้าเลือกครบอยู่แล้ว -> ยกเลิกทั้งหมด (เป็นสีขาว)
-            selectedFriends = [];
-            btnAll.classList.remove('active', 'btn-primary');
-            btnAll.classList.add('btn-outline-secondary');
-        } else {
-            // ถ้ายังไม่ครบ -> เลือกทั้งหมด (เป็นสีฟ้า)
-            selectedFriends = allFriendsData.map(f => f.name);
-            btnAll.classList.add('active', 'btn-primary');
-            btnAll.classList.remove('btn-outline-secondary');
-        }
-        
-        // วาดรายการเพื่อนใหม่เพื่อให้สถานะสีอัปเดต
-        renderFriendsList(allFriendsData);
-    }
-    
-    // อัปเดตสีปุ่ม All ตามจำนวนที่เลือกจริง
-    function updateAllButtonState() {
-        const btnAll = document.getElementById('btnSelectAll');
-        if (!btnAll) return;
-        
-        if (selectedFriends.length === allFriendsData.length && allFriendsData.length > 0) {
-            btnAll.classList.add('active', 'btn-primary');
-            btnAll.classList.remove('btn-outline-secondary');
-        } else {
-            btnAll.classList.remove('active', 'btn-primary');
-            btnAll.classList.add('btn-outline-secondary');
-        }
-    }
+        chip.innerHTML = `
+            <img src="${f.img || 'https://dummyimage.com/35x35/cccccc/ffffff&text=F'}" 
+                 class="rounded-circle me-1" width="25" height="25" style="object-fit:cover;">
+            ${f.name}
+        `;
+
+        // ✅ Logic การกด Toggle (เลือก/ยกเลิก)
+        chip.onclick = function() {
+            if (selectedFriends.includes(f.name)) {
+                // ถ้ามีชื่ออยู่แล้ว -> ลบออก (ยกเลิก)
+                selectedFriends = selectedFriends.filter(name => name !== f.name);
+                this.classList.remove('active');
+            } else {
+                // ถ้ายังไม่มี -> เพิ่มเข้าไป (เลือก)
+                selectedFriends.push(f.name);
+                this.classList.add('active');
+            }
+            console.log("เพื่อนที่เลือก:", selectedFriends); // เช็คค่าใน Console
+        };
+
+        container.appendChild(chip);
+    });
+}
 
 </script>
 </body>
 </html>
-
-
-
 
 
 
