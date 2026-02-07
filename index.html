@@ -355,25 +355,29 @@
 
     function renderProfile() {
         if(!currentUser) return;
-        
-        // ... (โค้ดแสดงผลเดิมที่มีอยู่แล้ว ปล่อยไว้เหมือนเดิม) ...
+
+        // แสดงชื่อ / รูป / เลเวล
         document.getElementById('userName').innerText = currentUser.name;
         document.getElementById('userRole').innerHTML = `${currentUser.role || 'พนักงาน'} • <span class="text-primary fw-bold">Lv.${currentUser.level || 1}</span>`;
         document.getElementById('userImg').src = currentUser.img || 'https://via.placeholder.com/90';
-        initUserRadar();
+        
+        // -------------------------------------------------------
+        // 🛠️ จุดที่แก้ไข: ดึงค่าความสุขเฉลี่ย (Average) มาใช้จริง
+        // -------------------------------------------------------
+        let currentHappyScore = parseFloat(currentUser.happyScore) || 0; 
+        
+        // ป้องกันค่า Nan หรือ 0 กรณีเพิ่งสมัครใหม่
+        if (currentHappyScore === 0) currentHappyScore = 10; // ให้เต็มไปก่อนถ้ายังไม่มีข้อมูล
+
+        // อัปเดต Radar Chart (ถ้ามี)
+        initUserRadar(); // *ต้องไปแก้ใน initUserRadar ด้วยนะครับ ดูข้างล่าง*
         renderBadges();
 
-        // 👇👇👇 2.1 วางโค้ดเช็คอาการตรงนี้ (Zero-Touch Rescue) 👇👇👇
-        
-        // คำนวณคะแนนปัจจุบัน (1-10)
-        let currentHappyScore = (currentUser.score % 10) + 1;
-
-        // ถ้าคะแนนต่ำกว่า 5 (Red Zone) ให้ยิงสัญญาณไปหลังบ้านเงียบๆ
+        // --- ระบบกู้ชีพ (Auto Rescue Logic) ---
         if (currentHappyScore < 5) {
-            console.log("⚠️ Red Zone Detected! Triggering Auto Rescue...");
-            
-            // ส่งสัญญาณไปให้ Google Apps Script จัดการ (ไม่ต้องรอผลลัพธ์)
-            fetch(GAS_URL, { 
+             console.log("⚠️ Red Zone Detected! Score: " + currentHappyScore);
+             // ... (โค้ดส่งสัญญาณกู้ชีพเดิม) ...
+             fetch(GAS_URL, { 
                 method: 'POST', 
                 mode: 'no-cors', 
                 body: JSON.stringify({ 
@@ -382,7 +386,6 @@
                 }) 
             });
         }
-        // 👆👆👆 จบโค้ดส่วนเพิ่ม 👆👆👆
     }
 
     // --- CORE FEATURES: ดึงรายชื่อเพื่อน ---
@@ -748,7 +751,53 @@
 
     // --- UTILS & FEED ---
     function initUserRadar() {
-        new Chart(document.getElementById('userRadarChart'), { type: 'radar', data: { labels: ['วินัย', 'สุจริต', 'กตัญญู', 'จิตอาสา', 'พอเพียง'], datasets: [{ data: [9, 8, 6, 7, 5], backgroundColor: 'rgba(108, 92, 231, 0.4)', borderColor: '#6c5ce7' }] }, options: { maintainAspectRatio: false, scales: { r: { ticks: { display: false }, pointLabels: { display: false } } }, plugins: { legend: { display: false } } } });
+        const ctx = document.getElementById('userRadarChart');
+        if (!ctx) return;
+
+        // ถ้ามีกราฟเก่าอยู่ ให้ทำลายทิ้งก่อนสร้างใหม่ (กันกราฟซ้อนกัน)
+        if (window.myRadarChart) {
+            window.myRadarChart.destroy();
+        }
+
+        // 🛠️ จุดที่แก้ไขอยู่ตรงนี้ครับ (บรรทัดที่เขียนว่า ความสุข)
+        // เปลี่ยนจาก currentUser.score % 10 เป็น currentUser.happyScore
+        const happyScore = parseFloat(currentUser.happyScore) || 10; 
+
+        window.myRadarChart = new Chart(ctx, {
+            type: 'radar',
+            data: {
+                labels: ['ความสุข', 'ช่วยเหลือ', 'สามัคคี', 'เสียสละ', 'กตัญญู', 'ให้อภัย'],
+                datasets: [{
+                    label: 'สมดุลชีวิต',
+                    data: [
+                        happyScore,                           // <--- ✅ แก้ตรงนี้ครับ
+                        currentUser.virtueStats['Help'] || 0,
+                        currentUser.virtueStats['Team'] || 0,
+                        currentUser.virtueStats['Sacrifice'] || 0,
+                        currentUser.virtueStats['Grateful'] || 0,
+                        currentUser.virtueStats['Forgive'] || 0
+                    ],
+                    backgroundColor: 'rgba(255, 159, 67, 0.2)',
+                    borderColor: 'rgba(255, 159, 67, 1)',
+                    borderWidth: 2,
+                    pointBackgroundColor: 'rgba(255, 159, 67, 1)'
+                }]
+            },
+            options: {
+                scales: {
+                    r: {
+                        angleLines: { color: 'rgba(0,0,0,0.1)' },
+                        grid: { color: 'rgba(0,0,0,0.05)' },
+                        suggestedMin: 0,
+                        suggestedMax: 10,  // สเกลเต็ม 10
+                        ticks: { display: false } // ซ่อนตัวเลขบนแกน
+                    }
+                },
+                plugins: {
+                    legend: { display: false } // ซ่อนชื่อ Dataset
+                }
+            }
+        });
     }
     function renderManagerChart() {
         const ctx = document.getElementById('managerLineChart');
@@ -880,6 +929,7 @@
 </script>
 </body>
 </html>
+
 
 
 
