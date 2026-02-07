@@ -698,7 +698,7 @@
             // เงื่อนไข: ถ้าเป็น Red Zone (สีแดง) AND ระบบคำนวณหาเพื่อนสนิทได้
             let rescueActionHtml = '';
             
-            if (statusClass === 'status-critical' && f.topCloseness) {
+            if (statusClass === 'status-critical' && f.topFriends && f.topFriends.length > 0) {
                 rescueActionHtml = `
                     <div class="mt-2 p-3 bg-white border border-danger rounded shadow-sm d-flex align-items-start fade-in" style="border-left: 5px solid #ff7675 !important;">
                         <div class="me-3" style="font-size: 1.5rem;">🤖</div>
@@ -709,8 +709,8 @@
                             </div>
                             <div class="mt-2 p-2 bg-light rounded border d-flex align-items-center">
                                 <i class="fas fa-user-friends text-primary me-2"></i>
-                                <span class="fw-bold text-primary">${f.topCloseness.name}</span>
-                                <span class="text-muted ms-2 small">(สนิทกัน ${f.topCloseness.count} ครั้ง)</span>
+                                <span class="fw-bold text-primary">${f.topFriends[0].name}</span>
+                                <span class="text-muted ms-2 small">(สนิทกัน ${f.topFriends[0].count} ครั้ง)</span>
                             </div>
                         </div>
                     </div>
@@ -723,8 +723,8 @@
             
             // ส่วนแสดงเพื่อนสนิท (แบบปกติ)
             let closenessHtml = '';
-            if (f.topCloseness) {
-                closenessHtml = `<div class="mt-1 small text-muted"><i class="fas fa-link me-1"></i>สนิทกับ: ${f.topCloseness.name}</div>`;
+            if (f.topFriends && f.topFriends.length > 0) {
+                closenessHtml = `<div class="mt-1 small text-muted"><i class="fas fa-link me-1"></i>สนิทกับ: ${f.topFriends[0].name}</div>`;
             }
 
             // เมื่อกดที่แถว ให้ดูรายละเอียด
@@ -1154,6 +1154,7 @@ function fetchFeed() {
 </script>
 </body>
 </html>
+
 
 
 
