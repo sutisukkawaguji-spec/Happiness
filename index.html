@@ -486,45 +486,116 @@
     function renderStaffList(users) {
         const sList = document.getElementById('staffListArea');
         sList.innerHTML = '';
-        users.sort((a,b) => a.score - b.score);
+        // เรียงตามคะแนนความสุข (เอาคนที่แย่ที่สุดขึ้นก่อน)
+        users.sort((a,b) => {
+            let happyA = (a.score % 10) + 1;
+            let happyB = (b.score % 10) + 1;
+            return happyA - happyB;
+        });
+
         users.forEach(f => {
             let statusClass = 'status-normal', icon = '🟢';
             let happyScore = (f.score % 10) + 1; 
             if(happyScore < 5) { statusClass = 'status-critical'; icon = '🔴'; }
             else if(happyScore < 7) { statusClass = 'status-warning'; icon = '🟠'; }
             
-            const div = document.createElement('div');
-            div.className = `d-flex align-items-center p-2 staff-row border-bottom ${statusClass}`;
-            
-            // 👉 เพิ่มการแสดงผล "เพื่อนสนิทที่สุด" (Top Closeness) ในหน้าผู้บริหาร
-            let closenessHtml = '';
-            if (f.topCloseness) {
-                closenessHtml = `<div style="font-size:0.7rem; color:#888;">สนิทกับ: ${f.topCloseness.name} (${f.topCloseness.count} ครั้ง)</div>`;
+            // 👉 ปรับปรุงใหม่: แสดงกล่องแนะนำผู้ช่วยโดยตรง (ไม่ต้องกดปุ่ม)
+            let rescueActionHtml = '';
+            // เงื่อนไข: ถ้าวิกฤต (สีแดง) และ ระบบหาเพื่อนสนิทเจอ
+            if (statusClass === 'status-critical' && f.topCloseness) {
+                rescueActionHtml = `
+                    <div class="mt-2 p-2 bg-white border border-danger text-danger rounded shadow-sm fade-in d-flex align-items-center" style="border-left-width: 4px !important; font-size: 0.85rem;">
+                        <span style="font-size: 1.2rem; margin-right: 8px;">🤖</span>
+                        <div>
+                            <strong>System Action:</strong> ระบบมอบหมายให้ <u>คุณ ${f.topCloseness.name}</u> (เพื่อนสนิท) เข้าดูแลด่วน! 🚨
+                        </div>
+                    </div>
+                `;
             }
 
+            const div = document.createElement('div');
+            div.className = `p-2 staff-row border-bottom ${statusClass}`; // เอา d-flex align-items-center ออกจากตรงนี้เพื่อให้จัด layout แบบ column
+            
+            let closenessHtml = '';
+            if (f.topCloseness) {
+                closenessHtml = `<div class="mt-1" style="font-size:0.75rem; color:#888;"><i class="fas fa-user-friends me-1"></i> สนิทกับ: ${f.topCloseness.name} (${f.topCloseness.count} ครั้ง)</div>`;
+            }
+
+            // คลิกที่แถวเพื่อดูรายละเอียด
             div.onclick = () => showStaffDetail(f, happyScore);
+            
+            // จัด Layout ใหม่ให้รองรับกล่อง Rescue
             div.innerHTML = `
-                <img src="${f.img}" style="width:40px; height:40px; border-radius:50%; margin-right:10px;">
-                <div class="flex-grow-1">
-                    <div class="fw-bold text-dark" style="font-size:0.95rem;">${f.name}</div>
-                    <small class="text-muted">${f.role}</small>
-                    ${closenessHtml} </div>
-                <div class="text-end"><span class="fw-bold">${happyScore}</span> <small>${icon}</small></div>
-            `;
+                <div class="d-flex align-items-start">
+                    <img src="${f.img}" style="width:50px; height:50px; border-radius:50%; margin-right:12px; border: 2px solid #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                    <div class="flex-grow-1">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="fw-bold text-dark" style="font-size:1.05rem;">${f.name}</div>
+                                <small class="text-muted badge bg-light text-dark border">${f.role}</small>
+                            </div>
+                            <div class="text-end">
+                                 <span class="fw-bold" style="font-size:1.2rem;">${happyScore}</span> <small style="font-size:1rem;">${icon}</small>
+                            </div>
+                        </div>
+                        ${closenessHtml}
+                    </div>
+                </div>
+                ${rescueActionHtml} `;
             sList.appendChild(div);
         });
     }
-    function fetchManagerData() {
-        fetch(GAS_URL + '?action=get_dashboard')
-        .then(res => res.json())
-        .then(data => {
-            chartData = data.trend || [8,8,8,8];
-            renderManagerChart();
-            checkTrendAndSuggest();
-            renderStaffList(data.users);
+
+    // --- 🚨 ฟังก์ชันแสดง Popup กู้คืนความสุข ---
+    function showRescuePopup(distressedName, friendName) {
+        // ข้อความที่จะให้ผู้บริหารส่งหาเพื่อนสนิท
+        const helpMessage = `🆘 ขอความช่วยเหลือด่วน! \n\nระบบ Happy Meter แจ้งเตือนว่าช่วงนี้ "${distressedName}" กราฟความสุขอยู่ในเกณฑ์น่าเป็นห่วง (Red Zone) 🔴 \n\nในฐานะที่คุณ "${friendName}" เป็นเพื่อนที่สนิทที่สุดของเขา ระบบจึงอยากฝากให้ช่วยดูแลเป็นพิเศษหน่อยนะ! \n\nลองทักไปคุย ชวนไปกินข้าว หรือหากิจกรรมทำร่วมกันดูนะ ขอบคุณมาก! 🙏 \n\n#เพื่อนช่วยเพื่อน #RedZoneRescue`;
+
+        Swal.fire({
+            title: '<span class="text-danger">🚨 Red Zone Alert!</span>',
+            html: `
+                <div class="mb-3">คุณ <strong>${distressedName}</strong> กำลังต้องการกำลังใจ</div>
+                <div class="p-3 bg-light rounded mb-3">
+                    <small class="text-muted">ระบบคำนวณว่าเพื่อนที่เหมาะสมที่สุดในการช่วยเหลือคือ:</small><br>
+                    <strong class="text-primary" style="font-size:1.3rem;">🤝 คุณ ${friendName}</strong>
+                </div>
+                <p class="small text-muted">กดปุ่มด้านล่างเพื่อส่งข้อความขอความช่วยเหลือไปยัง ${friendName} ผ่าน LINE</p>
+            `,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d63031',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: '<i class="fab fa-line"></i> ส่งข้อความหาเพื่อน',
+            cancelButtonText: 'ปิด'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                // เรียกใช้ LIFF Share Target Picker
+                if (liff.isApiAvailable('shareTargetPicker')) {
+                    liff.shareTargetPicker([
+                        { type: "text", text: helpMessage }
+                    ]).then((res) => {
+                        if(res) Swal.fire('ส่งสำเร็จ!', 'ข้อความถูกส่งไปหาเพื่อนแล้ว', 'success');
+                    }).catch((err) => {
+                        console.error('Share Target Picker failed', err);
+                        fallbackCopyText(helpMessage, friendName);
+                    });
+                } else {
+                    // ถ้าเครื่องไหนไม่รองรับ ให้ใช้วิธีคัดลอกข้อความแทน
+                    fallbackCopyText(helpMessage, friendName);
+                }
+            }
         });
     }
 
+    // ฟังก์ชันสำรองกรณีแชร์ไม่ได้
+    function fallbackCopyText(text, friendName) {
+        navigator.clipboard.writeText(text).then(() => {
+             Swal.fire('คัดลอกข้อความแล้ว', `กรุณาเปิด LINE แล้วส่งข้อความนี้ให้คุณ "${friendName}" ด้วยตัวเองครับ`, 'info');
+        }, () => {
+             Swal.fire('ข้อความ', text, 'info');
+        });
+    }
+    
     // --- FEED LOGIC (STORIES) ---
     function fetchFeed() {
         const container = document.getElementById('feedContainer');
@@ -724,6 +795,7 @@
 </script>
 </body>
 </html>
+
 
 
 
