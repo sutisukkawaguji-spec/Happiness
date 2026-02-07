@@ -446,28 +446,6 @@
         renderBadges();
     }
 
-    function renderBadges() {
-        const container = document.getElementById('badgeContainer');
-        if(!container) return;
-        const myBadges = currentUser.badges || []; 
-        
-        const allBadges = [
-            { id: 'badge_volunteer', icon: '🤝', name: 'ผู้ให้ใจบุญ', desc: 'ทำจิตอาสาครบ 3 ครั้ง' },
-            { id: 'badge_time',      icon: '⏰', name: 'เจ้าแห่งเวลา', desc: 'มีวินัยครบ 3 ครั้ง' },
-            { id: 'badge_rich',      icon: '💎', name: 'เศรษฐีความดี', desc: 'คะแนนรวมเกิน 200 แต้ม' },
-            { id: 'badge_secret',    icon: '🎁', name: 'กล่องปริศนา', desc: 'ความลับ!', secret: true }
-        ];
-
-        container.innerHTML = '';
-        allBadges.forEach(b => {
-            const isUnlocked = myBadges.includes(b.id);
-            const boxClass = isUnlocked ? 'badge-item' : 'badge-item badge-locked';
-            const iconShow = isUnlocked ? b.icon : (b.secret ? '❓' : '🔒');
-            const html = `<div class="${boxClass}" onclick="viewBadge('${b.name}', '${b.desc}', '${iconShow}')"><div class="badge-icon">${iconShow}</div><small>${b.name}</small></div>`;
-            container.innerHTML += html;
-        });
-    }
-
     // --- MANAGER FEATURES ---
     function renderStaffList(users) {
         const sList = document.getElementById('staffListArea');
@@ -710,6 +688,7 @@
 </script>
 </body>
 </html>
+
 
 
 
