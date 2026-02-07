@@ -421,50 +421,25 @@
 
     function renderProfile() {
         if(!currentUser) return;
-
-        // 1. แสดงชื่อ / รูป / เลเวล
+        
+        // Update Text
         document.getElementById('userName').innerText = currentUser.name;
-        document.getElementById('userRole').innerHTML = `${currentUser.role || 'พนักงาน'} • <span class="text-primary fw-bold">Lv.${currentUser.level || 1}</span>`;
+        // ✅ Level หาร 500 (คำนวณมาจากหลังบ้านแล้ว)
+        document.getElementById('userRole').innerHTML = `${currentUser.role} • <span class="text-primary fw-bold">Lv.${currentUser.level}</span>`;
         document.getElementById('userImg').src = currentUser.img || 'https://via.placeholder.com/90';
         
-        // -------------------------------------------------------
-        // ✨ AURA LOGIC: คำนวณหาด้านที่เด่นที่สุด
-        // -------------------------------------------------------
+        // ✅ Aura Logic: เปลี่ยนสีตาม dominantVirtue
         const auraEl = document.getElementById('userAura');
         if (auraEl) {
-            // ดึงค่าสถิติ (ถ้าไม่มีให้เป็น 0)
-            const stats = currentUser.virtueStats || {};
-            
-            // สร้าง Object เพื่อเทียบคะแนน (ใช้ Key ให้ตรงกับ CSS)
-            const scores = {
-                'volunteer': stats['volunteer'] || 0,
-                'sufficiency': stats['sufficiency'] || 0,
-                'discipline': stats['discipline'] || 0,
-                'integrity': stats['integrity'] || 0,
-                'gratitude': stats['gratitude'] || 0
-            };
-
-            // หาค่าสูงสุด (Max Score)
-            let maxScore = 0;
-            let dominantVirtue = 'none';
-
-            for (const [key, value] of Object.entries(scores)) {
-                if (value > maxScore) {
-                    maxScore = value;
-                    dominantVirtue = key;
-                }
-            }
-
-            // ล้างคลาสเก่าออกให้หมด เหลือแค่ aura-glow
-            auraEl.className = 'aura-glow';
-
-            // ถ้ามีคะแนน ให้ใส่สีตามด้านที่เด่น
-            if (maxScore > 0) {
-                auraEl.classList.add('aura-' + dominantVirtue);
-            } else {
-                auraEl.classList.add('aura-none');
-            }
+            const dominant = currentUser.dominantVirtue || 'none';
+            // ล้าง class เก่าแล้วใส่ class ใหม่
+            auraEl.className = 'aura-glow aura-' + dominant;
         }
+        
+        // (ส่วน Radar Chart และอื่นๆ คงเดิม...)
+        if (typeof initUserRadar === 'function') initUserRadar();
+        if (typeof renderBadges === 'function') renderBadges();
+    }
 
         // -------------------------------------------------------
         // ส่วนอื่นๆ คงเดิม
@@ -944,8 +919,30 @@
     }
     function renderManagerChart() {
         const ctx = document.getElementById('managerLineChart');
-        if(window.myManagerChart) window.myManagerChart.destroy(); // ลบกราฟเก่าก่อนสร้างใหม่
-        window.myManagerChart = new Chart(ctx, { type: 'line', data: { labels: ['W1', 'W2', 'W3', 'W4'], datasets: [{ label: 'Happy Trend', data: chartData, borderColor: '#ff7675', backgroundColor: 'rgba(255, 118, 117, 0.1)', fill: true, tension: 0.4 }] }, options: { plugins: { legend: { display: false } }, scales: { y: { min: 5, max: 10 } } } });
+        if(window.myManagerChart) window.myManagerChart.destroy();
+        
+        // chartData ดึงมาจาก data.trend ใน fetchManagerData
+        if(!chartData || chartData.length === 0) return;
+    
+        window.myManagerChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: chartData.map((_, i) => i + 1), // แกน X เป็นลำดับ
+                datasets: [{
+                    label: 'ดัชนีความสุขอารมณ์องค์กร',
+                    data: chartData, // ✅ ข้อมูลภาพรวมจากหลังบ้าน
+                    borderColor: '#0984e3',
+                    backgroundColor: 'rgba(9, 132, 227, 0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 2
+                }]
+            },
+            options: {
+                plugins: { legend: { display: false } },
+                scales: { y: { min: 0, max: 10, display: false }, x: { display: false } }
+            }
+        });
     }
     function checkTrendAndSuggest() {
        // Logic เช็คกราฟขาลง
@@ -983,15 +980,37 @@
 
                 // ✨ เพิ่ม: ตรรกะปุ่มยืนยัน (Verify)
                 // จะโชว์ก็ต่อเมื่อ: คนดู (currentUser) ไม่ใช่ เจ้าของโพสต์ (post.user_line_id)
+                let verifyAvatarsHtml = '';
+                if(post.verifies && post.verifies.length > 0) {
+                    verifyAvatarsHtml = '<div class="d-flex align-items-center mt-2 small text-success"><i class="fas fa-check-circle me-1"></i> ยืนยันโดย: ';
+                    post.verifies.slice(0, 3).forEach(v => { // โชว์สูงสุด 3 คน
+                        verifyAvatarsHtml += `<img src="${v.img}" class="rounded-circle border border-white ms-1" width="20" height="20" title="${v.name}">`;
+                    });
+                    if(post.verifies.length > 3) verifyAvatarsHtml += `<span class="ms-1">+${post.verifies.length - 3}</span>`;
+                    verifyAvatarsHtml += '</div>';
+                }
+                
+                // ปุ่ม Verify (ส่ง postId ไปด้วย)
                 let verifyBtnHtml = '';
                 if (currentUser && post.user_line_id && currentUser.userId !== post.user_line_id) {
+                     // ✅ ส่ง post.id (Row Index) ไปด้วย
                      verifyBtnHtml = `
-                        <button onclick="verifyPost('${post.user_line_id}', '${post.user_name}')" 
+                        <button onclick="verifyPost('${post.id}', '${post.user_line_id}', '${post.user_name}')" 
                                 class="btn btn-sm btn-outline-success rounded-pill me-2" 
                                 style="font-size: 0.7rem; padding: 2px 10px;">
                                 <i class="fas fa-shield-alt"></i> ยืนยัน
                         </button>
                      `;
+                }
+                
+                // ปุ่ม Like (เพิ่มใหม่)
+                let likeBtnHtml = `
+                    <div class="action-btn ${post.likes && post.likes.some(u=>u.name === currentUser.name) ? 'liked' : ''}" 
+                         onclick="likePost('${post.id}')">
+                         <i class="${post.likes && post.likes.some(u=>u.name === currentUser.name) ? 'fas' : 'far'} fa-heart me-1"></i> 
+                         ${post.likes ? post.likes.length : 0} ถูกใจ
+                    </div>
+                `;
                 }
 
                 const html = `
@@ -1023,6 +1042,53 @@
             });
         })
         .catch(err => container.innerHTML = `<div class="alert alert-danger">โหลดไม่สำเร็จ: ${err.message}</div>`);
+    }
+
+    // ✅ ฟังก์ชัน Like (เพิ่มใหม่)
+    function likePost(postId) {
+        // เอฟเฟกต์ปุ่มกดทันที (UI Feedback)
+        const btn = event.currentTarget;
+        if (!btn.classList.contains('liked')) {
+            btn.classList.add('liked');
+            btn.innerHTML = `<i class="fas fa-heart me-1"></i> ${parseInt(btn.innerText) + 1} ถูกใจ`;
+            
+            // ส่งข้อมูลไปหลังบ้าน
+            fetch(GAS_URL, {
+                method: 'POST', mode: 'no-cors',
+                body: JSON.stringify({ action: 'like_post', postId: postId, userId: currentUser.userId })
+            });
+        }
+    }
+
+    // ✅ ฟังก์ชัน Verify (เพิ่มใหม่)
+    function verifyPost(postId, targetId, targetName) {
+        Swal.fire({
+            title: 'ยืนยันความถูกต้อง?',
+            text: `คุณต้องการยืนยันกิจกรรมของ ${targetName}? (พยานรับ +5 คะแนน)`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'ยืนยันเลย',
+            confirmButtonColor: '#2ecc71',
+            cancelButtonText: 'ยกเลิก'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                // แสดง Loading
+                Swal.fire({title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading()});
+                
+                fetch(GAS_URL, {
+                    method: 'POST', mode: 'no-cors',
+                    body: JSON.stringify({
+                        action: 'verify_solo',
+                        postId: postId,
+                        witnessId: currentUser.userId,
+                        targetUserLineId: targetId
+                    })
+                }).then(() => {
+                   Swal.fire('เรียบร้อย!', 'ขอบคุณที่เป็นพยานความดี', 'success')
+                   .then(() => fetchFeed()); // โหลดฟีดใหม่เพื่ออัปเดตสถานะ
+                });
+            }
+        });
     }
     
     function viewImage(url) { Swal.fire({ imageUrl: url, imageWidth: '100%', showConfirmButton: false, showCloseButton: true, background: 'transparent' }); }
@@ -1072,6 +1138,7 @@
 </script>
 </body>
 </html>
+
 
 
 
