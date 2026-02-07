@@ -399,17 +399,35 @@
 
     // --- USER LOGIC ---
     function checkUser(userId, profile) {
-        fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'check_user', userId: userId }) })
+        // เพิ่ม return เพื่อให้ await ใน main() รอจนกว่าจะเสร็จ
+        return fetch(GAS_URL, { 
+            method: 'POST', 
+            // ⚠️ สำคัญ: ใช้ text/plain เพื่อหลีกเลี่ยง CORS Preflight ของ Google
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ action: 'check_user', userId: userId }) 
+        })
         .then(res => res.json())
         .then(data => {
             if (data.exists) { 
                 currentUser = { ...data.user, userId: userId }; 
                 renderProfile(); 
                 fetchManagerData();
-                fetchFriendsList(); // ✅ เรียกรายชื่อเพื่อน (กรองชื่อตัวเองออกในฟังก์ชัน)
+                fetchFriendsList(); 
             } else { 
                 registerUser(userId, profile); 
             }
+            // ปิดหน้า Loading เมื่อสำเร็จ
+            document.getElementById('loading').style.display = 'none';
+        })
+        .catch(err => {
+            console.error("Check User Error:", err);
+            // แจ้งเตือนถ้าเชื่อมต่อไม่ได้
+            Swal.fire({
+                icon: 'error',
+                title: 'เชื่อมต่อไม่สำเร็จ',
+                text: 'กรุณาตรวจสอบ URL หรือการตั้งค่า Deploy (Anyone)',
+                footer: err.message
+            });
             document.getElementById('loading').style.display = 'none';
         });
     }
@@ -1108,6 +1126,7 @@
 </script>
 </body>
 </html>
+
 
 
 
