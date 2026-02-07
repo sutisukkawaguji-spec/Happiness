@@ -214,7 +214,7 @@
             <div class="col-4">
                 <div class="profile-container">
                     <div id="userAura" class="aura-glow aura-active"></div>
-                    <img id="userImg" src="https://via.placeholder.com/90" class="profile-img">
+                    <img id="userImg" src="https://dummyimage.com/90x90/cccccc/ffffff&text=User" class="profile-img">
                 </div>
             </div>
             <div class="col-8 text-start">
@@ -390,7 +390,7 @@
     function activateDemoMode() {
         console.warn('Entering Demo Mode');
         document.getElementById('loading').style.display = 'none';
-        currentUser = { name: "Test User (PC)", role: "Admin", score: 999, level: 99, badges: ['badge_volunteer', 'badge_time'], img: "https://via.placeholder.com/90", userId: "U_TEST_1234" };
+        currentUser = { name: "Test User (PC)", role: "Admin", score: 999, level: 99, badges: ['badge_volunteer', 'badge_time'], img: "https://dummyimage.com/90x90/cccccc/ffffff&text=User", userId: "U_TEST_1234" };
         renderProfile();
         switchTab('record', document.querySelector('.nav-item.active'));
     }
@@ -449,7 +449,7 @@
         document.getElementById('userName').innerText = currentUser.name;
         // ✅ Level หาร 500 (คำนวณมาจากหลังบ้านแล้ว)
         document.getElementById('userRole').innerHTML = `${currentUser.role} • <span class="text-primary fw-bold">Lv.${currentUser.level}</span>`;
-        document.getElementById('userImg').src = currentUser.img || 'https://via.placeholder.com/90';
+        document.getElementById('userImg').src = currentUser.img || 'https://dummyimage.com/90x90/cccccc/ffffff&text=User';
         
         // ✅ Aura Logic: เปลี่ยนสีตาม dominantVirtue
         const auraEl = document.getElementById('userAura');
@@ -486,7 +486,6 @@
                 }) 
             });
         }
-    }
 
     // --- CORE FEATURES: ดึงรายชื่อเพื่อน ---
     function fetchFriendsList() {
@@ -516,7 +515,7 @@
                 div.className = 'col-6 mb-2';
                 div.innerHTML = `
                     <div class="friend-item p-2 border rounded d-flex align-items-center bg-white shadow-sm" style="cursor:pointer; transition: all 0.2s;" data-id="${user.lineId}" onclick="toggleFriend(this)">
-                        <img src="${user.img || 'https://via.placeholder.com/35'}" class="rounded-circle me-2 border" width="35" height="35" style="object-fit:cover;">
+                        <img src="${user.img || 'https://dummyimage.com/35x35/cccccc/ffffff&text=Friend'}" class="rounded-circle me-2 border" width="35" height="35" style="object-fit:cover;">
                         <div class="text-truncate small fw-bold" style="max-width: 120px;">${user.name}</div>
                     </div>
                 `;
@@ -980,6 +979,7 @@
         const container = document.getElementById('feedContainer');
         if (!container) return;
         container.innerHTML = '<div class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm mb-2"></div><br>กำลังดึงข้อมูล...</div>';
+        
         fetch(GAS_URL + '?action=get_feed')
         .then(res => res.json())
         .then(feed => {
@@ -1001,44 +1001,36 @@
                 // อีโมจิอารมณ์
                 const moodEmoji = post.happy == 3 ? '😁' : (post.happy == 2 ? '😐' : '😞');
 
-                // ✨ เพิ่ม: ตรรกะปุ่มยืนยัน (Verify)
-                // จะโชว์ก็ต่อเมื่อ: คนดู (currentUser) ไม่ใช่ เจ้าของโพสต์ (post.user_line_id)
-                let verifyAvatarsHtml = '';
-                if(post.verifies && post.verifies.length > 0) {
-                    verifyAvatarsHtml = '<div class="d-flex align-items-center mt-2 small text-success"><i class="fas fa-check-circle me-1"></i> ยืนยันโดย: ';
-                    post.verifies.slice(0, 3).forEach(v => { // โชว์สูงสุด 3 คน
-                        verifyAvatarsHtml += `<img src="${v.img}" class="rounded-circle border border-white ms-1" width="20" height="20" title="${v.name}">`;
-                    });
-                    if(post.verifies.length > 3) verifyAvatarsHtml += `<span class="ms-1">+${post.verifies.length - 3}</span>`;
-                    verifyAvatarsHtml += '</div>';
-                }
-                
-                // ปุ่ม Verify (ส่ง postId ไปด้วย)
+                // 1. ปุ่ม Verify (ยืนยัน)
                 let verifyBtnHtml = '';
                 if (currentUser && post.user_line_id && currentUser.userId !== post.user_line_id) {
-                     // ✅ ส่ง post.id (Row Index) ไปด้วย
                      verifyBtnHtml = `
-                        <button onclick="verifyPost('${post.id}', '${post.user_line_id}', '${post.user_name}')" 
+                        <button onclick="verifyPost('${post.user_line_id}', '${post.user_name}')" 
                                 class="btn btn-sm btn-outline-success rounded-pill me-2" 
                                 style="font-size: 0.7rem; padding: 2px 10px;">
                                 <i class="fas fa-shield-alt"></i> ยืนยัน
                         </button>
                      `;
                 }
-                
-                // ปุ่ม Like (เพิ่มใหม่)
-                let likeBtnHtml = `
-                    <div class="action-btn ${post.likes && post.likes.some(u=>u.name === currentUser.name) ? 'liked' : ''}" 
-                         onclick="likePost('${post.id}')">
-                         <i class="${post.likes && post.likes.some(u=>u.name === currentUser.name) ? 'fas' : 'far'} fa-heart me-1"></i> 
-                         ${post.likes ? post.likes.length : 0} ถูกใจ
-                    </div>
-                `;                
 
+                // 2. ปุ่ม Like (เพิ่มใหม่)
+                // ตรวจสอบว่ามีคนกด Like หรือยัง
+                let isLiked = post.likes && post.likes.some(u => u.name === currentUser.name);
+                let likeCount = post.likes ? post.likes.length : 0;
+                
+                let likeBtnHtml = `
+                    <div class="action-btn ${isLiked ? 'liked' : ''}" 
+                         onclick="likePost('${post.id}')">
+                         <i class="${isLiked ? 'fas' : 'far'} fa-heart me-1"></i> 
+                         ${likeCount} ถูกใจ
+                    </div>
+                `;
+
+                // ✅ แก้ URL รูปภาพตรงนี้ให้แล้ว (dummyimage)
                 const html = `
                     <div class="glass-card feed-card p-3 mb-3">
                         <div class="feed-header d-flex align-items-center">
-                            <img src="${post.user_img || 'https://via.placeholder.com/45'}" class="feed-avatar me-2" style="width: 45px; height: 45px; border-radius: 50%; object-fit: cover;">
+                            <img src="${post.user_img || 'https://dummyimage.com/45x45/cccccc/ffffff&text=User'}" class="feed-avatar me-2" style="width: 45px; height: 45px; border-radius: 50%; object-fit: cover;">
                             <div class="feed-user">
                                 <h6 class="mb-0 fw-bold">${post.user_name}</h6>
                                 <small class="text-muted" style="font-size: 0.8rem;">${timeAgo} • <span class="feed-badge badge bg-light text-dark border">${post.virtue}</span></small>
@@ -1054,9 +1046,7 @@
                         ${imgHtml}
                         
                         <div class="feed-actions mt-2 pt-2 border-top">
-                            <div class="action-btn text-muted" style="font-size: 0.9rem;">
-                                <i class="far fa-heart me-1"></i> ถูกใจ
-                            </div>
+                            ${likeBtnHtml}
                         </div>
                     </div>`;
                 
@@ -1130,6 +1120,7 @@
 </script>
 </body>
 </html>
+
 
 
 
