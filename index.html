@@ -42,7 +42,22 @@
         .mood-btn { border: none; background: none; font-size: 2.2rem; opacity: 0.4; transition: 0.2s; filter: grayscale(1); }
         .mood-btn.active { opacity: 1; transform: scale(1.2); filter: grayscale(0); }
         .friend-list { max-height: 250px; overflow-y: auto; }
-        .friend-item { display: flex; align-items: center; padding: 8px; border-radius: 12px; background: rgba(255,255,255,0.5); margin-bottom: 6px; cursor: pointer; transition: 0.2s; border: 1px solid transparent; }
+        .friend-item { 
+            display: flex; 
+            align-items: center; 
+            padding: 8px 12px; /* เพิ่ม Padding ให้กดง่าย */
+            border-radius: 12px; 
+            background: #fff; /* พื้นหลังสีขาว */
+            margin-bottom: 6px; 
+            cursor: pointer; /* ⭐ สำคัญ: ให้เมาส์เป็นรูปมือ */
+            transition: all 0.2s; 
+            border: 2px solid transparent; /* เตรียมขอบไว้ */
+            user-select: none; /* ห้ามลากคลุมดำตัวหนังสือ */
+        }
+        .friend-item:hover {
+            transform: translateY(-2px);
+            background-color: #f8f9fa;
+        }
         .friend-item.selected { background: #fff; border-color: var(--primary); box-shadow: 0 2px 8px rgba(108, 92, 231, 0.2); }
         .friend-avatar { width: 40px; height: 40px; border-radius: 50%; margin-right: 10px; object-fit: cover;}
 
@@ -394,14 +409,33 @@
 
     // ฟังก์ชันเลือก/ยกเลิกเพื่อน (เพิ่มให้เพราะในโค้ดเก่าขาดไป)
     function toggleFriend(el) {
+        // 1. สลับสถานะ Class (มี/ไม่มี)
         el.classList.toggle('selected');
+        
+        // 2. เปลี่ยนสีให้เห็นชัดๆ ว่าเลือกแล้ว
         if (el.classList.contains('selected')) {
-            el.style.borderColor = 'var(--primary)';
+            // กรณีเลือก: ใส่ขอบสีม่วง + พื้นหลังสีม่วงอ่อน
+            el.style.borderColor = '#6c5ce7';
             el.style.backgroundColor = '#f0f0ff';
+            el.style.boxShadow = '0 2px 8px rgba(108, 92, 231, 0.2)';
+            
+            // เพิ่มติ๊กถูก ✅ ข้างหลังชื่อ (Optional)
+            if(!el.querySelector('.check-mark')) {
+                const check = document.createElement('i');
+                check.className = 'fas fa-check-circle text-primary ms-auto check-mark';
+                el.appendChild(check);
+            }
         } else {
+            // กรณีเอาออก: กลับเป็นสีขาว
             el.style.borderColor = 'transparent';
             el.style.backgroundColor = 'white';
+            el.style.boxShadow = 'none';
+            
+            // เอาติ๊กถูกออก
+            const check = el.querySelector('.check-mark');
+            if(check) check.remove();
         }
+        console.log("Friend toggled"); // เช็คใน Console ว่าทำงานไหม
     }
 
     // --- HELPER: คำนวณ Level Badge ---
@@ -727,3 +761,4 @@
 </script>
 </body>
 </html>
+
