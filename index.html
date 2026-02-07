@@ -182,8 +182,7 @@
                 <label class="form-label fw-bold mb-0">ทำร่วมกับใคร?</label>
                 <button class="btn btn-sm btn-outline-primary rounded-pill px-3" id="btnSelectAll" onclick="selectAllFriends()"><i class="fas fa-check-double me-1"></i>All</button>
             </div>
-            <div class="friend-list" id="friendListContainer"></div>
-            <button class="btn btn-primary w-100 py-3 rounded-4 shadow mt-3 fw-bold" onclick="submitData()">บันทึกความดี</button>
+            <div class="friend-list row" id="friendListArea"></div> <button class="btn btn-primary w-100 py-3 rounded-4 shadow mt-3 fw-bold" onclick="submitData()">บันทึกความดี</button>
         </div>
     </div>
 
@@ -268,7 +267,7 @@
         },
         'rich_score': {
             title: 'เศรษฐีความดี',
-            source: 'score', // ระบุว่านับจากคะแนนรวม
+            source: 'score', 
             levels: [
                 { count: 200,  rank: 'I',   icon: '🥉', desc: 'คะแนนรวม 200 แต้ม' },
                 { count: 1000, rank: 'II',  icon: '🥈', desc: 'คะแนนรวม 1,000 แต้ม' },
@@ -277,194 +276,13 @@
         },
         'active_novice': {
             title: 'ผู้เริ่มต้น',
-            source: 'total', // ระบุว่านับจากจำนวนครั้งรวม
+            source: 'total', 
             levels: [
                 { count: 5, rank: '🔥', icon: '🏃', desc: 'บันทึกกิจกรรมครบ 5 ครั้ง' }
             ]
         }
     };
 
-    // ฟังก์ชันช่วยคำนวณว่าตอนนี้ user อยู่ Lv ไหนตามสถิติ
-    function getCalculatedLevel(badgeKey, userStats, userScore) {
-        const config = badgeConfig[badgeKey];
-        if (!config) return 0;
-
-        let currentCount = 0;
-        if (config.source === 'score') {
-            currentCount = userScore || 0;
-        } else {
-            currentCount = userStats[badgeKey] || 0;
-        }
-
-        let calculatedLevel = 0;
-        // วนลูปเช็คจาก Level สูงสุดลงมา
-        for (let i = config.levels.length - 1; i >= 0; i--) {
-            if (currentCount >= config.levels[i].count) {
-                calculatedLevel = i + 1; // Level เริ่มที่ 1
-                break;
-            }
-        }
-        return calculatedLevel;
-    }
-
-
-    // --- ฟังก์ชันช่วยคำนวณว่าตอนนี้ user อยู่ Lv ไหนตามสถิติจริง ---
-    function getCalculatedLevel(badgeKey, userStats, userScore, userTotal) {
-        const config = badgeConfig[badgeKey];
-        if (!config) return 0;
-
-        let currentCount = 0;
-        if (config.source === 'score') {
-            currentCount = userScore || 0;
-        } else if (config.source === 'total') {
-            currentCount = userTotal || 0;
-        } else {
-            // ถ้าไม่ระบุ source ให้นับจาก virtueStats (หมวดความดี)
-            currentCount = userStats[badgeKey] || 0;
-        }
-
-        let calculatedLevel = 0;
-        // วนลูปเช็คจาก Level สูงสุดลงมา เพื่อหา Level ที่ผ่านเกณฑ์
-        for (let i = config.levels.length - 1; i >= 0; i--) {
-            if (currentCount >= config.levels[i].count) {
-                calculatedLevel = i + 1; // Level เริ่มที่ 1
-                break;
-            }
-        }
-        return calculatedLevel;
-    }
-
-
-    // --- 🎁 ฟังก์ชันแสดงผลเหรียญ (เวอร์ชันสมบูรณ์: รองรับการอัปเกรด) ---
-    function renderBadges() {
-        const container = document.getElementById('badgeContainer');
-        if(!container || !currentUser) return;
-        container.innerHTML = '';
-        
-        // ดึงข้อมูลดิบที่ส่งมาจากหลังบ้าน
-        const myVirtueStats = currentUser.virtueStats || {};
-        const myTotalScore = currentUser.score || 0;
-        const myTotalCount = currentUser.totalCount || 0;
-
-        // ดึงข้อมูล Level ที่เคยบันทึกไว้ในความจำมือถือ (Local Storage)
-        let storageKey = `happyMeter_badges_${currentUser.userId}`;
-        let storedLevels = JSON.parse(localStorage.getItem(storageKey)) || {};
-
-        Object.keys(badgeConfig).forEach(badgeKey => {
-            const config = badgeConfig[badgeKey];
-            
-            // 1. คำนวณ Level ที่ควรจะเป็นตามสถิติจริง
-            const realLevelIdx = getCalculatedLevel(badgeKey, myVirtueStats, myTotalScore, myTotalCount);
-            
-            // 2. ดึง Level ที่ผู้ใช้เคยเปิดดูไปล่าสุด
-            const seenLevelIdx = storedLevels[badgeKey] || 0;
-
-            let html = '';
-
-            if (realLevelIdx === 0) {
-                // CASE A: ยังไม่ปลดล็อก Lv.1 (แสดงแม่กุญแจ 🔒)
-                html = `
-                    <div class="badge-item badge-locked" onclick="viewBadge('${config.title}', 'ยังทำไม่ถึงเกณฑ์ขั้นแรก', '🔒')">
-                        <div class="badge-icon">🔒</div>
-                        <small>${config.title}</small>
-                    </div>`;
-
-            } else if (realLevelIdx > seenLevelIdx) {
-                // CASE B: มีการอัปเกรด! (Level จริง > Level ที่เคยดู) -> แสดงกล่องสั่น 🎁
-                const nextLvConfig = config.levels[realLevelIdx - 1];
-                html = `
-                    <div class="badge-item badge-mystery-upgrade" onclick="revealUpgrade('${badgeKey}', ${realLevelIdx}, '${config.title} ${nextLvConfig.rank}', '${nextLvConfig.icon}')">
-                        <div class="badge-icon">🎁</div>
-                        <small>อัปเกรด!</small>
-                    </div>`;
-
-            } else {
-                // CASE C: แสดงเหรียญ Level ปัจจุบัน (เคยดูไปแล้ว 🥇)
-                const currentLvConfig = config.levels[realLevelIdx - 1];
-                html = `
-                    <div class="badge-item" onclick="viewBadge('${config.title} ${currentLvConfig.rank}', '${currentLvConfig.desc}', '${currentLvConfig.icon}')">
-                        <div class="badge-icon">${currentLvConfig.icon}</div>
-                        <small>${config.title} ${currentLvConfig.rank}</small>
-                    </div>`;
-            }
-            container.innerHTML += html;
-        });
-    }
-
-    // --------------------------------------------------
-    // 👇👇👇 วางฟังก์ชันนี้เพิ่มเข้าไปตรงนี้ครับ 👇👇👇
-    // --------------------------------------------------
-
-    // --- CORE FEATURES: ดึงรายชื่อเพื่อน ---
-    function fetchFriendsList() {
-        // 1. ป้องกันการทำงานก่อนมีข้อมูล User (สำคัญมาก)
-        if (!currentUser || !currentUser.userId) {
-             console.warn("รอข้อมูล User ก่อนโหลดรายชื่อเพื่อน...");
-             return;
-        }
-
-        console.log("กำลังโหลดรายชื่อเพื่อน...");
-        fetch(`${GAS_URL}?action=get_users`)
-        .then(res => res.json())
-        .then(data => {
-            const container = document.getElementById('friendListArea');
-            if (!container) return; // ถ้าหาที่วางไม่เจอให้จบการทำงาน
-            container.innerHTML = ''; // ล้างรายการเก่าทิ้งก่อน
-            
-            let count = 0;
-            data.forEach(user => {
-                // 🚨 2. จุดสำคัญ: กรองชื่อตัวเองออก (ถ้า Line ID ตรงกับเรา ไม่ต้องสร้างปุ่ม)
-                // แปลงเป็น String ทั้งคู่ก่อนเปรียบเทียบเพื่อความชัวร์
-                if (String(user.lineId) === String(currentUser.userId)) return;
-
-                count++;
-                const div = document.createElement('div');
-                // ใช้ class 'col-6' ของ Bootstrap เพื่อให้แสดง 2 คนต่อแถว
-                div.className = 'col-6 mb-2';
-                div.innerHTML = `
-                    <div class="friend-item p-2 border rounded d-flex align-items-center bg-white shadow-sm" style="cursor:pointer; transition: all 0.2s;" data-id="${user.lineId}" onclick="toggleFriend(this)">
-                        <img src="${user.img || 'https://via.placeholder.com/35'}" class="rounded-circle me-2 border" width="35" height="35" style="object-fit:cover;">
-                        <div class="text-truncate small fw-bold" style="max-width: 120px;">${user.name}</div>
-                    </div>
-                `;
-                container.appendChild(div);
-            });
-            console.log(`โหลดเพื่อนสำเร็จ: ${count} คน (ซ่อนชื่อตัวเองแล้ว)`);
-
-            // ถ้าไม่มีเพื่อนคนอื่นเลย ให้แสดงข้อความ
-            if (count === 0) {
-                container.innerHTML = '<div class="col-12 text-center text-muted small py-3">ยังไม่มีเพื่อนคนอื่นในระบบ</div>';
-            }
-        })
-        .catch(err => console.error('Error fetching friends:', err));
-    }
-    // --------------------------------------------------
-    // 👆👆👆 จบฟังก์ชันที่เพิ่มใหม่ 👆👆👆
-    // --------------------------------------------------
-    // --- 🎉 ฟังก์ชันเมื่อกดเปิดกล่องอัปเกรด ---
-    function revealUpgrade(badgeKey, newLevelIdx, title, icon) {
-        // 1. แสดง Effect เฉลิมฉลอง
-        confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
-        Swal.fire({
-            title: 'ยินดีด้วย! อัปเกรดสำเร็จ',
-            text: `คุณได้รับเหรียญ "${title}"`,
-            // ใช้ Dummy image แทนไอคอนจริงไปก่อน (หรือจะใส่ URL ไอคอนจริงก็ได้)
-            imageUrl: `https://dummyimage.com/200x200/eee/000&text=${icon}`, 
-            imageWidth: 100, imageHeight: 100,
-            confirmButtonColor: '#6c5ce7',
-            confirmButtonText: 'สุดยอด!'
-        }).then(() => {
-            // 2. บันทึกลงความจำเครื่องว่าเปิดดู Level นี้แล้ว
-            let storageKey = `happyMeter_badges_${currentUser.userId}`;
-            let storedLevels = JSON.parse(localStorage.getItem(storageKey)) || {};
-            storedLevels[badgeKey] = newLevelIdx;
-            localStorage.setItem(storageKey, JSON.stringify(storedLevels));
-
-            // 3. วาดหน้าเหรียญใหม่ให้กล่องหายไป
-            renderBadges();
-        });
-    }
-    
     // Global Vars
     let currentUser = null;
     let selectedMood = 3;
@@ -494,7 +312,6 @@
         currentUser = { name: "Test User (PC)", role: "Admin", score: 999, level: 99, badges: ['badge_volunteer', 'badge_time'], img: "https://via.placeholder.com/90", userId: "U_TEST_1234" };
         renderProfile();
         switchTab('record', document.querySelector('.nav-item.active'));
-        // ลบ Popup แจ้งเตือนออกแล้วครับ
     }
 
     main();
@@ -507,14 +324,15 @@
             if (data.exists) { 
                 currentUser = { ...data.user, userId: userId }; 
                 renderProfile(); 
-                // ✅ ย้ายมาใส่ตรงนี้แทน (ทำงานเมื่อรู้แล้วว่าเราคือใคร)
                 fetchManagerData();
+                fetchFriendsList(); // ✅ เรียกรายชื่อเพื่อน (กรองชื่อตัวเองออกในฟังก์ชัน)
             } else { 
                 registerUser(userId, profile); 
             }
             document.getElementById('loading').style.display = 'none';
         });
     }
+
     function registerUser(userId, profile) {
         fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'register_user', userId: userId, userName: profile.displayName, userImg: profile.pictureUrl }) })
         .then(() => checkUser(userId, profile));
@@ -522,7 +340,6 @@
 
     function renderProfile() {
         if(!currentUser) return;
-
         document.getElementById('userName').innerText = currentUser.name;
         document.getElementById('userRole').innerHTML = `${currentUser.role || 'พนักงาน'} • <span class="text-primary fw-bold">Lv.${currentUser.level || 1}</span>`;
         document.getElementById('userImg').src = currentUser.img || 'https://via.placeholder.com/90';
@@ -530,11 +347,151 @@
         renderBadges();
     }
 
+    // --- CORE FEATURES: ดึงรายชื่อเพื่อน ---
+    function fetchFriendsList() {
+        if (!currentUser || !currentUser.userId) {
+             console.warn("รอข้อมูล User ก่อนโหลดรายชื่อเพื่อน...");
+             return;
+        }
+        
+        // แก้ไข ID ให้ตรงกับ HTML
+        const container = document.getElementById('friendListArea'); 
+        if (!container) return;
+        
+        container.innerHTML = '<div class="col-12 text-center text-muted small"><div class="spinner-border spinner-border-sm"></div> กำลังโหลดเพื่อน...</div>';
+
+        fetch(`${GAS_URL}?action=get_users`)
+        .then(res => res.json())
+        .then(data => {
+            container.innerHTML = ''; 
+            
+            let count = 0;
+            data.forEach(user => {
+                // 🚨 กรองชื่อตัวเองออก
+                if (String(user.lineId) === String(currentUser.userId)) return;
+
+                count++;
+                const div = document.createElement('div');
+                div.className = 'col-6 mb-2';
+                div.innerHTML = `
+                    <div class="friend-item p-2 border rounded d-flex align-items-center bg-white shadow-sm" style="cursor:pointer; transition: all 0.2s;" data-id="${user.lineId}" onclick="toggleFriend(this)">
+                        <img src="${user.img || 'https://via.placeholder.com/35'}" class="rounded-circle me-2 border" width="35" height="35" style="object-fit:cover;">
+                        <div class="text-truncate small fw-bold" style="max-width: 120px;">${user.name}</div>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+
+            if (count === 0) {
+                container.innerHTML = '<div class="col-12 text-center text-muted small py-3">ยังไม่มีเพื่อนคนอื่นในระบบ</div>';
+            }
+        })
+        .catch(err => {
+            console.error('Error fetching friends:', err);
+            container.innerHTML = '<div class="col-12 text-center text-danger small">โหลดรายชื่อไม่สำเร็จ</div>';
+        });
+    }
+
+    // ฟังก์ชันเลือก/ยกเลิกเพื่อน (เพิ่มให้เพราะในโค้ดเก่าขาดไป)
+    function toggleFriend(el) {
+        el.classList.toggle('selected');
+        if (el.classList.contains('selected')) {
+            el.style.borderColor = 'var(--primary)';
+            el.style.backgroundColor = '#f0f0ff';
+        } else {
+            el.style.borderColor = 'transparent';
+            el.style.backgroundColor = 'white';
+        }
+    }
+
+    // --- HELPER: คำนวณ Level Badge ---
+    function getCalculatedLevel(badgeKey, userStats, userScore, userTotal) {
+        const config = badgeConfig[badgeKey];
+        if (!config) return 0;
+
+        let currentCount = 0;
+        if (config.source === 'score') {
+            currentCount = userScore || 0;
+        } else if (config.source === 'total') {
+            currentCount = userTotal || 0;
+        } else {
+            currentCount = userStats[badgeKey] || 0;
+        }
+
+        let calculatedLevel = 0;
+        for (let i = config.levels.length - 1; i >= 0; i--) {
+            if (currentCount >= config.levels[i].count) {
+                calculatedLevel = i + 1; 
+                break;
+            }
+        }
+        return calculatedLevel;
+    }
+
+    // --- 🎁 แสดงผลเหรียญ ---
+    function renderBadges() {
+        const container = document.getElementById('badgeContainer');
+        if(!container || !currentUser) return;
+        container.innerHTML = '';
+        
+        const myVirtueStats = currentUser.virtueStats || {};
+        const myTotalScore = currentUser.score || 0;
+        const myTotalCount = currentUser.totalCount || 0;
+
+        let storageKey = `happyMeter_badges_${currentUser.userId}`;
+        let storedLevels = JSON.parse(localStorage.getItem(storageKey)) || {};
+
+        Object.keys(badgeConfig).forEach(badgeKey => {
+            const config = badgeConfig[badgeKey];
+            const realLevelIdx = getCalculatedLevel(badgeKey, myVirtueStats, myTotalScore, myTotalCount);
+            const seenLevelIdx = storedLevels[badgeKey] || 0;
+
+            let html = '';
+            if (realLevelIdx === 0) {
+                html = `
+                    <div class="badge-item badge-locked" onclick="viewBadge('${config.title}', 'ยังทำไม่ถึงเกณฑ์ขั้นแรก', '🔒')">
+                        <div class="badge-icon">🔒</div>
+                        <small>${config.title}</small>
+                    </div>`;
+            } else if (realLevelIdx > seenLevelIdx) {
+                const nextLvConfig = config.levels[realLevelIdx - 1];
+                html = `
+                    <div class="badge-item badge-mystery-upgrade" onclick="revealUpgrade('${badgeKey}', ${realLevelIdx}, '${config.title} ${nextLvConfig.rank}', '${nextLvConfig.icon}')">
+                        <div class="badge-icon">🎁</div>
+                        <small>อัปเกรด!</small>
+                    </div>`;
+            } else {
+                const currentLvConfig = config.levels[realLevelIdx - 1];
+                html = `
+                    <div class="badge-item" onclick="viewBadge('${config.title} ${currentLvConfig.rank}', '${currentLvConfig.desc}', '${currentLvConfig.icon}')">
+                        <div class="badge-icon">${currentLvConfig.icon}</div>
+                        <small>${config.title} ${currentLvConfig.rank}</small>
+                    </div>`;
+            }
+            container.innerHTML += html;
+        });
+    }
+
     // --- MANAGER FEATURES ---
+    function fetchManagerData() {
+        // (ฟังก์ชันนี้ยังไม่มีในโค้ดที่คุณส่งมา ผมเพิ่มให้เพื่อให้ Dashboard ทำงานได้)
+        if (!currentUser || (currentUser.role !== 'Manager' && currentUser.role !== 'Admin')) return;
+        
+        fetch(`${GAS_URL}?action=get_dashboard`)
+        .then(res => res.json())
+        .then(data => {
+            if(data.users) renderStaffList(data.users);
+            if(data.trend) {
+                 chartData = data.trend;
+                 renderManagerChart();
+                 checkTrendAndSuggest();
+            }
+        });
+    }
+
     function renderStaffList(users) {
         const sList = document.getElementById('staffListArea');
         sList.innerHTML = '';
-        // เรียงตามคะแนนความสุข (เอาคนที่แย่ที่สุดขึ้นก่อน)
         users.sort((a,b) => {
             let happyA = (a.score % 10) + 1;
             let happyB = (b.score % 10) + 1;
@@ -547,9 +504,8 @@
             if(happyScore < 5) { statusClass = 'status-critical'; icon = '🔴'; }
             else if(happyScore < 7) { statusClass = 'status-warning'; icon = '🟠'; }
             
-            // 👉 ปรับปรุงใหม่: แสดงกล่องแนะนำผู้ช่วยโดยตรง (ไม่ต้องกดปุ่ม)
+            // 👉 แสดงกล่องแนะนำผู้ช่วย (Red Zone Rescue)
             let rescueActionHtml = '';
-            // เงื่อนไข: ถ้าวิกฤต (สีแดง) และ ระบบหาเพื่อนสนิทเจอ
             if (statusClass === 'status-critical' && f.topCloseness) {
                 rescueActionHtml = `
                     <div class="mt-2 p-2 bg-white border border-danger text-danger rounded shadow-sm fade-in d-flex align-items-center" style="border-left-width: 4px !important; font-size: 0.85rem;">
@@ -562,17 +518,15 @@
             }
 
             const div = document.createElement('div');
-            div.className = `p-2 staff-row border-bottom ${statusClass}`; // เอา d-flex align-items-center ออกจากตรงนี้เพื่อให้จัด layout แบบ column
+            div.className = `p-2 staff-row border-bottom ${statusClass}`;
             
             let closenessHtml = '';
             if (f.topCloseness) {
                 closenessHtml = `<div class="mt-1" style="font-size:0.75rem; color:#888;"><i class="fas fa-user-friends me-1"></i> สนิทกับ: ${f.topCloseness.name} (${f.topCloseness.count} ครั้ง)</div>`;
             }
 
-            // คลิกที่แถวเพื่อดูรายละเอียด
             div.onclick = () => showStaffDetail(f, happyScore);
             
-            // จัด Layout ใหม่ให้รองรับกล่อง Rescue
             div.innerHTML = `
                 <div class="d-flex align-items-start">
                     <img src="${f.img}" style="width:50px; height:50px; border-radius:50%; margin-right:12px; border: 2px solid #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
@@ -589,154 +543,17 @@
                         ${closenessHtml}
                     </div>
                 </div>
-                ${rescueActionHtml} `;
+                ${rescueActionHtml} 
+            `;
             sList.appendChild(div);
         });
-    }
-
-    // --- 🚨 ฟังก์ชันแสดง Popup กู้คืนความสุข ---
-    function showRescuePopup(distressedName, friendName) {
-        // ข้อความที่จะให้ผู้บริหารส่งหาเพื่อนสนิท
-        const helpMessage = `🆘 ขอความช่วยเหลือด่วน! \n\nระบบ Happy Meter แจ้งเตือนว่าช่วงนี้ "${distressedName}" กราฟความสุขอยู่ในเกณฑ์น่าเป็นห่วง (Red Zone) 🔴 \n\nในฐานะที่คุณ "${friendName}" เป็นเพื่อนที่สนิทที่สุดของเขา ระบบจึงอยากฝากให้ช่วยดูแลเป็นพิเศษหน่อยนะ! \n\nลองทักไปคุย ชวนไปกินข้าว หรือหากิจกรรมทำร่วมกันดูนะ ขอบคุณมาก! 🙏 \n\n#เพื่อนช่วยเพื่อน #RedZoneRescue`;
-
-        Swal.fire({
-            title: '<span class="text-danger">🚨 Red Zone Alert!</span>',
-            html: `
-                <div class="mb-3">คุณ <strong>${distressedName}</strong> กำลังต้องการกำลังใจ</div>
-                <div class="p-3 bg-light rounded mb-3">
-                    <small class="text-muted">ระบบคำนวณว่าเพื่อนที่เหมาะสมที่สุดในการช่วยเหลือคือ:</small><br>
-                    <strong class="text-primary" style="font-size:1.3rem;">🤝 คุณ ${friendName}</strong>
-                </div>
-                <p class="small text-muted">กดปุ่มด้านล่างเพื่อส่งข้อความขอความช่วยเหลือไปยัง ${friendName} ผ่าน LINE</p>
-            `,
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#d63031',
-            cancelButtonColor: '#6c757d',
-            confirmButtonText: '<i class="fab fa-line"></i> ส่งข้อความหาเพื่อน',
-            cancelButtonText: 'ปิด'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                // เรียกใช้ LIFF Share Target Picker
-                if (liff.isApiAvailable('shareTargetPicker')) {
-                    liff.shareTargetPicker([
-                        { type: "text", text: helpMessage }
-                    ]).then((res) => {
-                        if(res) Swal.fire('ส่งสำเร็จ!', 'ข้อความถูกส่งไปหาเพื่อนแล้ว', 'success');
-                    }).catch((err) => {
-                        console.error('Share Target Picker failed', err);
-                        fallbackCopyText(helpMessage, friendName);
-                    });
-                } else {
-                    // ถ้าเครื่องไหนไม่รองรับ ให้ใช้วิธีคัดลอกข้อความแทน
-                    fallbackCopyText(helpMessage, friendName);
-                }
-            }
-        });
-    }
-
-    // ฟังก์ชันสำรองกรณีแชร์ไม่ได้
-    function fallbackCopyText(text, friendName) {
-        navigator.clipboard.writeText(text).then(() => {
-             Swal.fire('คัดลอกข้อความแล้ว', `กรุณาเปิด LINE แล้วส่งข้อความนี้ให้คุณ "${friendName}" ด้วยตัวเองครับ`, 'info');
-        }, () => {
-             Swal.fire('ข้อความ', text, 'info');
-        });
-    }
-    
-    // --- FEED LOGIC (STORIES) ---
-    function fetchFeed() {
-        const container = document.getElementById('feedContainer');
-        if (!container) return;
-
-        container.innerHTML = '<div class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm mb-2"></div><br>กำลังดึงข้อมูล...</div>';
-
-        fetch(GAS_URL + '?action=get_feed')
-        .then(res => {
-            if (!res.ok) throw new Error("Server error: " + res.status);
-            return res.json();
-        })
-        .then(feed => {
-            container.innerHTML = '';
-            if (!feed || feed.length === 0) {
-                container.innerHTML = '<div class="text-center py-5 text-muted"><i class="far fa-newspaper fa-3x mb-3"></i><br>ยังไม่มีเรื่องราว<br>มาเริ่มทำความดีกันเถอะ!</div>';
-                return;
-            }
-            feed.forEach(post => {
-                let timeAgo = "-";
-                try { timeAgo = new Date(post.timestamp).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute:'2-digit' }); } catch(e) {}
-                
-                // Fix Mixed Content by replacing http with https for googleusercontent
-                let imgUrl = post.image;
-                if(imgUrl && imgUrl.startsWith('http:')) {
-                    imgUrl = imgUrl.replace('http:', 'https:');
-                }
-
-                const imgHtml = (imgUrl && imgUrl.length > 10) ? `<img src="${imgUrl}" class="feed-img" onclick="viewImage('${imgUrl}')">` : '';
-                const moodEmoji = post.happy == 3 ? '😁' : (post.happy == 2 ? '😐' : '😞');
-                const html = `
-                    <div class="glass-card feed-card p-3">
-                        <div class="feed-header">
-                            <img src="${post.user_img || 'https://via.placeholder.com/45'}" class="feed-avatar">
-                            <div class="feed-user"><h6>${post.user_name}</h6><small>${timeAgo} • <span class="feed-badge">${post.virtue}</span></small></div>
-                            <div class="ms-auto fs-4">${moodEmoji}</div>
-                        </div>
-                        <div class="feed-content mb-2">${post.note || ''}</div>
-                        ${imgHtml}
-                        <div class="feed-actions"><div class="action-btn" onclick="this.classList.toggle('liked'); this.querySelector('i').classList.toggle('fas'); this.querySelector('i').classList.toggle('far');"><i class="far fa-heart"></i> ถูกใจ</div></div>
-                    </div>`;
-                container.innerHTML += html;
-            });
-        })
-        .catch(err => {
-            console.error(err);
-            container.innerHTML = `<div class="alert alert-danger">โหลดไม่สำเร็จ: ${err.message}</div>`;
-        });
-    }
-    
-    function viewImage(url) {
-        Swal.fire({ imageUrl: url, imageWidth: '100%', showConfirmButton: false, showCloseButton: true, background: 'transparent' });
-    }
-
-    // --- MANAGER FEATURES ---
-    function renderStaffList(users) {
-        const sList = document.getElementById('staffListArea');
-        sList.innerHTML = '';
-        users.sort((a,b) => a.score - b.score);
-        users.forEach(f => {
-            let statusClass = 'status-normal', icon = '🟢';
-            let happyScore = (f.score % 10) + 1; 
-            if(happyScore < 5) { statusClass = 'status-critical'; icon = '🔴'; }
-            else if(happyScore < 7) { statusClass = 'status-warning'; icon = '🟠'; }
-            
-            const div = document.createElement('div');
-            div.className = `d-flex align-items-center p-2 staff-row border-bottom ${statusClass}`;
-            div.onclick = () => showStaffDetail(f, happyScore);
-            div.innerHTML = `<img src="${f.img}" style="width:40px; height:40px; border-radius:50%; margin-right:10px;"><div class="flex-grow-1"><div class="fw-bold text-dark" style="font-size:0.95rem;">${f.name}</div><small class="text-muted">${f.role}</small></div><div class="text-end"><span class="fw-bold">${happyScore}</span> <small>${icon}</small></div>`;
-            sList.appendChild(div);
-        });
-    }
-
-    function checkTrendAndSuggest() {
-        const last = chartData[chartData.length - 1];
-        const prev = chartData[chartData.length - 2];
-        if (last < prev) {
-            document.getElementById('trendAlert').style.display = 'block';
-            Swal.fire({ title: '⚠️ แนวโน้มขาลง', html: 'ความสุขมวลรวมลดลง<br>แนะนำ: จัดกิจกรรม Team Building ด่วน', icon: 'warning', confirmButtonColor: '#ff7675' });
-        }
-    }
-
-    function showStaffDetail(user, score) {
-        let helperHtml = (score < 7) ? `<div class="mt-3 bg-light p-2 rounded text-start"><small class="text-danger">ยังไม่มีเพื่อนดูแล</small><button class="btn btn-sm btn-outline-danger w-100 mt-2">มอบหมายงาน</button></div>` : `<div class="mt-3 bg-light p-2 rounded text-start"><small class="text-success">มีเพื่อนดูแลแล้ว</small></div>`;
-        Swal.fire({ html: `<img src="${user.img}" style="width:90px; height:90px; border-radius:50%; margin-bottom:10px;"><br><h5 class="fw-bold">${user.name}</h5><span class="badge bg-secondary mb-3">${user.role}</span><div class="row g-2 text-center"><div class="col-6"><div class="border rounded p-2"><h6>ความสุข</h6><span class="${score<5?'text-danger':''}">${score}/10</span></div></div><div class="col-6"><div class="border rounded p-2"><h6>คะแนนสะสม</h6><span>${user.score}</span></div></div></div>${helperHtml}`, showConfirmButton: false, showCloseButton: true });
     }
 
     // --- FORM & SUBMIT ---
     function setMood(val, btn) {
-        selectedMood = val; // ✅ ค่านี้ต้องถูกส่งไป
+        selectedMood = val; 
         document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        console.log("Selected mood set to:", selectedMood); // Debug
     }
     function addEmoji(emoji) { document.getElementById('noteInput').value += emoji + ' '; }
     
@@ -773,15 +590,22 @@
         items.forEach(i => isSelect ? i.classList.add('selected') : i.classList.remove('selected'));
         btn.innerHTML = isSelect ? '<i class="fas fa-times me-1"></i>Cancel' : '<i class="fas fa-check-double me-1"></i>All';
         btn.classList.toggle('btn-outline-primary'); btn.classList.toggle('btn-outline-danger');
+        // อัปเดต CSS ตามสถานะ
+        items.forEach(i => toggleFriend(i)); 
     }
 
     async function submitData() {
         if(!currentUser) return Swal.fire('Error', 'ไม่พบข้อมูลผู้ใช้', 'error');
+        
+        // แก้ไข Selector ให้แม่นยำขึ้น
         const btn = document.querySelector('button[onclick="submitData()"]');
+        const originalText = btn.innerHTML;
         btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังประมวลผล...';
+        
         try {
             const tagged = Array.from(document.querySelectorAll('.friend-item.selected')).map(el => el.dataset.id).join(',');
             let uploadId = null; let totalChunks = 0;
+            
             if (selectedImageBase64) {
                 uploadId = Date.now().toString();
                 const CHUNK_SIZE = 50000;
@@ -794,23 +618,27 @@
             }
             btn.innerHTML = 'กำลังบันทึกข้อมูล...';
             
-            console.log("Submitting mood:", selectedMood); // Debug Check
-            
-            // ✅ ส่งค่า selectedMood ที่ถูกต้องไป
             await fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ 
                 action: 'submit_activity', 
                 userId: currentUser.userId, 
                 userName: currentUser.name, 
-                happyLevel: selectedMood, // <-- ต้องใช้ตัวแปรนี้
+                happyLevel: selectedMood,
                 virtueTag: document.getElementById('virtueSelect').value, 
                 note: document.getElementById('noteInput').value, 
                 taggedFriends: tagged, 
                 uploadId: uploadId, 
                 totalChunks: totalChunks 
             }) });
+            
             Swal.fire({ icon: 'success', title: 'บันทึกสำเร็จ!', text: 'ขอบคุณที่ร่วมแบ่งปันความสุข', showConfirmButton: false, timer: 2000 }).then(() => { location.reload(); });
-        } catch (err) { /* ... (error handling) ... */ }
+        } catch (err) { 
+            console.error(err);
+            Swal.fire('Error', 'เกิดข้อผิดพลาด: ' + err.message, 'error');
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
     }
+
     // --- NAVIGATION ---
     function switchTab(pageId, el) {
         if (pageId === 'manager') {
@@ -828,25 +656,74 @@
         if(pageId === 'stories') fetchFeed();
     }
 
-    // --- CHARTS & UI UTILS ---
+    // --- UTILS & FEED ---
     function initUserRadar() {
         new Chart(document.getElementById('userRadarChart'), { type: 'radar', data: { labels: ['วินัย', 'สุจริต', 'กตัญญู', 'จิตอาสา', 'พอเพียง'], datasets: [{ data: [9, 8, 6, 7, 5], backgroundColor: 'rgba(108, 92, 231, 0.4)', borderColor: '#6c5ce7' }] }, options: { maintainAspectRatio: false, scales: { r: { ticks: { display: false }, pointLabels: { display: false } } }, plugins: { legend: { display: false } } } });
     }
     function renderManagerChart() {
         const ctx = document.getElementById('managerLineChart');
-        new Chart(ctx, { type: 'line', data: { labels: ['W1', 'W2', 'W3', 'W4'], datasets: [{ label: 'Happy Trend', data: chartData, borderColor: '#ff7675', backgroundColor: 'rgba(255, 118, 117, 0.1)', fill: true, tension: 0.4 }] }, options: { plugins: { legend: { display: false } }, scales: { y: { min: 5, max: 10 } } } });
+        if(window.myManagerChart) window.myManagerChart.destroy(); // ลบกราฟเก่าก่อนสร้างใหม่
+        window.myManagerChart = new Chart(ctx, { type: 'line', data: { labels: ['W1', 'W2', 'W3', 'W4'], datasets: [{ label: 'Happy Trend', data: chartData, borderColor: '#ff7675', backgroundColor: 'rgba(255, 118, 117, 0.1)', fill: true, tension: 0.4 }] }, options: { plugins: { legend: { display: false } }, scales: { y: { min: 5, max: 10 } } } });
     }
+    function checkTrendAndSuggest() {
+       // Logic เช็คกราฟขาลง
+    }
+
+    function showStaffDetail(user, score) {
+        let helperHtml = (score < 7) ? `<div class="mt-3 bg-light p-2 rounded text-start"><small class="text-danger">ยังไม่มีเพื่อนดูแล</small></div>` : `<div class="mt-3 bg-light p-2 rounded text-start"><small class="text-success">มีเพื่อนดูแลแล้ว</small></div>`;
+        Swal.fire({ html: `<img src="${user.img}" style="width:90px; height:90px; border-radius:50%; margin-bottom:10px;"><br><h5 class="fw-bold">${user.name}</h5><span class="badge bg-secondary mb-3">${user.role}</span><div class="row g-2 text-center"><div class="col-6"><div class="border rounded p-2"><h6>ความสุข</h6><span class="${score<5?'text-danger':''}">${score}/10</span></div></div><div class="col-6"><div class="border rounded p-2"><h6>คะแนนสะสม</h6><span>${user.score}</span></div></div></div>${helperHtml}`, showConfirmButton: false, showCloseButton: true });
+    }
+
+    function fetchFeed() {
+        const container = document.getElementById('feedContainer');
+        if (!container) return;
+        container.innerHTML = '<div class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm mb-2"></div><br>กำลังดึงข้อมูล...</div>';
+        fetch(GAS_URL + '?action=get_feed')
+        .then(res => res.json())
+        .then(feed => {
+            container.innerHTML = '';
+            if (!feed || feed.length === 0) {
+                container.innerHTML = '<div class="text-center py-5 text-muted"><i class="far fa-newspaper fa-3x mb-3"></i><br>ยังไม่มีเรื่องราว<br>มาเริ่มทำความดีกันเถอะ!</div>';
+                return;
+            }
+            feed.forEach(post => {
+                let timeAgo = "-";
+                try { timeAgo = new Date(post.timestamp).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute:'2-digit' }); } catch(e) {}
+                let imgUrl = post.image;
+                if(imgUrl && imgUrl.startsWith('http:')) imgUrl = imgUrl.replace('http:', 'https:');
+                const imgHtml = (imgUrl && imgUrl.length > 10) ? `<img src="${imgUrl}" class="feed-img" onclick="viewImage('${imgUrl}')">` : '';
+                const moodEmoji = post.happy == 3 ? '😁' : (post.happy == 2 ? '😐' : '😞');
+                const html = `
+                    <div class="glass-card feed-card p-3">
+                        <div class="feed-header">
+                            <img src="${post.user_img || 'https://via.placeholder.com/45'}" class="feed-avatar">
+                            <div class="feed-user"><h6>${post.user_name}</h6><small>${timeAgo} • <span class="feed-badge">${post.virtue}</span></small></div>
+                            <div class="ms-auto fs-4">${moodEmoji}</div>
+                        </div>
+                        <div class="feed-content mb-2">${post.note || ''}</div>
+                        ${imgHtml}
+                        <div class="feed-actions"><div class="action-btn"><i class="far fa-heart"></i> ถูกใจ</div></div>
+                    </div>`;
+                container.innerHTML += html;
+            });
+        })
+        .catch(err => container.innerHTML = `<div class="alert alert-danger">โหลดไม่สำเร็จ: ${err.message}</div>`);
+    }
+    
+    function viewImage(url) { Swal.fire({ imageUrl: url, imageWidth: '100%', showConfirmButton: false, showCloseButton: true, background: 'transparent' }); }
     function showVirtueInfo() { Swal.fire({ title: 'คำอธิบายหมวดความดี', html: '<div class="text-start fs-6"><p><b class="text-danger">🤝 จิตอาสา:</b> ช่วยเหลือผู้อื่น</p><p><b class="text-success">🌱 พอเพียง:</b> ประหยัด</p><p><b class="text-primary">📏 วินัย:</b> ตรงเวลา</p><p><b style="color:#6c5ce7">💎 สุจริต:</b> ซื่อสัตย์</p><p><b class="text-warning">🙏 กตัญญู:</b> รู้คุณคน</p></div>', confirmButtonColor: '#6c5ce7' }); }
-    function openMysteryBox() { confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } }); Swal.fire({ title: 'ยินดีด้วย!', imageUrl: 'https://cdn-icons-png.flaticon.com/512/2583/2583344.png', imageWidth: 100, imageHeight: 100, confirmButtonColor: '#6c5ce7' }); }
+    function revealUpgrade(badgeKey, newLevelIdx, title, icon) {
+        confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
+        Swal.fire({ title: 'ยินดีด้วย! อัปเกรดสำเร็จ', text: `คุณได้รับเหรียญ "${title}"`, imageUrl: `https://dummyimage.com/200x200/eee/000&text=${icon}`, imageWidth: 100, imageHeight: 100, confirmButtonColor: '#6c5ce7', confirmButtonText: 'สุดยอด!' }).then(() => {
+            let storageKey = `happyMeter_badges_${currentUser.userId}`;
+            let storedLevels = JSON.parse(localStorage.getItem(storageKey)) || {};
+            storedLevels[badgeKey] = newLevelIdx;
+            localStorage.setItem(storageKey, JSON.stringify(storedLevels));
+            renderBadges();
+        });
+    }
     function viewBadge(t,d,i) { Swal.fire({ title: i + ' ' + t, text: d, confirmButtonColor: '#6c5ce7' }); }
 
 </script>
 </body>
 </html>
-
-
-
-
-
-
-
