@@ -1105,39 +1105,10 @@
     }
     function viewBadge(t,d,i) { Swal.fire({ title: i + ' ' + t, text: d, confirmButtonColor: '#6c5ce7' }); }
 
-    // --- ฟังก์ชันเมื่อเพื่อนกดปุ่มยืนยัน ---
-    function verifyPost(targetId, targetName) {
-        Swal.fire({
-            title: 'ยืนยันความถูกต้อง?',
-            text: `คุณต้องการยืนยันว่ากิจกรรมของ ${targetName} เป็นความจริง?`,
-            icon: 'question',
-            showCancelButton: true,
-            confirmButtonText: 'ใช่ ยืนยัน (+5 คะแนน)',
-            confirmButtonColor: '#2ecc71'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                // ส่งข้อมูลไปหลังบ้าน
-                fetch(GAS_URL, {
-                    method: 'POST',
-                    mode: 'no-cors',
-                    body: JSON.stringify({
-                        action: 'verify_solo',
-                        witnessId: currentUser.userId,        // เรา (พยาน)
-                        witnessName: currentUser.name,
-                        targetUserId: targetId,               // คนโพสต์
-                        targetUserName: targetName,
-                        targetUserLineId: targetId            // (สมมติใช้ ID เดียวกัน)
-                    })
-                });
-                
-                Swal.fire('เรียบร้อย!', 'คุณได้รับคะแนนพยาน +5 คะแนน', 'success');
-            }
-        });
-    }
-
 </script>
 </body>
 </html>
+
 
 
 
