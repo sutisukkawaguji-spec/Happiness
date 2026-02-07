@@ -261,7 +261,7 @@
         currentUser = { name: "Test User (PC)", role: "Admin", score: 999, level: 99, badges: ['badge_volunteer', 'badge_time'], img: "https://via.placeholder.com/90", userId: "U_TEST_1234" };
         renderProfile();
         switchTab('record', document.querySelector('.nav-item.active'));
-        Swal.fire({ icon: 'info', title: 'Test Mode', text: 'ระบบจำลอง (ไม่เชื่อมต่อ LINE)', toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
+        // ลบ Popup แจ้งเตือนออกแล้วครับ
     }
 
     main();
@@ -288,10 +288,6 @@
 
     function renderProfile() {
         if(!currentUser) return;
-
-        // 👇👇 เพิ่มบรรทัดนี้เข้าไปครับ (บรรทัดสายลับ) 👇👇
-        alert("🕵️ Check Data:\nScore: " + currentUser.score + "\nLevel: " + currentUser.level + "\nBadges: " + currentUser.badges);
-        // 👆👆---------------------------------------👆👆
 
         document.getElementById('userName').innerText = currentUser.name;
         document.getElementById('userRole').innerHTML = `${currentUser.role || 'พนักงาน'} • <span class="text-primary fw-bold">Lv.${currentUser.level || 1}</span>`;
@@ -322,25 +318,38 @@
         });
     }
 
-    // --- DATA FETCHING ---
-    function fetchFriendsList() {
-        fetch(GAS_URL + '?action=get_users')
-        .then(res => res.json())
-        .then(users => {
-            const fList = document.getElementById('friendListContainer');
-            fList.innerHTML = '';
-            users.forEach(f => {
-                if (currentUser && f.lineId === currentUser.userId) return;
-                const div = document.createElement('div');
-                div.className = 'friend-item';
-                div.dataset.id = f.lineId;
-                div.innerHTML = `<img src="${f.img}" class="friend-avatar"><h6>${f.name}</h6><div class="ms-auto"><i class="far fa-circle text-muted"></i></div>`;
-                div.onclick = function() { this.classList.toggle('selected'); }
-                fList.appendChild(div);
-            });
+    // --- MANAGER FEATURES ---
+    function renderStaffList(users) {
+        const sList = document.getElementById('staffListArea');
+        sList.innerHTML = '';
+        users.sort((a,b) => a.score - b.score);
+        users.forEach(f => {
+            let statusClass = 'status-normal', icon = '🟢';
+            let happyScore = (f.score % 10) + 1; 
+            if(happyScore < 5) { statusClass = 'status-critical'; icon = '🔴'; }
+            else if(happyScore < 7) { statusClass = 'status-warning'; icon = '🟠'; }
+            
+            const div = document.createElement('div');
+            div.className = `d-flex align-items-center p-2 staff-row border-bottom ${statusClass}`;
+            
+            // 👉 เพิ่มการแสดงผล "เพื่อนสนิทที่สุด" (Top Closeness) ในหน้าผู้บริหาร
+            let closenessHtml = '';
+            if (f.topCloseness) {
+                closenessHtml = `<div style="font-size:0.7rem; color:#888;">สนิทกับ: ${f.topCloseness.name} (${f.topCloseness.count} ครั้ง)</div>`;
+            }
+
+            div.onclick = () => showStaffDetail(f, happyScore);
+            div.innerHTML = `
+                <img src="${f.img}" style="width:40px; height:40px; border-radius:50%; margin-right:10px;">
+                <div class="flex-grow-1">
+                    <div class="fw-bold text-dark" style="font-size:0.95rem;">${f.name}</div>
+                    <small class="text-muted">${f.role}</small>
+                    ${closenessHtml} </div>
+                <div class="text-end"><span class="fw-bold">${happyScore}</span> <small>${icon}</small></div>
+            `;
+            sList.appendChild(div);
         });
     }
-
     function fetchManagerData() {
         fetch(GAS_URL + '?action=get_dashboard')
         .then(res => res.json())
@@ -441,9 +450,10 @@
 
     // --- FORM & SUBMIT ---
     function setMood(val, btn) {
-        selectedMood = val;
+        selectedMood = val; // ✅ ค่านี้ต้องถูกส่งไป
         document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
+        console.log("Selected mood set to:", selectedMood); // Debug
     }
     function addEmoji(emoji) { document.getElementById('noteInput').value += emoji + ' '; }
     
@@ -500,13 +510,24 @@
                 }
             }
             btn.innerHTML = 'กำลังบันทึกข้อมูล...';
-            await fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: 'submit_activity', userId: currentUser.userId, userName: currentUser.name, happyLevel: selectedMood, virtueTag: document.getElementById('virtueSelect').value, note: document.getElementById('noteInput').value, taggedFriends: tagged, uploadId: uploadId, totalChunks: totalChunks }) });
+            
+            console.log("Submitting mood:", selectedMood); // Debug Check
+            
+            // ✅ ส่งค่า selectedMood ที่ถูกต้องไป
+            await fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ 
+                action: 'submit_activity', 
+                userId: currentUser.userId, 
+                userName: currentUser.name, 
+                happyLevel: selectedMood, // <-- ต้องใช้ตัวแปรนี้
+                virtueTag: document.getElementById('virtueSelect').value, 
+                note: document.getElementById('noteInput').value, 
+                taggedFriends: tagged, 
+                uploadId: uploadId, 
+                totalChunks: totalChunks 
+            }) });
             Swal.fire({ icon: 'success', title: 'บันทึกสำเร็จ!', text: 'ขอบคุณที่ร่วมแบ่งปันความสุข', showConfirmButton: false, timer: 2000 }).then(() => { location.reload(); });
-        } catch (err) {
-            console.error(err); Swal.fire('Error', 'เกิดข้อผิดพลาดในการส่งข้อมูล', 'error'); btn.disabled = false; btn.innerText = 'ลองใหม่อีกครั้ง';
-        }
+        } catch (err) { /* ... (error handling) ... */ }
     }
-
     // --- NAVIGATION ---
     function switchTab(pageId, el) {
         if (pageId === 'manager') {
@@ -539,4 +560,5 @@
 </script>
 </body>
 </html>
+
 
