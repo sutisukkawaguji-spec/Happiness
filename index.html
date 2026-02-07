@@ -266,14 +266,20 @@
                 { count: 15, rank: 'II',  icon: '⚖️', desc: 'แบบอย่างด้านวินัย (15 ครั้ง)' }
             ]
         },
-        // ตัวอย่างเหรียญที่นับจากคะแนนรวม (Total Score)
         'rich_score': {
             title: 'เศรษฐีความดี',
-            source: 'score', // ระบุว่าไม่ได้นับจาก virtueCount แต่มาจาก score รวม
+            source: 'score', // ระบุว่านับจากคะแนนรวม
             levels: [
                 { count: 200,  rank: 'I',   icon: '🥉', desc: 'คะแนนรวม 200 แต้ม' },
                 { count: 1000, rank: 'II',  icon: '🥈', desc: 'คะแนนรวม 1,000 แต้ม' },
                 { count: 5000, rank: 'III', icon: '🥇', desc: 'ตำนาน (5,000 แต้ม)' }
+            ]
+        },
+        'active_novice': {
+            title: 'ผู้เริ่มต้น',
+            source: 'total', // ระบุว่านับจากจำนวนครั้งรวม
+            levels: [
+                { count: 5, rank: '🔥', icon: '🏃', desc: 'บันทึกกิจกรรมครบ 5 ครั้ง' }
             ]
         }
     };
@@ -302,16 +308,45 @@
     }
 
 
-    // --- ฟังก์ชันแสดงผลเหรียญ (เวอร์ชันใหม่ รองรับการอัปเกรด) ---
+    // --- ฟังก์ชันช่วยคำนวณว่าตอนนี้ user อยู่ Lv ไหนตามสถิติจริง ---
+    function getCalculatedLevel(badgeKey, userStats, userScore, userTotal) {
+        const config = badgeConfig[badgeKey];
+        if (!config) return 0;
+
+        let currentCount = 0;
+        if (config.source === 'score') {
+            currentCount = userScore || 0;
+        } else if (config.source === 'total') {
+            currentCount = userTotal || 0;
+        } else {
+            // ถ้าไม่ระบุ source ให้นับจาก virtueStats (หมวดความดี)
+            currentCount = userStats[badgeKey] || 0;
+        }
+
+        let calculatedLevel = 0;
+        // วนลูปเช็คจาก Level สูงสุดลงมา เพื่อหา Level ที่ผ่านเกณฑ์
+        for (let i = config.levels.length - 1; i >= 0; i--) {
+            if (currentCount >= config.levels[i].count) {
+                calculatedLevel = i + 1; // Level เริ่มที่ 1
+                break;
+            }
+        }
+        return calculatedLevel;
+    }
+
+
+    // --- 🎁 ฟังก์ชันแสดงผลเหรียญ (เวอร์ชันสมบูรณ์: รองรับการอัปเกรด) ---
     function renderBadges() {
         const container = document.getElementById('badgeContainer');
         if(!container || !currentUser) return;
         container.innerHTML = '';
         
+        // ดึงข้อมูลดิบที่ส่งมาจากหลังบ้าน
         const myVirtueStats = currentUser.virtueStats || {};
         const myTotalScore = currentUser.score || 0;
+        const myTotalCount = currentUser.totalCount || 0;
 
-        // ดึงข้อมูล Level ที่เคยบันทึกไว้ในมือถือ (Local Storage)
+        // ดึงข้อมูล Level ที่เคยบันทึกไว้ในความจำมือถือ (Local Storage)
         let storageKey = `happyMeter_badges_${currentUser.userId}`;
         let storedLevels = JSON.parse(localStorage.getItem(storageKey)) || {};
 
@@ -319,7 +354,7 @@
             const config = badgeConfig[badgeKey];
             
             // 1. คำนวณ Level ที่ควรจะเป็นตามสถิติจริง
-            const realLevelIdx = getCalculatedLevel(badgeKey, myVirtueStats, myTotalScore);
+            const realLevelIdx = getCalculatedLevel(badgeKey, myVirtueStats, myTotalScore, myTotalCount);
             
             // 2. ดึง Level ที่ผู้ใช้เคยเปิดดูไปล่าสุด
             const seenLevelIdx = storedLevels[badgeKey] || 0;
@@ -327,7 +362,7 @@
             let html = '';
 
             if (realLevelIdx === 0) {
-                // CASE A: ยังไม่ปลดล็อก Lv.1 (แสดงแม่กุญแจ)
+                // CASE A: ยังไม่ปลดล็อก Lv.1 (แสดงแม่กุญแจ 🔒)
                 html = `
                     <div class="badge-item badge-locked" onclick="viewBadge('${config.title}', 'ยังทำไม่ถึงเกณฑ์ขั้นแรก', '🔒')">
                         <div class="badge-icon">🔒</div>
@@ -335,7 +370,7 @@
                     </div>`;
 
             } else if (realLevelIdx > seenLevelIdx) {
-                // CASE B: มีการอัปเกรด! (Level จริง สูงกว่าที่เคยดู) -> แสดงกล่องของขวัญสั่นๆ
+                // CASE B: มีการอัปเกรด! (Level จริง > Level ที่เคยดู) -> แสดงกล่องสั่น 🎁
                 const nextLvConfig = config.levels[realLevelIdx - 1];
                 html = `
                     <div class="badge-item badge-mystery-upgrade" onclick="revealUpgrade('${badgeKey}', ${realLevelIdx}, '${config.title} ${nextLvConfig.rank}', '${nextLvConfig.icon}')">
@@ -344,7 +379,7 @@
                     </div>`;
 
             } else {
-                // CASE C: แสดงเหรียญ Level ปัจจุบัน (เคยดูไปแล้ว)
+                // CASE C: แสดงเหรียญ Level ปัจจุบัน (เคยดูไปแล้ว 🥇)
                 const currentLvConfig = config.levels[realLevelIdx - 1];
                 html = `
                     <div class="badge-item" onclick="viewBadge('${config.title} ${currentLvConfig.rank}', '${currentLvConfig.desc}', '${currentLvConfig.icon}')">
@@ -356,14 +391,15 @@
         });
     }
 
-    // ฟังก์ชันเมื่อกดเปิดกล่องอัปเกรด
+    // --- 🎉 ฟังก์ชันเมื่อกดเปิดกล่องอัปเกรด ---
     function revealUpgrade(badgeKey, newLevelIdx, title, icon) {
         // 1. แสดง Effect เฉลิมฉลอง
         confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
         Swal.fire({
             title: 'ยินดีด้วย! อัปเกรดสำเร็จ',
             text: `คุณได้รับเหรียญ "${title}"`,
-            imageUrl: `https://dummyimage.com/200x200/eee/000&text=${icon}`, // ใช้ Dummy image แทนไอคอนจริงไปก่อน
+            // ใช้ Dummy image แทนไอคอนจริงไปก่อน (หรือจะใส่ URL ไอคอนจริงก็ได้)
+            imageUrl: `https://dummyimage.com/200x200/eee/000&text=${icon}`, 
             imageWidth: 100, imageHeight: 100,
             confirmButtonColor: '#6c5ce7',
             confirmButtonText: 'สุดยอด!'
@@ -688,6 +724,7 @@
 </script>
 </body>
 </html>
+
 
 
 
