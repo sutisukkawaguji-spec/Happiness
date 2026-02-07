@@ -492,46 +492,68 @@
         });
     }
 
-    function registerUser(profile) {
+    function registerUser(userId, profile) {
+        // 🛡️ ป้องกันกรณีไม่มีข้อมูลโปรไฟล์
+        const lineName = profile.displayName || "พนักงานใหม่";
+        const lineImg = profile.pictureUrl || "https://dummyimage.com/90x90/cccccc/ffffff&text=User";
+    
         Swal.fire({
-            title: 'ยืนยันตัวตนพนักงาน',
+            title: 'ยินดีต้อนรับพนักงานใหม่',
             html: `
-                <p class="small text-muted">สำนักงานธนารักษ์พื้นที่หนองบัวลำภู</p>
-                <input type="text" id="regName" class="swal2-input" value="${profile.displayName}" placeholder="ชื่อ-นามสกุล">
-                <select id="regDept" class="swal2-select" style="display: flex; width: 80%; margin: 1em auto;">
-                    <option value="" disabled selected>— เลือกส่วนงานของคุณ —</option>
-                    <option value="ส่วนจัดการที่ราชพัสดุ">ส่วนจัดการที่ราชพัสดุ</option>
-                    <option value="ส่วนบริหาร">ส่วนบริหาร</option>
-                    <option value="ส่วนประเมินราคาทรัพย์สิน">ส่วนประเมินราคาทรัพย์สิน</option>
-                    <option value="ส่วนจัดการฐานข้อมูล">ส่วนจัดการฐานข้อมูล</option>
-                </select>
+                <div class="text-center mb-3">
+                    <img src="${lineImg}" class="rounded-circle border shadow-sm" width="80" height="80" style="object-fit: cover;">
+                    <p class="mt-2 mb-0 fw-bold">${lineName}</p>
+                    <small class="text-muted">สำนักงานธนารักษ์พื้นที่หนองบัวลำภู</small>
+                </div>
+                <div class="text-start">
+                    <label class="form-label small fw-bold">ชื่อ-นามสกุล (สำหรับรายงานผล):</label>
+                    <input type="text" id="regName" class="swal2-input" value="${lineName}" placeholder="ระบุชื่อ-นามสกุลจริง">
+                    
+                    <label class="form-label small fw-bold mt-3">ส่วนงานที่คุณสังกัด:</label>
+                    <select id="regDept" class="swal2-select" style="display: flex; width: 100%; margin: 0.5em auto;">
+                        <option value="" disabled selected>— เลือกส่วนงานของคุณ —</option>
+                        <option value="ส่วนจัดการที่ราชพัสดุ">ส่วนจัดการที่ราชพัสดุ</option>
+                        <option value="ส่วนบริหาร">ส่วนบริหาร</option>
+                        <option value="ส่วนประเมินราคาทรัพย์สิน">ส่วนประเมินราคาทรัพย์สิน</option>
+                        <option value="ส่วนจัดการฐานข้อมูล">ส่วนจัดการฐานข้อมูล</option>
+                    </select>
+                </div>
             `,
-            confirmButtonText: 'บันทึกข้อมูล',
+            confirmButtonText: 'ยืนยันและลงทะเบียน',
+            confirmButtonColor: '#6c5ce7',
+            allowOutsideClick: false, // บังคับให้ลงทะเบียนก่อน
             preConfirm: () => {
                 const name = document.getElementById('regName').value;
                 const dept = document.getElementById('regDept').value;
                 if (!name || !dept) {
-                    Swal.showValidationMessage(`กรุณาระบุชื่อและเลือกส่วนงาน`);
+                    Swal.showValidationMessage(`กรุณาระบุชื่อและเลือกส่วนงานให้ครบถ้วน`);
+                    return false;
                 }
                 return { name: name, department: dept };
             }
         }).then((result) => {
             if (result.isConfirmed) {
-                const userData = {
-                    action: 'register',
-                    userId: profile.userId,
-                    name: result.value.name,
-                    department: result.value.department, // ส่งส่วนงานไป
-                    office: "สำนักงานธนารักษ์พื้นที่หนองบัวลำภู",
-                    img: profile.pictureUrl
-                };
-                
-                fetch(GAS_URL, {
-                    method: 'POST',
-                    mode: 'no-cors',
-                    body: JSON.stringify(userData)
+                // 🚀 ส่งข้อมูลไปที่ Google Apps Script
+                fetch(GAS_URL, { 
+                    method: 'POST', 
+                    body: JSON.stringify({ 
+                        action: 'register_user', 
+                        userId: userId, 
+                        userName: result.value.name, 
+                        userImg: lineImg,
+                        department: result.value.department,
+                        office: "สำนักงานธนารักษ์พื้นที่หนองบัวลำภู"
+                    }) 
                 }).then(() => {
-                    location.reload(); // บันทึกเสร็จแล้วรีโหลดเพื่อดึงข้อมูลใหม่
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'ลงทะเบียนสำเร็จ',
+                        text: 'ขอบคุณที่ร่วมเป็นส่วนหนึ่งของ ดี มีสุข',
+                        timer: 2000,
+                        showConfirmButton: false
+                    }).then(() => {
+                        checkUser(userId, profile); // กลับไปโหลดหน้าหลัก
+                    });
                 });
             }
         });
@@ -1413,6 +1435,7 @@ function fetchFeed() {
 </script>
 </body>
 </html>
+
 
 
 
