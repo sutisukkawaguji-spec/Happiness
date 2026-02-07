@@ -221,12 +221,18 @@
             </div>
             
             <label class="form-label fw-bold d-flex align-items-center">หมวดความดี <i class="fas fa-circle-question info-btn fa-lg" onclick="showVirtueInfo()"></i></label>
-            <select class="form-select mb-3" id="virtueSelect" style="border-radius: 12px;">
-                <option value="volunteer">🤝 จิตอาสา (Volunteer)</option>
-                <option value="sufficiency">🌱 พอเพียง (Sufficiency)</option>
-                <option value="discipline">📏 วินัย (Discipline)</option>
-                <option value="integrity">💎 สุจริต (Integrity)</option>
-                <option value="gratitude">🙏 กตัญญู (Gratitude)</option>
+            <select class="form-select form-control-lg border-0 shadow-sm mb-3" id="virtueType">
+                <option value="" selected disabled>— เลือกประเภทกิจกรรม —</option>
+                <option value="health" data-mapping="discipline">ส่งเสริมสุขภาพ/กีฬา/โยคะ</option>
+                <option value="teambuilding" data-mapping="gratitude">กิจกรรมกลุ่ม/Team Building/กินข้าวร่วมกัน</option>
+                <option value="green" data-mapping="sufficiency">Green Office/ประหยัดพลังงาน/ปลูกต้นไม้</option>
+                <option value="cleaning" data-mapping="discipline">Big Cleaning Day/จัดระเบียบที่ทำงาน</option>
+                <option value="blood" data-mapping="volunteer">บริจาคโลหิต/จิตอาสาช่วยเหลือสังคม</option>
+                <option value="nogift" data-mapping="integrity">No Gift Policy/ปฏิเสธสินบน</option>
+                <option value="service" data-mapping="integrity">งานบริการด้วยใจ/โปร่งใส</option>
+                <option value="religion" data-mapping="gratitude">ทำบุญ/ตักบาตร/กิจกรรมทางศาสนา</option>
+                <option value="knowledge" data-mapping="sufficiency">อบรมพัฒนาตนเอง/ความรู้การเงิน</option>
+                <option value="other" data-mapping="volunteer">ช่วยเหลือเพื่อนร่วมงาน/อื่นๆ</option>
             </select>
 
             <div class="mb-3">
@@ -486,9 +492,49 @@
         });
     }
 
-    function registerUser(userId, profile) {
-        fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'register_user', userId: userId, userName: profile.displayName, userImg: profile.pictureUrl }) })
-        .then(() => checkUser(userId, profile));
+    function registerUser(profile) {
+        Swal.fire({
+            title: 'ยืนยันตัวตนพนักงาน',
+            html: `
+                <p class="small text-muted">สำนักงานธนารักษ์พื้นที่หนองบัวลำภู</p>
+                <input type="text" id="regName" class="swal2-input" value="${profile.displayName}" placeholder="ชื่อ-นามสกุล">
+                <select id="regDept" class="swal2-select" style="display: flex; width: 80%; margin: 1em auto;">
+                    <option value="" disabled selected>— เลือกส่วนงานของคุณ —</option>
+                    <option value="ส่วนจัดการที่ราชพัสดุ">ส่วนจัดการที่ราชพัสดุ</option>
+                    <option value="ส่วนบริหาร">ส่วนบริหาร</option>
+                    <option value="ส่วนประเมินราคาทรัพย์สิน">ส่วนประเมินราคาทรัพย์สิน</option>
+                    <option value="ส่วนจัดการฐานข้อมูล">ส่วนจัดการฐานข้อมูล</option>
+                </select>
+            `,
+            confirmButtonText: 'บันทึกข้อมูล',
+            preConfirm: () => {
+                const name = document.getElementById('regName').value;
+                const dept = document.getElementById('regDept').value;
+                if (!name || !dept) {
+                    Swal.showValidationMessage(`กรุณาระบุชื่อและเลือกส่วนงาน`);
+                }
+                return { name: name, department: dept };
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                const userData = {
+                    action: 'register',
+                    userId: profile.userId,
+                    name: result.value.name,
+                    department: result.value.department, // ส่งส่วนงานไป
+                    office: "สำนักงานธนารักษ์พื้นที่หนองบัวลำภู",
+                    img: profile.pictureUrl
+                };
+                
+                fetch(GAS_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    body: JSON.stringify(userData)
+                }).then(() => {
+                    location.reload(); // บันทึกเสร็จแล้วรีโหลดเพื่อดึงข้อมูลใหม่
+                });
+            }
+        });
     }
 
     function renderProfile() {
@@ -1367,6 +1413,7 @@ function fetchFeed() {
 </script>
 </body>
 </html>
+
 
 
 
