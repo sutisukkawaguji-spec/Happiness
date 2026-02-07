@@ -779,21 +779,54 @@
             feed.forEach(post => {
                 let timeAgo = "-";
                 try { timeAgo = new Date(post.timestamp).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute:'2-digit' }); } catch(e) {}
+                
                 let imgUrl = post.image;
                 if(imgUrl && imgUrl.startsWith('http:')) imgUrl = imgUrl.replace('http:', 'https:');
+                
+                // รูปภาพโพสต์
                 const imgHtml = (imgUrl && imgUrl.length > 10) ? `<img src="${imgUrl}" class="feed-img" onclick="viewImage('${imgUrl}')">` : '';
+                
+                // อีโมจิอารมณ์
                 const moodEmoji = post.happy == 3 ? '😁' : (post.happy == 2 ? '😐' : '😞');
+
+                // ✨ เพิ่ม: ตรรกะปุ่มยืนยัน (Verify)
+                // จะโชว์ก็ต่อเมื่อ: คนดู (currentUser) ไม่ใช่ เจ้าของโพสต์ (post.user_line_id)
+                let verifyBtnHtml = '';
+                if (currentUser && post.user_line_id && currentUser.userId !== post.user_line_id) {
+                     verifyBtnHtml = `
+                        <button onclick="verifyPost('${post.user_line_id}', '${post.user_name}')" 
+                                class="btn btn-sm btn-outline-success rounded-pill me-2" 
+                                style="font-size: 0.7rem; padding: 2px 10px;">
+                                <i class="fas fa-shield-alt"></i> ยืนยัน
+                        </button>
+                     `;
+                }
+
                 const html = `
-                    <div class="glass-card feed-card p-3">
-                        <div class="feed-header">
-                            <img src="${post.user_img || 'https://via.placeholder.com/45'}" class="feed-avatar">
-                            <div class="feed-user"><h6>${post.user_name}</h6><small>${timeAgo} • <span class="feed-badge">${post.virtue}</span></small></div>
-                            <div class="ms-auto fs-4">${moodEmoji}</div>
+                    <div class="glass-card feed-card p-3 mb-3">
+                        <div class="feed-header d-flex align-items-center">
+                            <img src="${post.user_img || 'https://via.placeholder.com/45'}" class="feed-avatar me-2" style="width: 45px; height: 45px; border-radius: 50%; object-fit: cover;">
+                            <div class="feed-user">
+                                <h6 class="mb-0 fw-bold">${post.user_name}</h6>
+                                <small class="text-muted" style="font-size: 0.8rem;">${timeAgo} • <span class="feed-badge badge bg-light text-dark border">${post.virtue}</span></small>
+                            </div>
+                            
+                            <div class="ms-auto d-flex align-items-center">
+                                ${verifyBtnHtml}
+                                <div class="fs-4">${moodEmoji}</div>
+                            </div>
                         </div>
-                        <div class="feed-content mb-2">${post.note || ''}</div>
+                        
+                        <div class="feed-content mt-2 mb-2">${post.note || ''}</div>
                         ${imgHtml}
-                        <div class="feed-actions"><div class="action-btn"><i class="far fa-heart"></i> ถูกใจ</div></div>
+                        
+                        <div class="feed-actions mt-2 pt-2 border-top">
+                            <div class="action-btn text-muted" style="font-size: 0.9rem;">
+                                <i class="far fa-heart me-1"></i> ถูกใจ
+                            </div>
+                        </div>
                     </div>`;
+                
                 container.innerHTML += html;
             });
         })
@@ -814,9 +847,40 @@
     }
     function viewBadge(t,d,i) { Swal.fire({ title: i + ' ' + t, text: d, confirmButtonColor: '#6c5ce7' }); }
 
+    // --- ฟังก์ชันเมื่อเพื่อนกดปุ่มยืนยัน ---
+    function verifyPost(targetId, targetName) {
+        Swal.fire({
+            title: 'ยืนยันความถูกต้อง?',
+            text: `คุณต้องการยืนยันว่ากิจกรรมของ ${targetName} เป็นความจริง?`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'ใช่ ยืนยัน (+5 คะแนน)',
+            confirmButtonColor: '#2ecc71'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                // ส่งข้อมูลไปหลังบ้าน
+                fetch(GAS_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    body: JSON.stringify({
+                        action: 'verify_solo',
+                        witnessId: currentUser.userId,        // เรา (พยาน)
+                        witnessName: currentUser.name,
+                        targetUserId: targetId,               // คนโพสต์
+                        targetUserName: targetName,
+                        targetUserLineId: targetId            // (สมมติใช้ ID เดียวกัน)
+                    })
+                });
+                
+                Swal.fire('เรียบร้อย!', 'คุณได้รับคะแนนพยาน +5 คะแนน', 'success');
+            }
+        });
+    }
+
 </script>
 </body>
 </html>
+
 
 
 
