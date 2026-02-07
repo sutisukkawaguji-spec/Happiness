@@ -444,22 +444,39 @@
 
     function renderProfile() {
         if(!currentUser) return;
-        
-        // Update Text
+
         document.getElementById('userName').innerText = currentUser.name;
-        // ✅ Level หาร 500 (คำนวณมาจากหลังบ้านแล้ว)
-        document.getElementById('userRole').innerHTML = `${currentUser.role} • <span class="text-primary fw-bold">Lv.${currentUser.level}</span>`;
+        // แสดง Level
+        document.getElementById('userRole').innerHTML = `${currentUser.role || 'พนักงาน'} • <span class="text-primary fw-bold">Lv.${currentUser.level || 1}</span>`;
         document.getElementById('userImg').src = currentUser.img || 'https://dummyimage.com/90x90/cccccc/ffffff&text=User';
         
-        // ✅ Aura Logic: เปลี่ยนสีตาม dominantVirtue
+        // -------------------------------------------------------
+        // ⚡ UPDATE BARS: คำนวณความกว้างหลอดพลัง
+        // -------------------------------------------------------
+        
+        // 1. หลอดความสุข (Happy Bar): คะแนนเต็ม 10
+        // (สมมติ backend ส่งค่าเฉลี่ยมา 0-10)
+        let happyPercent = (parseFloat(currentUser.happyScore || 0) / 10) * 100;
+        document.querySelector('.bar-happy').style.width = `${Math.min(happyPercent, 100)}%`;
+
+        // 2. หลอดความดี (Virtue Bar): แสดง Progress ของเลเวลปัจจุบัน
+        // คะแนนทุก 500 อัพเลเวล -> ใช้ % 500 เพื่อดูเศษที่เหลือ
+        // เช่น คะแนน 1200 -> Level 3 -> เศษ 200 -> หลอดวิ่ง 40% (200/500)
+        let currentScore = currentUser.score || 0;
+        let virtuePercent = ((currentScore % 500) / 500) * 100;
+        
+        // ถ้าคะแนน 0 ให้หลอดว่าง, ถ้าคะแนนหารลงตัว (เช่น 500, 1000) ให้หลอดเต็ม
+        if (currentScore > 0 && virtuePercent === 0) virtuePercent = 100;
+        
+        document.querySelector('.bar-virtue').style.width = `${virtuePercent}%`;
+
+        // Aura Logic (คงเดิม)
         const auraEl = document.getElementById('userAura');
         if (auraEl) {
-            const dominant = currentUser.dominantVirtue || 'none';
-            // ล้าง class เก่าแล้วใส่ class ใหม่
-            auraEl.className = 'aura-glow aura-' + dominant;
+             const dominant = currentUser.dominantVirtue || 'none';
+             auraEl.className = 'aura-glow aura-' + dominant;
         }
         
-        // (ส่วน Radar Chart และอื่นๆ คงเดิม...)
         if (typeof initUserRadar === 'function') initUserRadar();
         if (typeof renderBadges === 'function') renderBadges();
     }
@@ -975,7 +992,7 @@
         Swal.fire({ html: `<img src="${user.img}" style="width:90px; height:90px; border-radius:50%; margin-bottom:10px;"><br><h5 class="fw-bold">${user.name}</h5><span class="badge bg-secondary mb-3">${user.role}</span><div class="row g-2 text-center"><div class="col-6"><div class="border rounded p-2"><h6>ความสุข</h6><span class="${score<5?'text-danger':''}">${score}/10</span></div></div><div class="col-6"><div class="border rounded p-2"><h6>คะแนนสะสม</h6><span>${user.score}</span></div></div></div>${helperHtml}`, showConfirmButton: false, showCloseButton: true });
     }
 
-    function fetchFeed() {
+function fetchFeed() {
         const container = document.getElementById('feedContainer');
         if (!container) return;
         container.innerHTML = '<div class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm mb-2"></div><br>กำลังดึงข้อมูล...</div>';
@@ -985,7 +1002,7 @@
         .then(feed => {
             container.innerHTML = '';
             if (!feed || feed.length === 0) {
-                container.innerHTML = '<div class="text-center py-5 text-muted"><i class="far fa-newspaper fa-3x mb-3"></i><br>ยังไม่มีเรื่องราว<br>มาเริ่มทำความดีกันเถอะ!</div>';
+                container.innerHTML = '<div class="text-center py-5 text-muted"><i class="far fa-newspaper fa-3x mb-3"></i><br>ยังไม่มีเรื่องราว</div>';
                 return;
             }
             feed.forEach(post => {
@@ -994,39 +1011,55 @@
                 
                 let imgUrl = post.image;
                 if(imgUrl && imgUrl.startsWith('http:')) imgUrl = imgUrl.replace('http:', 'https:');
-                
-                // รูปภาพโพสต์
                 const imgHtml = (imgUrl && imgUrl.length > 10) ? `<img src="${imgUrl}" class="feed-img" onclick="viewImage('${imgUrl}')">` : '';
-                
-                // อีโมจิอารมณ์
                 const moodEmoji = post.happy == 3 ? '😁' : (post.happy == 2 ? '😐' : '😞');
 
-                // 1. ปุ่ม Verify (ยืนยัน)
-                let verifyBtnHtml = '';
-                if (currentUser && post.user_line_id && currentUser.userId !== post.user_line_id) {
-                     verifyBtnHtml = `
-                        <button onclick="verifyPost('${post.user_line_id}', '${post.user_name}')" 
-                                class="btn btn-sm btn-outline-success rounded-pill me-2" 
-                                style="font-size: 0.7rem; padding: 2px 10px;">
-                                <i class="fas fa-shield-alt"></i> ยืนยัน
-                        </button>
-                     `;
+                // --- 🛡️ ส่วน Verify ---
+                let verifySectionHtml = '';
+                let avatarsHtml = '';
+                
+                // 1. สร้าง Avatar คนที่กดยืนยันแล้ว
+                if (post.verifies && post.verifies.length > 0) {
+                    post.verifies.forEach(v => {
+                        avatarsHtml += `<img src="${v.img}" class="rounded-circle border border-white ms-1" width="25" height="25" title="${v.name}" style="object-fit:cover;">`;
+                    });
+                    verifySectionHtml = `
+                        <div class="d-flex align-items-center mt-2 p-2 bg-light rounded" style="font-size:0.8rem;">
+                            <span class="text-success me-2 fw-bold"><i class="fas fa-shield-alt"></i> ยืนยันโดย:</span>
+                            ${avatarsHtml}
+                        </div>
+                    `;
                 }
 
-                // 2. ปุ่ม Like (เพิ่มใหม่)
-                // ตรวจสอบว่ามีคนกด Like หรือยัง
+                // 2. ปุ่ม Verify
+                let verifyBtnHtml = '';
+                // เช็คว่าเรากดไปหรือยัง (ใช้ชื่อเช็ค หรือ ID ถ้ามี)
+                let isVerifiedByMe = post.verifies && post.verifies.some(v => v.name === currentUser.name);
+                
+                if (currentUser && post.user_line_id && currentUser.userId !== post.user_line_id) {
+                     if (isVerifiedByMe) {
+                         // ถ้ากดแล้ว ให้แสดงสถานะเฉยๆ กดอีกไม่ได้
+                         verifyBtnHtml = `<span class="badge bg-success rounded-pill me-2"><i class="fas fa-check"></i> ยืนยันแล้ว (+5)</span>`;
+                     } else {
+                         // ถ้ายังไม่กด ให้แสดงปุ่ม
+                         verifyBtnHtml = `
+                            <button onclick="verifyPost('${post.id}', '${post.user_line_id}', '${post.user_name}')" 
+                                    class="btn btn-sm btn-outline-success rounded-pill me-2">
+                                    <i class="fas fa-shield-alt"></i> ยืนยัน
+                            </button>
+                         `;
+                     }
+                }
+
+                // --- ❤️ ปุ่ม Like ---
                 let isLiked = post.likes && post.likes.some(u => u.name === currentUser.name);
                 let likeCount = post.likes ? post.likes.length : 0;
-                
                 let likeBtnHtml = `
-                    <div class="action-btn ${isLiked ? 'liked' : ''}" 
-                         onclick="likePost('${post.id}')">
-                         <i class="${isLiked ? 'fas' : 'far'} fa-heart me-1"></i> 
-                         ${likeCount} ถูกใจ
+                    <div class="action-btn ${isLiked ? 'liked' : ''}" onclick="likePost('${post.id}')">
+                         <i class="${isLiked ? 'fas' : 'far'} fa-heart me-1"></i> ${likeCount} ถูกใจ
                     </div>
                 `;
 
-                // ✅ แก้ URL รูปภาพตรงนี้ให้แล้ว (dummyimage)
                 const html = `
                     <div class="glass-card feed-card p-3 mb-3">
                         <div class="feed-header d-flex align-items-center">
@@ -1035,7 +1068,6 @@
                                 <h6 class="mb-0 fw-bold">${post.user_name}</h6>
                                 <small class="text-muted" style="font-size: 0.8rem;">${timeAgo} • <span class="feed-badge badge bg-light text-dark border">${post.virtue}</span></small>
                             </div>
-                            
                             <div class="ms-auto d-flex align-items-center">
                                 ${verifyBtnHtml}
                                 <div class="fs-4">${moodEmoji}</div>
@@ -1044,6 +1076,7 @@
                         
                         <div class="feed-content mt-2 mb-2">${post.note || ''}</div>
                         ${imgHtml}
+                        ${verifySectionHtml} 
                         
                         <div class="feed-actions mt-2 pt-2 border-top">
                             ${likeBtnHtml}
@@ -1076,19 +1109,19 @@
     function verifyPost(postId, targetId, targetName) {
         Swal.fire({
             title: 'ยืนยันความถูกต้อง?',
-            text: `คุณต้องการยืนยันกิจกรรมของ ${targetName}? (พยานรับ +5 คะแนน)`,
+            text: `ยืนยันว่ากิจกรรมของ ${targetName} เป็นความจริง?`,
             icon: 'question',
             showCancelButton: true,
-            confirmButtonText: 'ยืนยันเลย',
+            confirmButtonText: 'ยืนยัน (+5 คะแนน)',
             confirmButtonColor: '#2ecc71',
             cancelButtonText: 'ยกเลิก'
         }).then((result) => {
             if (result.isConfirmed) {
-                // แสดง Loading
                 Swal.fire({title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading()});
                 
                 fetch(GAS_URL, {
-                    method: 'POST', mode: 'no-cors',
+                    method: 'POST',
+                    mode: 'no-cors',
                     body: JSON.stringify({
                         action: 'verify_solo',
                         postId: postId,
@@ -1096,8 +1129,9 @@
                         targetUserLineId: targetId
                     })
                 }).then(() => {
-                   Swal.fire('เรียบร้อย!', 'ขอบคุณที่เป็นพยานความดี', 'success')
-                   .then(() => fetchFeed()); // โหลดฟีดใหม่เพื่ออัปเดตสถานะ
+                    // แจ้งเตือนและโหลดหน้าใหม่เพื่อแสดงผล Avatar
+                    Swal.fire('เรียบร้อย!', 'คุณได้รับคะแนนพยาน +5 คะแนน', 'success')
+                    .then(() => fetchFeed()); 
                 });
             }
         });
@@ -1120,6 +1154,7 @@
 </script>
 </body>
 </html>
+
 
 
 
