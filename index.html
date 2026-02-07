@@ -25,11 +25,77 @@
         .glass-card { background: var(--glass-bg); backdrop-filter: blur(15px); border-radius: 24px; box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07); padding: 20px; margin-bottom: 20px; border: 1px solid rgba(255,255,255,0.6); }
 
         /* Profile & Aura */
-        .profile-container { position: relative; display: inline-block; margin-bottom: 15px; }
-        .profile-img { width: 90px; height: 90px; border-radius: 50%; border: 3px solid #fff; position: relative; z-index: 2; object-fit: cover; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        .aura-glow { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 100px; height: 100px; border-radius: 50%; z-index: 1; filter: blur(15px); opacity: 0.7; transition: 0.5s; }
-        .aura-normal { background: #dfe6e9; }
-        .aura-active { background: #0984e3; box-shadow: 0 0 20px #0984e3; }
+        /* --- AURA STYLES: แสงออร่าตามความดี 5 ด้าน --- */
+        .profile-container { 
+            position: relative; 
+            display: inline-block; 
+            margin-bottom: 15px; 
+            z-index: 1;
+        }
+        
+        .profile-img { 
+            width: 90px; 
+            height: 90px; 
+            border-radius: 50%; 
+            border: 3px solid #fff; 
+            position: relative; 
+            z-index: 2; /* รูปต้องอยู่ทับแสง */
+            object-fit: cover; 
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1); 
+            background: #fff;
+        }
+        
+        /* ฐานของออร่า */
+        .aura-glow { 
+            position: absolute; 
+            top: 50%; 
+            left: 50%; 
+            transform: translate(-50%, -50%); 
+            width: 110px; /* ใหญ่กว่ารูปนิดหน่อย */
+            height: 110px; 
+            border-radius: 50%; 
+            z-index: 1; /* อยู่หลังรูป */
+            filter: blur(15px); 
+            opacity: 0.8; 
+            transition: all 1s ease; /* เปลี่ยนสีนุ่มนวล */
+        }
+        
+        /* 🔵 1. จิตอาสา (Volunteer) - สีฟ้า */
+        .aura-volunteer {
+            background: radial-gradient(circle, #3498db 0%, transparent 70%);
+            box-shadow: 0 0 20px rgba(52, 152, 219, 0.6);
+        }
+        
+        /* 🟢 2. พอเพียง (Sufficiency) - สีเขียว */
+        .aura-sufficiency {
+            background: radial-gradient(circle, #2ecc71 0%, transparent 70%);
+            box-shadow: 0 0 20px rgba(46, 204, 113, 0.6);
+        }
+        
+        /* 🟣 3. วินัย (Discipline) - สีม่วง */
+        .aura-discipline {
+            background: radial-gradient(circle, #9b59b6 0%, transparent 70%);
+            box-shadow: 0 0 20px rgba(155, 89, 182, 0.6);
+        }
+        
+        /* 💎 4. สุจริต (Integrity) - สีฟ้าคราม */
+        .aura-integrity {
+            background: radial-gradient(circle, #00cec9 0%, transparent 70%);
+            box-shadow: 0 0 20px rgba(0, 206, 201, 0.6);
+        }
+        
+        /* ❤️ 5. กตัญญู (Gratitude) - สีชมพู/แดง */
+        .aura-gratitude {
+            background: radial-gradient(circle, #e84393 0%, transparent 70%);
+            box-shadow: 0 0 20px rgba(232, 67, 147, 0.6);
+        }
+        
+        /* ⚪ ไม่มีออร่า (เริ่มต้น) */
+        .aura-none {
+            background: #dfe6e9;
+            box-shadow: none;
+            opacity: 0.3;
+        }
 
         /* Energy Bars */
         .power-bar-label { font-size: 0.75rem; font-weight: 600; color: #666; display: flex; justify-content: space-between; margin-bottom: 2px;}
@@ -38,7 +104,7 @@
         .bar-virtue { background: linear-gradient(90deg, #81ecec, #00cec9); }
 
         /* Inputs & Friend List */
-        .mood-container { display: flex; justify-content: space-around; background: #fff; padding: 10px; border-radius: 20px; }
+        .mood- { display: flex; justify-content: space-around; background: #fff; padding: 10px; border-radius: 20px; }
         .mood-btn { border: none; background: none; font-size: 2.2rem; opacity: 0.4; transition: 0.2s; filter: grayscale(1); }
         .mood-btn.active { opacity: 1; transform: scale(1.2); filter: grayscale(0); }
         .friend-list { max-height: 250px; overflow-y: auto; }
@@ -356,27 +422,63 @@
     function renderProfile() {
         if(!currentUser) return;
 
-        // แสดงชื่อ / รูป / เลเวล
+        // 1. แสดงชื่อ / รูป / เลเวล
         document.getElementById('userName').innerText = currentUser.name;
         document.getElementById('userRole').innerHTML = `${currentUser.role || 'พนักงาน'} • <span class="text-primary fw-bold">Lv.${currentUser.level || 1}</span>`;
         document.getElementById('userImg').src = currentUser.img || 'https://via.placeholder.com/90';
         
         // -------------------------------------------------------
-        // 🛠️ จุดที่แก้ไข: ดึงค่าความสุขเฉลี่ย (Average) มาใช้จริง
+        // ✨ AURA LOGIC: คำนวณหาด้านที่เด่นที่สุด
+        // -------------------------------------------------------
+        const auraEl = document.getElementById('userAura');
+        if (auraEl) {
+            // ดึงค่าสถิติ (ถ้าไม่มีให้เป็น 0)
+            const stats = currentUser.virtueStats || {};
+            
+            // สร้าง Object เพื่อเทียบคะแนน (ใช้ Key ให้ตรงกับ CSS)
+            const scores = {
+                'volunteer': stats['volunteer'] || 0,
+                'sufficiency': stats['sufficiency'] || 0,
+                'discipline': stats['discipline'] || 0,
+                'integrity': stats['integrity'] || 0,
+                'gratitude': stats['gratitude'] || 0
+            };
+
+            // หาค่าสูงสุด (Max Score)
+            let maxScore = 0;
+            let dominantVirtue = 'none';
+
+            for (const [key, value] of Object.entries(scores)) {
+                if (value > maxScore) {
+                    maxScore = value;
+                    dominantVirtue = key;
+                }
+            }
+
+            // ล้างคลาสเก่าออกให้หมด เหลือแค่ aura-glow
+            auraEl.className = 'aura-glow';
+
+            // ถ้ามีคะแนน ให้ใส่สีตามด้านที่เด่น
+            if (maxScore > 0) {
+                auraEl.classList.add('aura-' + dominantVirtue);
+            } else {
+                auraEl.classList.add('aura-none');
+            }
+        }
+
+        // -------------------------------------------------------
+        // ส่วนอื่นๆ คงเดิม
         // -------------------------------------------------------
         let currentHappyScore = parseFloat(currentUser.happyScore) || 0; 
-        
-        // ป้องกันค่า Nan หรือ 0 กรณีเพิ่งสมัครใหม่
-        if (currentHappyScore === 0) currentHappyScore = 10; // ให้เต็มไปก่อนถ้ายังไม่มีข้อมูล
+        if (currentHappyScore === 0) currentHappyScore = 10;
 
-        // อัปเดต Radar Chart (ถ้ามี)
-        initUserRadar(); // *ต้องไปแก้ใน initUserRadar ด้วยนะครับ ดูข้างล่าง*
-        renderBadges();
+        // อัปเดต Radar Chart และ Badges
+        if (typeof initUserRadar === 'function') initUserRadar();
+        if (typeof renderBadges === 'function') renderBadges();
 
-        // --- ระบบกู้ชีพ (Auto Rescue Logic) ---
+        // ระบบกู้ชีพ (Auto Rescue Logic)
         if (currentHappyScore < 5) {
-             console.log("⚠️ Red Zone Detected! Score: " + currentHappyScore);
-             // ... (โค้ดส่งสัญญาณกู้ชีพเดิม) ...
+             console.log("⚠️ Red Zone Detected!");
              fetch(GAS_URL, { 
                 method: 'POST', 
                 mode: 'no-cors', 
@@ -970,6 +1072,7 @@
 </script>
 </body>
 </html>
+
 
 
 
