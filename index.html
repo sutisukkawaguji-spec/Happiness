@@ -290,20 +290,24 @@
                     <span class="badge bg-white text-dark border p-2" onclick="addEmoji('🔥')">🔥</span>
                     <span class="badge bg-white text-dark border p-2" onclick="addEmoji('🙏')">🙏</span>
                 </div>
-                <div class="mb-3">
-                    <button class="btn btn-outline-secondary w-100 rounded-3 mt-2" onclick="document.getElementById('fileCam').click()">
-                        <i class="fas fa-camera me-2"></i>ถ่ายภาพ/เลือกรูป (สูงสุด 3 รูป)
-                    </button>
-                    <input type="file" id="fileCam" hidden accept="image/*" multiple onchange="handleFileSelect(this)">
-                
-                    <div id="thumbList" class="d-flex gap-2 mt-2 overflow-auto" style="white-space: nowrap;"></div>
-                
-                    <div id="previewArea" class="img-preview-container mt-2 position-relative">
-                        <small class="text-muted position-absolute top-50 start-50 translate-middle pointer-events-none">
-                            ภาพรวมจะปรากฏที่นี่
-                        </small>
+            <div class="mb-3">
+                <textarea class="form-control mb-2" rows="2" placeholder="วันนี้ทำอะไรมา..." id="noteInput" style="border-radius: 12px;"></textarea>
+                <div class="d-flex gap-2 overflow-auto pb-2">
                     </div>
+            </div> <div class="mb-3">
+                <button class="btn btn-outline-secondary w-100 rounded-3" onclick="document.getElementById('fileCam').click()">
+                    <i class="fas fa-camera me-2"></i>ถ่ายภาพ/เลือกรูป (สูงสุด 3 รูป)
+                </button>
+                <input type="file" id="fileCam" hidden accept="image/*" multiple onchange="handleFileSelect(this)">
+            
+                <div id="thumbList" class="d-flex gap-2 mt-2 overflow-auto" style="white-space: nowrap;"></div>
+            
+                <div id="previewArea" class="img-preview-container mt-2 position-relative">
+                    <small class="text-muted position-absolute top-50 start-50 translate-middle pointer-events-none">
+                        ภาพรวมจะปรากฏที่นี่
+                    </small>
                 </div>
+            </div>
 
             <div class="d-flex justify-content-between align-items-center mb-2">
                 <label class="form-label fw-bold mb-0">ทำร่วมกับใคร?</label>
@@ -980,8 +984,6 @@
     // --- 📸 ADVANCED IMAGE COLLAGE SYSTEM ---
     
     // ตัวแปรเก็บไฟล์รูปภาพปัจจุบัน (Array ของ File Object)
-    let currentImageFiles = []; 
-
     // 1. ฟังก์ชันเมื่อเลือกไฟล์จาก Input
     function handleFileSelect(input) {
         const newFiles = Array.from(input.files);
@@ -1722,6 +1724,7 @@
 </script>
 </body>
 </html>
+
 
 
 
