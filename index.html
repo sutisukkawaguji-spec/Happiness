@@ -554,29 +554,37 @@
         });
     }
 
-    // 5. Helper: รวมภาพใน Canvas (ปรับปรุง Layout + ขอบมน)
+    // 5. Helper: รวมภาพใน Canvas (ปรับปรุง Layout + ขอบมน + ✨เพิ่มเส้นขอบภาพ)
     function mergeImagesToCanvas(images) {
         return new Promise((resolve) => {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
-
+    
             // กำหนดขนาด Canvas
             const W = 1200;
             const H = 800;
             canvas.width = W;
             canvas.height = H;
-
-            // 🎨 พื้นหลังสีดำ (ทำหน้าที่เป็นเส้นขอบ)
+    
+            // 🎨 พื้นหลังสีดำ (ทำหน้าที่เป็น "เส้นกั้น" ระหว่างภาพใหญ่ๆ)
             ctx.fillStyle = "#000000";
             ctx.fillRect(0, 0, W, H);
-
+    
             const count = images.length;
-            const gap = 15;      // ความหนาเส้นขอบ
-            const radius = 25;   // ✨ ความมนของขอบ (ยิ่งเยอะยิ่งมน)
-
-            // ฟังก์ชันช่วยวาดภาพแบบขอบมน
+            // gap คือช่องว่างระหว่างรูป ที่จะโชว์พื้นหลังสีดำ
+            const gap = 15;
+            // radius คือความมนของมุม
+            const radius = 25;
+    
+            // ✨ ตั้งค่าสีและความหนาของ "ขอบภาพ" (Border รอบรูป)
+            const imgBorderColor = "#FFFFFF"; // สีขาว (เพื่อให้ตัดกับพื้นหลังดำ)
+            const imgBorderWidth = 4;         // ความหนาของเส้นขอบ
+    
+            // ฟังก์ชันช่วยวาดภาพแบบขอบมน + ✨วาดเส้นขอบ
             function drawRounded(img, x, y, w, h) {
-                ctx.save();
+                ctx.save(); // บันทึกสถานะเริ่มต้น
+    
+                // 1. สร้างเส้นทาง (Path) สี่เหลี่ยมมุมมน
                 ctx.beginPath();
                 ctx.moveTo(x + radius, y);
                 ctx.lineTo(x + w - radius, y);
@@ -588,63 +596,72 @@
                 ctx.lineTo(x, y + radius);
                 ctx.quadraticCurveTo(x, y, x + radius, y);
                 ctx.closePath();
-                ctx.clip(); // ตัดขอบ
-                
-                // เรียกใช้ฟังก์ชัน Crop เดิม
+    
+                // 2. ตัดขอบและวาดรูป (Clip & Draw Image)
+                ctx.save(); // บันทึกสถานะก่อน Clip
+                ctx.clip(); // ตัดขอบตามเส้นทางที่สร้างไว้
+                // เรียกใช้ฟังก์ชัน Crop เดิม เพื่อวาดรูปภายในพื้นที่ที่ตัด
                 drawImageProp(ctx, img, x, y, w, h);
-                ctx.restore();
+                ctx.restore(); // คืนค่าสถานะการ Clip (แต่เส้นทาง Path ยังอยู่)
+    
+                // 3. ✨ วาดเส้นขอบ (Stroke Border) ตามเส้นทางเดิม
+                // การวาดเส้นขอบต้องทำหลังจากวาดรูปเสร็จแล้ว
+                ctx.strokeStyle = imgBorderColor; // กำหนดสีเส้นขอบ
+                ctx.lineWidth = imgBorderWidth;   // กำหนดความหนา
+                ctx.stroke(); // สั่งวาดเส้นตาม Path
+    
+                ctx.restore(); // คืนค่าสถานะทั้งหมดกลับเป็นเหมือนเดิมก่อนเริ่มฟังก์ชัน
             }
-
-            // --- 📐 จัดวาง Layout ---
-
+    
+            // --- 📐 จัดวาง Layout (เหมือนเดิม) ---
+    
             if (count === 1) {
                 // 1 รูป: เต็มจอ
                 drawRounded(images[0], 0, 0, W, H);
-            } 
+            }
             else if (count === 2) {
                 // 2 รูป: แบ่งครึ่งซ้าย-ขวา
                 const halfW = (W - gap) / 2;
                 drawRounded(images[0], 0, 0, halfW, H);
                 drawRounded(images[1], halfW + gap, 0, halfW, H);
-            } 
+            }
             else if (count === 3) {
-                // ✨ 3 รูปแบบใหม่: บนแบ่งครึ่ง / ล่างยาว
-                
+                // 3 รูป: บนแบ่งครึ่ง / ล่างยาว
                 const colW = (W - gap) / 2;      // ความกว้างของรูปบน
                 const rowH = (H - gap) / 2;      // ความสูงแบ่งครึ่งบนล่าง
-                
+    
                 // รูปที่ 1: บนซ้าย
                 drawRounded(images[0], 0, 0, colW, rowH);
-                
+    
                 // รูปที่ 2: บนขวา
                 drawRounded(images[1], colW + gap, 0, colW, rowH);
-                
+    
                 // รูปที่ 3: ล่างยาวเต็ม
                 drawRounded(images[2], 0, rowH + gap, W, rowH);
             }
-
+    
             // Export
             resolve(canvas.toDataURL('image/jpeg', 0.85));
         });
     }
-
+    
     // 6. Helper: Crop ภาพ (คงเดิม ไม่ต้องแก้)
     function drawImageProp(ctx, img, x, y, w, h) {
         const offsetX = 0.5, offsetY = 0.5;
         const iw = img.width, ih = img.height;
         const r = Math.min(w / iw, h / ih);
         let nw = iw * r, nh = ih * r, cx, cy, cw, ch, ar = 1;
-        
+    
         if (nw < w) ar = w / nw;
         if (Math.abs(ar - 1) < 1e-14 && nh < h) ar = h / nh;
         nw *= ar; nh *= ar;
-        
+    
         cw = iw / (nw / w); ch = ih / (nh / h);
         cx = (iw - cw) * offsetX; cy = (ih - ch) * offsetY;
-        
+    
         if (cx < 0) cx = 0; if (cy < 0) cy = 0;
         if (cw > iw) cw = iw; if (ch > ih) ch = ih;
-        
+    
         ctx.drawImage(img, cx, cy, cw, ch, x, y, w, h);
     }
 
@@ -1092,17 +1109,33 @@
     }
 
     async function submitData() {
+        // 1. เช็คว่ามี User ไหม
         if(!currentUser) return Swal.fire('Error', 'ไม่พบข้อมูลผู้ใช้', 'error');
-        
-        // แก้ไข Selector ให้แม่นยำขึ้น
+
+        // ✨ 2. [เพิ่มใหม่] บังคับเลือกหมวดความดี ✨
+        const virtueTag = document.getElementById('virtueSelect').value;
+        if (!virtueTag) {
+            return Swal.fire({
+                icon: 'warning',
+                title: 'ลืมเลือกหมวดครับ!',
+                text: 'กรุณาระบุประเภทความดีก่อนกดบันทึกนะ',
+                confirmButtonText: 'โอเค',
+                confirmButtonColor: '#6c5ce7' // สีม่วงตามธีม
+            });
+        }
+
+        // --- เริ่มกระบวนการบันทึก ---
         const btn = document.querySelector('button[onclick="submitData()"]');
         const originalText = btn.innerHTML;
-        btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังประมวลผล...';
+        btn.disabled = true; 
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังประมวลผล...';
         
         try {
             const tagged = Array.from(document.querySelectorAll('.friend-item.selected')).map(el => el.dataset.id).join(',');
-            let uploadId = null; let totalChunks = 0;
+            let uploadId = null; 
+            let totalChunks = 0;
             
+            // จัดการอัปโหลดรูป (ถ้ามี)
             if (selectedImageBase64) {
                 uploadId = Date.now().toString();
                 const CHUNK_SIZE = 50000;
@@ -1110,28 +1143,53 @@
                 for (let i = 0; i < totalChunks; i++) {
                     const chunk = selectedImageBase64.substring(i * CHUNK_SIZE, Math.min((i + 1) * CHUNK_SIZE, selectedImageBase64.length));
                     btn.innerHTML = `<i class="fas fa-cloud-upload-alt"></i> อัปโหลดรูป ${Math.round(((i+1)/totalChunks)*100)}%`;
-                    await fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: 'upload_chunk', uploadId: uploadId, chunkIndex: i, chunkData: chunk }) });
+                    await fetch(GAS_URL, { 
+                        method: 'POST', 
+                        mode: 'no-cors', 
+                        body: JSON.stringify({ 
+                            action: 'upload_chunk', 
+                            uploadId: uploadId, 
+                            chunkIndex: i, 
+                            chunkData: chunk 
+                        }) 
+                    });
                 }
             }
+
             btn.innerHTML = 'กำลังบันทึกข้อมูล...';
             
-            await fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ 
-                action: 'submit_activity', 
-                userId: currentUser.userId, 
-                userName: currentUser.name, 
-                happyLevel: selectedMood,
-                virtueTag: document.getElementById('virtueSelect').value, 
-                note: document.getElementById('noteInput').value, 
-                taggedFriends: tagged, 
-                uploadId: uploadId, 
-                totalChunks: totalChunks 
-            }) });
+            // ส่งข้อมูลทั้งหมดไป Google Sheet
+            await fetch(GAS_URL, { 
+                method: 'POST', 
+                mode: 'no-cors', 
+                body: JSON.stringify({ 
+                    action: 'submit_activity', 
+                    userId: currentUser.userId, 
+                    userName: currentUser.name, 
+                    happyLevel: selectedMood, 
+                    virtueTag: virtueTag, // ส่งค่าที่เช็คแล้วไป
+                    note: document.getElementById('noteInput').value, 
+                    taggedFriends: tagged, 
+                    uploadId: uploadId, 
+                    totalChunks: totalChunks 
+                }) 
+            });
             
-            Swal.fire({ icon: 'success', title: 'บันทึกสำเร็จ!', text: 'ขอบคุณที่ร่วมแบ่งปันความสุข', showConfirmButton: false, timer: 2000 }).then(() => { location.reload(); });
+            // สำเร็จ!
+            Swal.fire({ 
+                icon: 'success', 
+                title: 'บันทึกสำเร็จ!', 
+                text: 'ขอบคุณที่ร่วมแบ่งปันความสุข', 
+                showConfirmButton: false, 
+                timer: 2000 
+            }).then(() => { 
+                location.reload(); 
+            });
+
         } catch (err) { 
-            console.error(err);
-            Swal.fire('Error', 'เกิดข้อผิดพลาด: ' + err.message, 'error');
-            btn.disabled = false;
+            console.error(err); 
+            Swal.fire('Error', 'เกิดข้อผิดพลาด: ' + err.message, 'error'); 
+            btn.disabled = false; 
             btn.innerHTML = originalText;
         }
     }
@@ -1574,5 +1632,6 @@
 </script>
 </body>
 </html>
+
 
 
