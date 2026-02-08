@@ -1393,16 +1393,15 @@
                     if (isVerifiedByMe) {
                         verifyBtnHtml = `<button class="btn btn-sm btn-success rounded-pill ms-auto disabled" style="opacity:0.8"><i class="fas fa-check-circle"></i> ยืนยันแล้ว (+3)</button>`;
                     } else {
-                        // ปุ่มกดรับแต้ม (กดได้ไม่อั้นตามกติกาใหม่)
+                        // ✅ แก้ตรงนี้: เพิ่ม , this ต่อท้ายพารามิเตอร์ เพื่อส่งตัวปุ่มไปด้วย
                         verifyBtnHtml = `
-                            <button onclick="verifyPost('${post.id}', '${post.user_line_id}', '${post.user_name}')" 
+                            <button onclick="verifyPost('${post.id}', '${post.user_line_id}', '${post.user_name}', this)" 
                                     class="btn btn-sm btn-outline-primary rounded-pill ms-auto shadow-sm">
                                 <i class="fas fa-shield-alt"></i> ยืนยัน (+3)
                             </button>
                         `;
                     }
                 }
-
                 // --- แสดง Avatar คนที่ยืนยันแล้ว ---
                 let avatarsHtml = '';
                 if (verifyList.length > 0) {
@@ -1465,8 +1464,8 @@
         }
     }
 
-    // ✅ ฟังก์ชัน Verify (เพิ่มใหม่)
-    function verifyPost(postId, targetId, targetName) {
+    // ✅ ฟังก์ชัน Verify (ฉบับแก้ไข: เปลี่ยนปุ่มทันทีไม่ต้องรอโหลด)
+    function verifyPost(postId, targetId, targetName, btnElement) {
         // ถามยืนยันก่อนกด
         Swal.fire({
             title: 'ยืนยันความดี?',
@@ -1484,7 +1483,7 @@
                 
                 fetch(GAS_URL, {
                     method: 'POST',
-                    mode: 'no-cors', // สำคัญมากสำหรับ GAS
+                    mode: 'no-cors',
                     body: JSON.stringify({
                         action: 'verify_post',
                         postId: postId,
@@ -1492,16 +1491,25 @@
                         targetUserLineId: targetId
                     })
                 }).then(() => {
-                    // สำเร็จ! แจ้งเตือนและโหลด Feed ใหม่
+                    // ✨ เปลี่ยนสถานะปุ่มทันที (ไม่ต้องรอ fetchFeed)
+                    if (btnElement) {
+                        btnElement.innerHTML = '<i class="fas fa-check-circle"></i> ยืนยันแล้ว (+3)';
+                        btnElement.className = 'btn btn-sm btn-success rounded-pill ms-auto disabled'; // เปลี่ยนเป็นสีเขียว
+                        btnElement.removeAttribute('onclick'); // เอาลิ้งค์กดออก
+                        btnElement.style.opacity = '0.8';
+                    }
+
+                    // สำเร็จ! แจ้งเตือนและโหลดข้อมูลเบื้องหลัง
                     Swal.fire({
                         icon: 'success',
                         title: 'สำเร็จ!',
                         text: 'คุณได้รับคะแนนพยาน +3 คะแนน',
-                        timer: 2000,
+                        timer: 1500,
                         showConfirmButton: false
                     }).then(() => {
-                        fetchFeed(); // โหลดหน้าใหม่เพื่อให้ปุ่มหายไป
-                        checkUser(currentUser.userId); // อัปเดตคะแนนตัวเองบนหัวเว็บ
+                        // โหลดข้อมูลใหม่เงียบๆ
+                        checkUser(currentUser.userId); 
+                        // fetchFeed(); // ไม่จำเป็นต้องโหลดใหม่ทั้งหน้าก็ได้ เพราะเราแก้ปุ่มไปแล้ว (หรือจะเปิดไว้ก็ได้ถ้าต้องการชัวร์)
                     });
                 }).catch(err => {
                     Swal.fire('Error', 'เกิดข้อผิดพลาด: ' + err.message, 'error');
@@ -1632,6 +1640,7 @@
 </script>
 </body>
 </html>
+
 
 
 
