@@ -26,6 +26,26 @@
         body { background-image: var(--bg-gradient); font-family: 'Kanit', sans-serif; min-height: 100vh; color: #444; padding-bottom: 100px; overflow-x: hidden; }
         .glass-card { background: var(--glass-bg); backdrop-filter: blur(15px); border-radius: 24px; box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07); padding: 20px; margin-bottom: 20px; border: 1px solid rgba(255,255,255,0.6); }
 
+        /* สไตล์สำหรับรูปย่อยและการลบ */
+        .thumb-item {
+            position: relative;
+            width: 80px;
+            height: 80px;
+            flex-shrink: 0;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 2px solid #ddd;
+        }
+        .thumb-img { width: 100%; height: 100%; object-fit: cover; }
+        .btn-remove-img {
+            position: absolute; top: 2px; right: 2px;
+            background: rgba(255, 0, 0, 0.8); color: white;
+            border: none; border-radius: 50%; width: 20px; height: 20px;
+            font-size: 12px; display: flex; align-items: center; justify-content: center;
+            cursor: pointer; z-index: 10;
+        }
+        
+        .btn-remove-img:hover { background: red; }
         /* --- ส่วนกรอบรูปโปรไฟล์ (Container) --- */
         .profile-container { 
             position: relative; 
@@ -199,22 +219,7 @@
             90% { transform: translate(1px, 2px) rotate(0deg); }
             100% { transform: translate(1px, -2px) rotate(-1deg); }
         }
-    /* --- CSS จุดที่ 3: Thumbnail List --- */
-        .thumb-item {
-            position: relative;
-            width: 80px; height: 80px;
-            flex-shrink: 0;
-            border-radius: 10px; overflow: hidden;
-            border: 2px solid #ddd;
-        }
-        .thumb-img { width: 100%; height: 100%; object-fit: cover; }
-        .btn-remove-img {
-            position: absolute; top: 2px; right: 2px;
-            background: rgba(255, 0, 0, 0.8); color: white;
-            border: none; border-radius: 50%; width: 20px; height: 20px;
-            font-size: 12px; display: flex; align-items: center; justify-content: center;
-            cursor: pointer; z-index: 10;
-        }
+
     </style>
 </head>
 <body>
@@ -1532,19 +1537,3 @@
 </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
