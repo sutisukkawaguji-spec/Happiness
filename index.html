@@ -26,26 +26,6 @@
         body { background-image: var(--bg-gradient); font-family: 'Kanit', sans-serif; min-height: 100vh; color: #444; padding-bottom: 100px; overflow-x: hidden; }
         .glass-card { background: var(--glass-bg); backdrop-filter: blur(15px); border-radius: 24px; box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07); padding: 20px; margin-bottom: 20px; border: 1px solid rgba(255,255,255,0.6); }
 
-        /* สไตล์สำหรับรูปย่อยและการลบ */
-        .thumb-item {
-            position: relative;
-            width: 80px;
-            height: 80px;
-            flex-shrink: 0;
-            border-radius: 10px;
-            overflow: hidden;
-            border: 2px solid #ddd;
-        }
-        .thumb-img { width: 100%; height: 100%; object-fit: cover; }
-        .btn-remove-img {
-            position: absolute; top: 2px; right: 2px;
-            background: rgba(255, 0, 0, 0.8); color: white;
-            border: none; border-radius: 50%; width: 20px; height: 20px;
-            font-size: 12px; display: flex; align-items: center; justify-content: center;
-            cursor: pointer; z-index: 10;
-        }
-        
-        .btn-remove-img:hover { background: red; }
         /* --- ส่วนกรอบรูปโปรไฟล์ (Container) --- */
         .profile-container { 
             position: relative; 
@@ -219,7 +199,6 @@
             90% { transform: translate(1px, 2px) rotate(0deg); }
             100% { transform: translate(1px, -2px) rotate(-1deg); }
         }
-
     </style>
 </head>
 <body>
@@ -269,7 +248,7 @@
                 <option value="gratitude" style="color:#e84393;">🙏 กตัญญู (Gratitude)</option>
             </select>
 
-           <div class="mb-3">
+            <div class="mb-3">
                 <textarea class="form-control mb-2" rows="2" placeholder="วันนี้ทำอะไรมา..." id="noteInput" style="border-radius: 12px;"></textarea>
                 <div class="d-flex gap-2 overflow-auto pb-2">
                     <span class="badge bg-white text-dark border p-2" onclick="addEmoji('❤️')">❤️</span>
@@ -277,21 +256,9 @@
                     <span class="badge bg-white text-dark border p-2" onclick="addEmoji('🔥')">🔥</span>
                     <span class="badge bg-white text-dark border p-2" onclick="addEmoji('🙏')">🙏</span>
                 </div>
-                
-                <div class="mb-3">
-                    <button class="btn btn-outline-secondary w-100 rounded-3 mt-2" onclick="document.getElementById('fileCam').click()">
-                        <i class="fas fa-camera me-2"></i>ถ่ายภาพ/เลือกรูป (สูงสุด 3 รูป)
-                    </button>
-                    <input type="file" id="fileCam" hidden accept="image/*" multiple onchange="handleFileSelect(this)">
-                
-                    <div id="thumbList" class="d-flex gap-2 mt-2 overflow-auto" style="white-space: nowrap;"></div>
-                
-                    <div id="previewArea" class="img-preview-container mt-2 position-relative">
-                        <small class="text-muted position-absolute top-50 start-50 translate-middle pointer-events-none">
-                            ภาพรวมจะปรากฏที่นี่
-                        </small>
-                    </div>
-                </div>
+                <button class="btn btn-outline-secondary w-100 rounded-3 mt-2" onclick="document.getElementById('fileCam').click()"><i class="fas fa-camera me-2"></i>ถ่ายภาพ/เลือกรูป</button>
+                <input type="file" id="fileCam" hidden accept="image/*" onchange="previewImage(this)">
+                <div id="previewArea" class="img-preview-container"></div>
             </div>
 
             <div class="d-flex justify-content-between align-items-center mb-2">
@@ -929,94 +896,6 @@
     }
     function addEmoji(emoji) { document.getElementById('noteInput').value += emoji + ' '; }
     
-        // --- 📸 IMAGE LOGIC ---
-    function handleFileSelect(input) {
-        if (!input.files || input.files.length === 0) return;
-        const newFiles = Array.from(input.files);
-        if (currentImageFiles.length + newFiles.length > 3) {
-            Swal.fire('แจ้งเตือน', 'เลือกได้สูงสุด 3 รูปครับ', 'warning');
-            input.value = ''; return;
-        }
-        currentImageFiles = [...currentImageFiles, ...newFiles];
-        refreshGallery();
-        input.value = ''; 
-    }
-
-    function removeImage(index) {
-        currentImageFiles.splice(index, 1);
-        refreshGallery();
-    }
-
-    async function refreshGallery() {
-        const thumbContainer = document.getElementById('thumbList');
-        const preview = document.getElementById('previewArea');
-        thumbContainer.innerHTML = '';
-        
-        currentImageFiles.forEach((file, idx) => {
-            const url = URL.createObjectURL(file);
-            const div = document.createElement('div');
-            div.className = 'thumb-item animate__animated animate__fadeInRight';
-            div.innerHTML = `<img src="${url}" class="thumb-img"><button class="btn-remove-img" onclick="removeImage(${idx})"><i class="fas fa-times"></i></button>`;
-            thumbContainer.appendChild(div);
-        });
-
-        if (currentImageFiles.length === 0) {
-            selectedImageBase64 = null;
-            preview.style.backgroundImage = 'none';
-            preview.innerHTML = '<small class="text-muted position-absolute top-50 start-50 translate-middle">ภาพรวมจะปรากฏที่นี่</small>';
-            return;
-        }
-
-        preview.innerHTML = '<div class="spinner-border text-secondary m-auto"></div>';
-        try {
-            const imageObjects = await Promise.all(currentImageFiles.map(f => loadImage(f)));
-            const mergedBase64 = await mergeImagesToCanvas(imageObjects);
-            selectedImageBase64 = mergedBase64;
-            preview.innerHTML = '';
-            preview.style.backgroundImage = `url(${mergedBase64})`;
-        } catch (err) { console.error(err); }
-    }
-
-    function loadImage(file) {
-        return new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onload = (e) => { const img = new Image(); img.onload = () => resolve(img); img.src = e.target.result; };
-            reader.readAsDataURL(file);
-        });
-    }
-
-    function mergeImagesToCanvas(images) {
-        return new Promise((resolve) => {
-            const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d');
-            const W = 1000; const H = 800; canvas.width = W; canvas.height = H;
-            ctx.fillStyle = "#000000"; ctx.fillRect(0, 0, W, H);
-            const count = images.length; const gap = 15;
-
-            if (count === 1) drawImageProp(ctx, images[0], 0, 0, W, H);
-            else if (count === 2) {
-                const halfW = (W - gap) / 2;
-                drawImageProp(ctx, images[0], 0, 0, halfW, H);
-                drawImageProp(ctx, images[1], halfW + gap, 0, halfW, H);
-            } else if (count === 3) {
-                const col1W = (W - gap) / 2; const col2W = (W - gap) / 2; const col2X = col1W + gap; const rowH = (H - gap) / 2;
-                drawImageProp(ctx, images[0], 0, 0, col1W, H);
-                drawImageProp(ctx, images[1], col2X, 0, col2W, rowH);
-                drawImageProp(ctx, images[2], col2X, rowH + gap, col2W, rowH);
-            }
-            resolve(canvas.toDataURL('image/jpeg', 0.8));
-        });
-    }
-
-    function drawImageProp(ctx, img, x, y, w, h) {
-        const offsetX = 0.5, offsetY = 0.5;
-        const iw = img.width, ih = img.height, r = Math.min(w / iw, h / ih);
-        let nw = iw * r, nh = ih * r, cx, cy, cw, ch, ar = 1;
-        if (nw < w) ar = w / nw; if (Math.abs(ar - 1) < 1e-14 && nh < h) ar = h / nh;
-        nw *= ar; nh *= ar; cw = iw / (nw / w); ch = ih / (nh / h); cx = (iw - cw) * offsetX; cy = (ih - ch) * offsetY;
-        if (cx < 0) cx = 0; if (cy < 0) cy = 0; if (cw > iw) cw = iw; if (ch > ih) ch = ih;
-        ctx.drawImage(img, cx, cy, cw, ch, x, y, w, h);
-    }
-
     function previewImage(input) {
         if (input.files && input.files[0]) {
             const file = input.files[0];
