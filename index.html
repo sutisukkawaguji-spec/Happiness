@@ -87,6 +87,39 @@
             transition: all 0.5s ease;
         }
 
+        /* --- 🟡 แก้ไขส่วนที่ 1: เพิ่ม CSS --- */
+        
+        /* ปุ่มตัวกรอง (Filter) */
+        .filter-box { display: flex; gap: 10px; margin-bottom: 15px; }
+        .filter-btn { 
+            flex: 1; border: 1px solid #ddd; background: #fff; color: #888; 
+            border-radius: 20px; padding: 5px; font-size: 0.85rem; transition: 0.2s; 
+        }
+        .filter-btn.active { 
+            background: var(--primary); color: #fff; border-color: var(--primary); 
+            box-shadow: 0 4px 10px rgba(108, 92, 231, 0.3); 
+        }
+
+        /* จุดแดงแจ้งเตือน (Notification Badge) */
+        .nav-notify-badge {
+            position: absolute; top: 5px; right: 25%;
+            background: #ff7675; color: white; border: 2px solid #fff;
+            border-radius: 50%; width: 18px; height: 18px;
+            font-size: 10px; display: flex; align-items: center; justify-content: center;
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 100;
+        }
+        @keyframes popIn { from { transform: scale(0); } to { transform: scale(1); } }
+
+        /* แสงวิบวับ (Glow) สำหรับเหรียญใหม่ */
+        .nav-glow { position: relative; }
+        .nav-glow::after {
+            content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 45px; height: 45px; background: radial-gradient(circle, rgba(255, 234, 167, 0.8) 0%, transparent 70%);
+            border-radius: 50%; z-index: -1; animation: pulseGlow 1.5s infinite;
+        }
+        @keyframes pulseGlow { 0% { opacity: 0.6; transform: translate(-50%, -50%) scale(0.8); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(1.4); } }
+
         /* 🔥 EFFECT: แก้ใหม่ให้คงขนาดที่ขยายไว้ ไม่หดกลับ */
         @keyframes pulse-slow { 
             0% { transform: translate(-50%, -50%) scale(var(--scale, 1)); opacity: 0.7; } 
@@ -303,6 +336,21 @@
 
     <div id="page-stories" class="page-section">
         <h5 class="fw-bold mb-3 px-2">เรื่องราวความดีล่าสุด</h5>
+        
+        <div class="filter-box px-2">
+            <button class="filter-btn active" onclick="setFeedFilter('all', this)">ทั้งหมด</button>
+            <button class="filter-btn" onclick="setFeedFilter('related', this)">ส่วนร่วมของฉัน</button>
+        </div>
+
+        <div id="feedContainer" style="min-height: 200px;">
+            <div class="text-center py-5 text-muted">
+                <div class="spinner-border spinner-border-sm mb-2"></div><br>กำลังโหลดเรื่องราว...
+            </div>
+        </div>
+    </div>
+    
+    <div id="page-stories" class="page-section">
+        <h5 class="fw-bold mb-3 px-2">เรื่องราวความดีล่าสุด</h5>
         <div id="feedContainer" style="min-height: 200px;">
             <div class="text-center py-5 text-muted">
                 <div class="spinner-border spinner-border-sm mb-2"></div><br>กำลังโหลดเรื่องราว...
@@ -374,9 +422,9 @@
 
 <div class="bottom-nav">
     <div class="nav-item active" onclick="switchTab('record', this)"><i class="fas fa-plus-circle"></i><span>บันทึก</span></div>
-    <div class="nav-item" onclick="switchTab('stories', this)"><i class="fas fa-images"></i><span>เรื่องราว</span></div>
+    <div class="nav-item" id="nav-stories-btn" onclick="switchTab('stories', this)"><i class="fas fa-images"></i><span>เรื่องราว</span></div>
     <div class="nav-item" onclick="switchTab('stats', this)"><i class="fas fa-chart-pie"></i><span>สถิติ</span></div>
-    <div class="nav-item" onclick="switchTab('badges', this)"><i class="fas fa-medal"></i><span>เหรียญ</span></div>
+    <div class="nav-item" id="nav-badges-btn" onclick="switchTab('badges', this)"><i class="fas fa-medal"></i><span>เหรียญ</span></div>
     <div class="nav-item" onclick="switchTab('manager', this)"><i class="fas fa-user-tie"></i><span>ผู้บริหาร</span></div>
 </div>
 
@@ -464,12 +512,13 @@
         }
     };
 
-   let currentUser = null;
+    let currentUser = null;
     let selectedMood = 3;
     let chartData = []; 
     // --- 🌍 IMAGE VARS ---
     let currentImageFiles = []; 
     let selectedImageBase64 = null;
+    let currentFeedFilter = 'all'; // ค่าเริ่มต้น: ดูทั้งหมด
 
     // --- MAIN FUNCTION ---
     async function main() {
@@ -926,7 +975,9 @@
     }
 
     // --- 🎁 แสดงผลเหรียญ ---
+    // 🟡 แก้ไข renderBadges เพื่อใส่แสงวิบวับ
     function renderBadges() {
+        // ... (Code เดิมส่วนหา container) ...
         const container = document.getElementById('badgeContainer');
         if(!container || !currentUser) return;
         container.innerHTML = '';
@@ -937,36 +988,40 @@
 
         let storageKey = `happyMeter_badges_${currentUser.userId}`;
         let storedLevels = JSON.parse(localStorage.getItem(storageKey)) || {};
+        let hasNewBadge = false; // ตัวแปรเช็คเหรียญใหม่
 
         Object.keys(badgeConfig).forEach(badgeKey => {
             const config = badgeConfig[badgeKey];
             const realLevelIdx = getCalculatedLevel(badgeKey, myVirtueStats, myTotalScore, myTotalCount);
             const seenLevelIdx = storedLevels[badgeKey] || 0;
+            
+            // ถ้า Level จริง มากกว่า Level ที่เคยบันทึกไว้ แสดงว่ามีเหรียญใหม่
+            if (realLevelIdx > seenLevelIdx) {
+                hasNewBadge = true;
+            }
 
+            // ... (Code วาด HTML เหรียญ เหมือนเดิมทุกประการ) ...
             let html = '';
-            if (realLevelIdx === 0) {
-                html = `
-                    <div class="badge-item badge-locked" onclick="viewBadge('${config.title}', 'ยังทำไม่ถึงเกณฑ์ขั้นแรก', '🔒')">
-                        <div class="badge-icon">🔒</div>
-                        <small>${config.title}</small>
-                    </div>`;
+            // ... (Copy Logic เดิมมาวางตรงนี้ หรือใช้ของเดิม) ...
+             if (realLevelIdx === 0) {
+                html = `<div class="badge-item badge-locked" onclick="viewBadge('${config.title}', 'ยังทำไม่ถึงเกณฑ์ขั้นแรก', '🔒')"><div class="badge-icon">🔒</div><small>${config.title}</small></div>`;
             } else if (realLevelIdx > seenLevelIdx) {
                 const nextLvConfig = config.levels[realLevelIdx - 1];
-                html = `
-                    <div class="badge-item badge-mystery-upgrade" onclick="revealUpgrade('${badgeKey}', ${realLevelIdx}, '${config.title} ${nextLvConfig.rank}', '${nextLvConfig.icon}')">
-                        <div class="badge-icon">🎁</div>
-                        <small>อัปเกรด!</small>
-                    </div>`;
+                html = `<div class="badge-item badge-mystery-upgrade" onclick="revealUpgrade('${badgeKey}', ${realLevelIdx}, '${config.title} ${nextLvConfig.rank}', '${nextLvConfig.icon}')"><div class="badge-icon">🎁</div><small>อัปเกรด!</small></div>`;
             } else {
                 const currentLvConfig = config.levels[realLevelIdx - 1];
-                html = `
-                    <div class="badge-item" onclick="viewBadge('${config.title} ${currentLvConfig.rank}', '${currentLvConfig.desc}', '${currentLvConfig.icon}')">
-                        <div class="badge-icon">${currentLvConfig.icon}</div>
-                        <small>${config.title} ${currentLvConfig.rank}</small>
-                    </div>`;
+                html = `<div class="badge-item" onclick="viewBadge('${config.title} ${currentLvConfig.rank}', '${currentLvConfig.desc}', '${currentLvConfig.icon}')"><div class="badge-icon">${currentLvConfig.icon}</div><small>${config.title} ${currentLvConfig.rank}</small></div>`;
             }
             container.innerHTML += html;
         });
+
+        // ✨ ใส่แสงวิบวับถ้ามีเหรียญใหม่
+        const badgeNav = document.getElementById('nav-badges-btn');
+        if (hasNewBadge) {
+            badgeNav.classList.add('nav-glow');
+        } else {
+            badgeNav.classList.remove('nav-glow');
+        }
     }
 
     // --- MANAGER FEATURES ---
@@ -1188,20 +1243,41 @@
     }
 
     // --- NAVIGATION ---
+    // 🟡 แก้ไข switchTab เพื่อจัดการจุดแดง
     function switchTab(pageId, el) {
+        // ... (Logic เช็ค Manager เดิมคงไว้) ...
         if (pageId === 'manager') {
             if (!currentUser || (currentUser.role !== 'Manager' && currentUser.role !== 'Admin')) {
                 Swal.fire({ icon: 'error', title: 'Access Denied', text: 'สงวนสิทธิ์เฉพาะผู้บริหารเท่านั้นครับ', confirmButtonColor: '#6c5ce7' });
                 return;
             }
         }
+
         document.querySelectorAll('.page-section').forEach(p => p.classList.remove('active'));
         document.getElementById('page-' + pageId).classList.add('active');
+        
         document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-        el.classList.add('active');
+        if (el) el.classList.add('active');
+        
+        // --- 🔔 Logic เคลียร์จุดแดง ---
+        if (pageId === 'stories') {
+             // เอากล่องแจ้งเตือนออก
+             const badge = document.querySelector('#nav-stories-btn .nav-notify-badge');
+             if(badge) badge.remove();
+             
+             // อัปเดตว่าดูครบแล้ว (นับจำนวนลูก children ใน feed container หรือดึงใหม่)
+             // เพื่อความชัวร์ ให้ fetchFeed ทำหน้าที่อัปเดต localStorage เมื่อเปิดหน้านี้
+             fetchFeed(); 
+        }
+        // ---------------------------
+
         document.getElementById('header-user').style.display = (pageId === 'manager') ? 'none' : 'block';
         if(pageId === 'manager') fetchManagerData();
-        if(pageId === 'stories') fetchFeed();
+        // if(pageId === 'stories') fetchFeed(); // เอาออก เพราะเรียกข้างบนแล้ว
+        if (pageId === 'badges' && document.getElementById('nav-badges-btn').classList.contains('nav-glow')) {
+             // ถ้ากดเข้ามาดูเหรียญ ให้เอาแสงวิบวับออก
+             document.getElementById('nav-badges-btn').classList.remove('nav-glow');
+        }
     }
 
     // --- UTILS & FEED ---
@@ -1331,91 +1407,103 @@
         Swal.fire({ html: `<img src="${user.img}" style="width:90px; height:90px; border-radius:50%; margin-bottom:10px;"><br><h5 class="fw-bold">${user.name}</h5><span class="badge bg-secondary mb-3">${user.role}</span><div class="row g-2 text-center"><div class="col-6"><div class="border rounded p-2"><h6>ความสุข</h6><span class="${score<5?'text-danger':''}">${score}/10</span></div></div><div class="col-6"><div class="border rounded p-2"><h6>คะแนนสะสม</h6><span>${user.score}</span></div></div></div>${helperHtml}`, showConfirmButton: false, showCloseButton: true });
     }
 
+   // 🟡 ฟังก์ชันดึง Feed (ฉบับอัปเกรด: กรองได้ + แจ้งเตือน + แก้บั๊ก Verify)
     function fetchFeed() {
         const container = document.getElementById('feedContainer');
         if (!container) return;
+        
+        // ถ้าเป็นการกดกรอง ไม่ต้องขึ้น Loading ใหญ่ ให้แค่เคลียร์
         container.innerHTML = '<div class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm mb-2"></div><br>กำลังดึงข้อมูล...</div>';
         
-        // ใส่ timestamp เพื่อป้องกันแคช
         fetch(GAS_URL + '?action=get_feed&t=' + new Date().getTime())
         .then(res => res.json())
         .then(feed => {
             container.innerHTML = '';
+            
+            // --- 🔔 Logic แจ้งเตือน (Notification) ---
+            const lastSeenCount = parseInt(localStorage.getItem('lastSeenStoryCount')) || 0;
+            const currentCount = feed.length;
+            const newStories = currentCount - lastSeenCount;
+            const navBadge = document.getElementById('nav-stories-btn');
+            
+            // ลบจุดแดงเก่าออกก่อน
+            const oldBadge = navBadge.querySelector('.nav-notify-badge');
+            if(oldBadge) oldBadge.remove();
+
+            // ถ้ามีเรื่องใหม่ และไม่ได้อยู่ที่หน้า Stories ให้ขึ้นจุดแดง
+            if (newStories > 0 && !document.getElementById('page-stories').classList.contains('active')) {
+                navBadge.innerHTML += `<div class="nav-notify-badge">${newStories}</div>`;
+            } else {
+                // ถ้าเปิดหน้า Stories อยู่ ให้อัปเดตว่าดูครบแล้ว
+                localStorage.setItem('lastSeenStoryCount', currentCount);
+            }
+            // ----------------------------------------
+
             if (!feed || feed.length === 0) {
-                container.innerHTML = '<div class="text-center py-5 text-muted"><i class="far fa-newspaper fa-3x mb-3"></i><br>ยังไม่มีเรื่องราว</div>';
+                container.innerHTML = '<div class="text-center py-5 text-muted">ยังไม่มีเรื่องราว</div>';
                 return;
             }
             
             feed.forEach(post => {
-                // --- จัดการเวลา ---
+                // --- 🛡️ แก้บั๊ก Verify (ใช้ String() ครอบเพื่อความชัวร์) ---
+                let verifyList = post.verifies || [];
+                // แปลงเป็น String ทั้งคู่ก่อนเทียบ กันพลาดเรื่อง int/string
+                let isVerifiedByMe = verifyList.some(v => String(v.lineId) === String(currentUser.userId));
+                let isMyPost = String(post.user_line_id) === String(currentUser.userId);
+                
+                // ตรวจสอบการ Like (สำหรับใช้ในตัวกรอง)
+                let isLiked = post.likes && post.likes.some(u => String(u.lineId) === String(currentUser.userId));
+
+                // --- 🔍 Logic ตัวกรอง (Filtering) ---
+                // ถ้าเลือก "ส่วนร่วม" จะโชว์เฉพาะ: โพสต์เรา OR เราไปกด Verify OR เราไปกด Like
+                if (currentFeedFilter === 'related') {
+                    if (!isMyPost && !isVerifiedByMe && !isLiked) return; // ข้ามไปเลยถ้าไม่เกี่ยว
+                }
+
+                // ... (ส่วนการแสดงผล HTML เหมือนเดิม) ...
                 let timeAgo = "-";
                 try { timeAgo = new Date(post.timestamp).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute:'2-digit' }); } catch(e) {}
                 
-                // --- จัดการรูปภาพ ---
                 let imgUrl = post.image;
                 if(imgUrl && imgUrl.startsWith('http:')) imgUrl = imgUrl.replace('http:', 'https:');
                 const imgHtml = (imgUrl && imgUrl.length > 10) ? `<img src="${imgUrl}" class="feed-img" onclick="viewImage('${imgUrl}')">` : '';
                 
-                // --- Emoji อารมณ์ ---
                 const moodEmoji = post.happy == 3 ? '😁' : (post.happy == 2 ? '😐' : '😞');
 
-                // --- 🛡️ LOGIC ปุ่ม VERIFY (ส่วนสำคัญที่แก้ใหม่) ---
+                // ปุ่ม Verify
                 let verifyBtnHtml = '';
-                let verifyList = post.verifies || [];
                 let verifyCount = verifyList.length;
-                let isVerifiedByMe = verifyList.some(v => String(v.lineId) === String(currentUser.userId));
-                let isMyPost = String(post.user_line_id) === String(currentUser.userId);
-                let isBonus = post.bonusGiven === "TRUE" || verifyCount >= 4; // เช็คว่าได้โบนัสหรือยัง
+                let isBonus = post.bonusGiven === "TRUE" || verifyCount >= 4;
 
-                // 1. กรณีเป็นเจ้าของโพสต์
                 if (isMyPost) {
                     if (post.taggedFriends && post.taggedFriends.length > 0) {
-                        // โพสต์ทีม (Team)
                         verifyBtnHtml = `<span class="badge bg-success rounded-pill ms-auto"><i class="fas fa-users"></i> กิจกรรมทีม (+10)</span>`;
                     } else {
-                        // โพสต์เดี่ยว (Solo)
-                        if (isBonus) {
-                             verifyBtnHtml = `<span class="badge bg-warning text-dark rounded-pill ms-auto animate__animated animate__pulse animate__infinite"><i class="fas fa-crown"></i> โบนัสแตก! (+8)</span>`;
-                        } else {
-                             verifyBtnHtml = `<span class="badge bg-secondary rounded-pill ms-auto"><i class="fas fa-hourglass-half"></i> รอพยาน (${verifyCount}/4)</span>`;
-                        }
+                        if (isBonus) verifyBtnHtml = `<span class="badge bg-warning text-dark rounded-pill ms-auto"><i class="fas fa-crown"></i> โบนัสแตก!</span>`;
+                        else verifyBtnHtml = `<span class="badge bg-secondary rounded-pill ms-auto"><i class="fas fa-hourglass-half"></i> รอพยาน (${verifyCount}/4)</span>`;
                     }
-                } 
-                // 2. กรณีเป็นเพื่อน (คนกด)
-                else {
+                } else {
                     if (isVerifiedByMe) {
                         verifyBtnHtml = `<button class="btn btn-sm btn-success rounded-pill ms-auto disabled" style="opacity:0.8"><i class="fas fa-check-circle"></i> ยืนยันแล้ว (+3)</button>`;
                     } else {
-                        // ✅ แก้ตรงนี้: เพิ่ม , this ต่อท้ายพารามิเตอร์ เพื่อส่งตัวปุ่มไปด้วย
-                        verifyBtnHtml = `
-                            <button onclick="verifyPost('${post.id}', '${post.user_line_id}', '${post.user_name}', this)" 
-                                    class="btn btn-sm btn-outline-primary rounded-pill ms-auto shadow-sm">
-                                <i class="fas fa-shield-alt"></i> ยืนยัน (+3)
-                            </button>
-                        `;
+                        // ส่ง this เข้าไปเพื่อเปลี่ยนปุ่มทันที
+                        verifyBtnHtml = `<button onclick="verifyPost('${post.id}', '${post.user_line_id}', '${post.user_name}', this)" class="btn btn-sm btn-outline-primary rounded-pill ms-auto shadow-sm"><i class="fas fa-shield-alt"></i> ยืนยัน (+3)</button>`;
                     }
                 }
-                // --- แสดง Avatar คนที่ยืนยันแล้ว ---
+
+                // Avatar คนยืนยัน
                 let avatarsHtml = '';
                 if (verifyList.length > 0) {
-                    verifyList.forEach(v => {
-                        avatarsHtml += `<img src="${v.img}" class="rounded-circle border border-white ms-1" width="25" height="25" title="${v.name}" style="object-fit:cover;">`;
-                    });
+                    verifyList.forEach(v => { avatarsHtml += `<img src="${v.img}" class="rounded-circle border border-white ms-1" width="25" height="25" title="${v.name}" style="object-fit:cover;">`; });
                     avatarsHtml = `<div class="d-flex align-items-center mt-2 p-2 bg-light rounded small"><span class="text-primary me-2 fw-bold"><i class="fas fa-user-check"></i> พยาน:</span>${avatarsHtml}</div>`;
                 }
 
-                // --- ❤️ ปุ่ม Like ---
-                let isLiked = post.likes && post.likes.some(u => String(u.lineId) === String(currentUser.userId));
+                // ปุ่ม Like
                 let likeCount = post.likes ? post.likes.length : 0;
-                let likeBtnHtml = `
-                    <div class="action-btn ${isLiked ? 'liked' : ''}" onclick="likePost('${post.id}')">
-                         <i class="${isLiked ? 'fas' : 'far'} fa-heart me-1"></i> ${likeCount} ถูกใจ
-                    </div>
-                `;
+                let likeBtnHtml = `<div class="action-btn ${isLiked ? 'liked' : ''}" onclick="likePost('${post.id}')"><i class="${isLiked ? 'fas' : 'far'} fa-heart me-1"></i> ${likeCount} ถูกใจ</div>`;
 
-                // --- ประกอบ HTML ---
                 const html = `
-                    <div class="glass-card feed-card p-3 mb-3">
+                    <div class="glass-card feed-card p-3 mb-3 animate__animated animate__fadeIn">
                         <div class="feed-header d-flex align-items-center">
                             <img src="${post.user_img || 'https://dummyimage.com/45x45/cccccc/ffffff&text=User'}" class="feed-avatar me-2">
                             <div class="feed-user">
@@ -1424,11 +1512,9 @@
                             </div>
                             ${verifyBtnHtml}
                         </div>
-                        
                         <div class="feed-content mt-2 mb-2">${post.note || ''}</div>
                         ${imgHtml}
                         ${avatarsHtml}
-                        
                         <div class="feed-actions mt-2 pt-2 border-top d-flex align-items-center justify-content-between">
                             ${likeBtnHtml}
                             <div class="fs-4">${moodEmoji}</div>
@@ -1630,9 +1716,18 @@
         });
     }
 
+    // 🟡 ฟังก์ชันสลับตัวกรอง
+    function setFeedFilter(type, btn) {
+        currentFeedFilter = type;
+        // เปลี่ยนสีปุ่ม
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        // โหลด Feed ใหม่ด้วยเงื่อนไขใหม่
+        fetchFeed(); 
+    }
+
 </script>
 </body>
 </html>
-
 
 
