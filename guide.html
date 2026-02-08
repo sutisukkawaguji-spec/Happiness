@@ -56,21 +56,30 @@
         .chart-box { background: #f8f9fa; border-radius: 15px; padding: 15px; position: relative; height: 180px; display: flex; align-items: flex-end; justify-content: space-around; border: 1px dashed #ccc; overflow: hidden; }
         .chart-bar { width: 20%; border-radius: 5px 5px 0 0; position: relative; transition: height 1s; display: flex; align-items: flex-end; justify-content: center; color: white; font-weight: bold; font-size: 0.8rem; padding-bottom: 5px; }
         .chart-bar span { position: absolute; top: -25px; left: 50%; transform: translateX(-50%); color: #555; font-size: 0.7rem; }
-        
         .trend-line { 
             position: absolute; bottom: 0; left: 0; width: 100%; height: 100%; 
             background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50" preserveAspectRatio="none"><path d="M0,50 L10,40 L30,45 L50,20 L70,30 L90,10 L100,5" fill="rgba(9,132,227,0.1)" stroke="%230984e3" stroke-width="1"/></svg>');
             background-size: 100% 100%; opacity: 0.5; z-index: 0;
         }
 
-        /* Policy Badge */
-        .policy-card { background: #f8f9fa; border-radius: 15px; padding: 15px; margin-bottom: 10px; border-left: 5px solid #ccc; transition: 0.2s; }
-        .policy-card:hover { transform: translateX(5px); background: #fff; box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
-        .policy-t { border-left-color: #00cec9; }
-        .policy-r { border-left-color: #fdcb6e; }
-        .policy-d { border-left-color: #ff7675; }
-        
-        .policy-badge { display: inline-block; padding: 3px 8px; border-radius: 6px; color: white; font-size: 0.7rem; font-weight: bold; margin-bottom: 5px; }
+        /* --- 🕸️ Radar Chart Simulation --- */
+        .radar-box { position: relative; width: 200px; height: 200px; margin: 0 auto; background: radial-gradient(circle, #fff, #f0f0f0); border-radius: 50%; border: 1px dashed #ccc; }
+        .radar-shape { 
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 0; height: 0;
+            border-left: 60px solid transparent; border-right: 60px solid transparent; border-bottom: 90px solid rgba(108, 92, 231, 0.4);
+        }
+        .radar-shape::after {
+            content: ''; position: absolute; top: 30px; left: -60px;
+            width: 0; height: 0;
+            border-left: 60px solid transparent; border-right: 60px solid transparent; border-top: 90px solid rgba(108, 92, 231, 0.4);
+        }
+        .radar-label { position: absolute; font-size: 0.7rem; font-weight: bold; color: #666; }
+        .rl-top { top: 5px; left: 50%; transform: translateX(-50%); }
+        .rl-right { top: 40%; right: 5px; }
+        .rl-left { top: 40%; left: 5px; }
+        .rl-bot-r { bottom: 15px; right: 20px; }
+        .rl-bot-l { bottom: 15px; left: 20px; }
 
         /* --- ✨ Aura & Bars --- */
         .bar-label { font-size: 0.8rem; font-weight: bold; display: flex; justify-content: space-between; margin-bottom: 5px; }
@@ -85,6 +94,10 @@
         .aura-glow { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85px; height: 85px; border-radius: 50%; z-index: 1; filter: blur(10px); opacity: 0.8; animation: pulse-slow 3s infinite; }
         @keyframes pulse-slow { 0% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.2); } 100% { transform: translate(-50%, -50%) scale(1); } }
         
+        /* Policy Badge */
+        .policy-card { background: #f8f9fa; border-radius: 15px; padding: 15px; margin-bottom: 10px; border-left: 5px solid #ccc; transition: 0.2s; }
+        .policy-t { border-left-color: #00cec9; } .policy-r { border-left-color: #fdcb6e; } .policy-d { border-left-color: #ff7675; }
+        
         .aura-volunteer { background: radial-gradient(circle, #3498db 0%, transparent 70%); }
         .aura-sufficiency { background: radial-gradient(circle, #2ecc71 0%, transparent 70%); }
         .aura-discipline { background: radial-gradient(circle, #9b59b6 0%, transparent 70%); }
@@ -92,7 +105,8 @@
         .aura-gratitude { background: radial-gradient(circle, #e84393 0%, transparent 70%); }
 
         .btn-install { background: linear-gradient(90deg, #00b894, #00cec9); color: white; border-radius: 50px; padding: 12px 35px; font-weight: bold; text-decoration: none; display: block; text-align: center; box-shadow: 0 5px 15px rgba(0, 184, 148, 0.4); margin-top: 20px; }
-    /* 🟡 ปุ่มย้อนกลับ (เพิ่มใหม่) */
+
+	/* 🟡 ปุ่มย้อนกลับ (เพิ่มใหม่) */
         .header-banner { position: relative; } /* ต้องเพิ่มบรรทัดนี้เพื่อให้ปุ่มอิงตำแหน่งได้ */
         
         .btn-back { 
@@ -112,7 +126,11 @@
 </head>
 <body>
 
-    <div class="header-banner">
+<div class="header-banner">
+        <a href="./index.html" class="btn-back" onclick="try{history.back()}catch(e){}">
+            <i class="fas fa-chevron-left"></i>
+        </a>
+
         <h1 class="fw-bold mb-1"><i class="fas fa-book-reader"></i> คู่มือการใช้งาน</h1>
         <p class="mb-0 opacity-75 small">ระบบ Happy Meter & KPI องค์กร</p>
     </div>
@@ -121,7 +139,7 @@
         <a href="#install" class="nav-pill-btn"><i class="fas fa-download"></i> ติดตั้ง</a>
         <a href="#executive" class="nav-pill-btn active"><i class="fas fa-user-tie"></i> ผู้บริหาร</a>
         <a href="#record" class="nav-pill-btn"><i class="fas fa-edit"></i> บันทึก</a>
-        <a href="#witness" class="nav-pill-btn"><i class="fas fa-user-check"></i> พยาน</a>
+        <a href="#stats" class="nav-pill-btn"><i class="fas fa-chart-pie"></i> กราฟ</a>
         <a href="#level" class="nav-pill-btn"><i class="fas fa-chart-line"></i> เลเวล</a>
     </div>
 
@@ -169,34 +187,18 @@
                 </div>
             </div>
 
-            <div class="alert alert-success small mt-3">
-                <h6 class="fw-bold mb-1"><i class="fas fa-gem"></i> กลยุทธ์ VALUE: Unity (U)</h6>
-                แอปพลิเคชันนี้คือกลไกหลักในการขับเคลื่อนเสาหลัก <b>"U - Unity (พัฒนาบุคลากร)"</b> เพื่อสร้างความผูกพัน ความสามัคคี และความสุขในการทำงาน
-            </div>
-
             <hr class="my-4">
-            <h6 class="fw-bold mb-2"><i class="fas fa-chart-area text-primary"></i> Executive Dashboard (ตัวอย่างการแสดงผล)</h6>
-            <p class="small text-muted mb-3">ผู้บริหารสามารถติดตามสถานะองค์กรได้แบบ Real-time ผ่านกราฟสรุปผล</p>
-            
+            <h6 class="fw-bold mb-2"><i class="fas fa-chart-area text-primary"></i> Executive Dashboard (ตัวอย่าง)</h6>
             <div class="chart-box mb-3">
-                <div class="trend-line"></div> <div class="chart-bar bg-info" style="height: 60%;">T</div>
+                <div class="trend-line"></div>
+                <div class="chart-bar bg-info" style="height: 60%;">T</div>
                 <div class="chart-bar bg-warning" style="height: 45%;">R</div>
                 <div class="chart-bar bg-danger" style="height: 80%;">D</div>
             </div>
             
-            <div class="row g-2 text-center small text-muted">
-                <div class="col-4 border-end"><b>Happy Index</b><br><span class="text-success">88%</span> (สูง)</div>
-                <div class="col-4 border-end"><b>Burnout Risk</b><br><span class="text-danger">2 คน</span> (ต่ำ)</div>
-                <div class="col-4"><b>Top Value</b><br><span class="text-primary">Dedication</span></div>
-            </div>
-
             <div class="alert alert-danger bg-white border-danger text-danger rounded-3 small mt-3">
                 <h6 class="fw-bold"><i class="fas fa-exclamation-triangle"></i> ระบบเตือนภัย (Early Warning)</h6>
-                เมื่อบุคลากรมีความสุขต่ำกว่าเกณฑ์ (Red Zone) ระบบจะ:
-                <ol class="mb-0 mt-1 ps-3">
-                    <li>แจ้งเตือนในหน้า Dashboard ของผู้บริหาร</li>
-                    <li>แนะนำ <b>"Buddy"</b> (เพื่อนสนิทที่สุดในระบบ) ให้ช่วยดูแลและพูดคุย เพื่อป้องกันปัญหาสุขภาพจิต</li>
-                </ol>
+                เมื่อบุคลากรมีความสุขต่ำกว่าเกณฑ์ ระบบจะแนะนำ <b>"Buddy"</b> ให้ช่วยดูแลเพื่อป้องกันภาวะหมดไฟ
             </div>
         </div>
 
@@ -233,9 +235,37 @@
             </div>
         </div>
 
+        <div id="stats" class="card-guide">
+            <h5 class="section-title"><i class="fas fa-chart-pie"></i> 3. สถิติสมดุลพลัง (Radar Chart)</h5>
+            
+            <div class="row align-items-center">
+                <div class="col-6">
+                    <div class="radar-box">
+                        <div class="radar-shape"></div>
+                        <span class="radar-label rl-top">จิตอาสา</span>
+                        <span class="radar-label rl-right">พอเพียง</span>
+                        <span class="radar-label rl-bot-r">วินัย</span>
+                        <span class="radar-label rl-bot-l">สุจริต</span>
+                        <span class="radar-label rl-left">กตัญญู</span>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <h6 class="fw-bold text-primary">ความหมาย</h6>
+                    <p class="small text-muted mb-2">กราฟนี้แสดงให้เห็นว่าคุณ <b>"หนัก"</b> ไปทางด้านไหน</p>
+                    <ul class="small text-muted ps-3 mb-0">
+                        <li><b>กราฟเบี้ยว:</b> มีจุดเด่นเฉพาะด้าน</li>
+                        <li><b>กราฟกลม:</b> มีสมดุลครบทุกด้าน (Balanced)</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="alert alert-info small mt-3 mb-0">
+                <i class="fas fa-lightbulb me-1"></i> <b>เป้าหมาย:</b> พยายามทำให้กราฟขยายออกเต็มวง เพื่อเป็นบุคลากรต้นแบบที่สมบูรณ์
+            </div>
+        </div>
+
         <div id="witness" class="card-guide">
-            <h5 class="section-title"><i class="fas fa-shield-alt"></i> 3. ระบบพยาน (Witness)</h5>
-            <p class="small text-muted">ช่วยกันตรวจสอบเพื่อสังคมที่โปร่งใส (Transparency)</p>
+            <h5 class="section-title"><i class="fas fa-shield-alt"></i> 4. ระบบพยาน (Witness)</h5>
+            <p class="small text-muted">ช่วยกันตรวจสอบเพื่อสังคมที่โปร่งใส</p>
             <ul class="list-unstyled small">
                 <li class="mb-2"><i class="fas fa-check-circle text-success me-2"></i><b>กดยืนยัน:</b> เมื่อเห็นโพสต์เพื่อน กดปุ่มยืนยัน</li>
                 <li class="mb-2"><i class="fas fa-gift text-warning me-2"></i><b>รับแต้ม:</b> ผู้กดเป็นพยานรับทันที <b>+3 คะแนน</b></li>
@@ -244,7 +274,7 @@
         </div>
 
         <div id="level" class="card-guide">
-            <h5 class="section-title"><i class="fas fa-chart-line"></i> 4. ระบบเลเวล & ออร่า</h5>
+            <h5 class="section-title"><i class="fas fa-chart-line"></i> 5. ระบบเลเวล & ออร่า</h5>
             
             <div class="bar-label"><span><i class="fas fa-star text-info"></i> หลอดคะแนน (Score)</span><span>Lv.2</span></div>
             <div class="progress"><div class="progress-bar bar-virtue" style="width: 50%"></div></div>
@@ -259,6 +289,19 @@
                     <div class="aura-item"><div class="profile-wrapper"><div class="aura-glow aura-integrity"></div><img src="https://dummyimage.com/70x70/eee/000&text=I" class="demo-img"></div><small style="color:#00cec9" class="fw-bold">สุจริต</small></div>
                     <div class="aura-item"><div class="profile-wrapper"><div class="aura-glow aura-gratitude"></div><img src="https://dummyimage.com/70x70/eee/000&text=G" class="demo-img"></div><small style="color:#e84393" class="fw-bold">กตัญญู</small></div>
                 </div>
+            </div>
+        </div>
+
+        <div id="badge" class="card-guide">
+            <h5 class="section-title"><i class="fas fa-medal"></i> 6. เหรียญความสำเร็จ</h5>
+            <div class="d-flex align-items-center mb-3 border-bottom pb-2">
+                <div class="fs-1 me-3">🥉</div><div><h6 class="fw-bold mb-0">Rookie</h6><small class="text-muted">สะสมครบ 100 คะแนน</small></div>
+            </div>
+            <div class="d-flex align-items-center mb-3 border-bottom pb-2">
+                <div class="fs-1 me-3">🥈</div><div><h6 class="fw-bold mb-0">Pro</h6><small class="text-muted">สะสมครบ 1,000 คะแนน</small></div>
+            </div>
+            <div class="d-flex align-items-center mb-3">
+                <div class="fs-1 me-3">👑</div><div><h6 class="fw-bold mb-0">Legend</h6><small class="text-muted">สะสมครบ 10,000 คะแนน</small></div>
             </div>
         </div>
 
