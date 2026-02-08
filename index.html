@@ -560,44 +560,77 @@
     }
 
     function renderProfile() {
-        if(!currentUser) return;
-
-        document.getElementById('userName').innerText = currentUser.name;
-        document.getElementById('userRole').innerHTML = `${currentUser.role || 'พนักงาน'} • <span class="text-primary fw-bold">Lv.${currentUser.level || 1}</span>`;
-        document.getElementById('userImg').src = currentUser.img || 'https://dummyimage.com/90x90/cccccc/ffffff&text=User';
-        
-        // --- หลอดพลัง (Bars) ---
-        let happyPercent = (parseFloat(currentUser.happyScore || 0) / 10) * 100;
-        document.querySelector('.bar-happy').style.width = `${Math.min(happyPercent, 100)}%`;
-
-        let currentScore = currentUser.score || 0;
-        let virtuePercent = ((currentScore % 500) / 500) * 100;
-        if (currentScore > 0 && virtuePercent === 0) virtuePercent = 100;
-        document.querySelector('.bar-virtue').style.width = `${virtuePercent}%`;
-
-        // --- ✨ AURA LOGIC (ฉบับแก้ไขสมบูรณ์) ---
-        const auraEl = document.getElementById('userAura');
-        if (auraEl) {
-             // 1. แปลงเป็นตัวพิมพ์เล็ก (Lower Case) เพื่อให้ตรงกับ CSS
-             const dominant = (currentUser.dominantVirtue || 'none').toLowerCase();
-             const level = parseInt(currentUser.level) || 1;
-
-             // 2. ล้างคลาสเก่า แล้วใส่คลาสสีใหม่
-             auraEl.className = `aura-glow aura-${dominant}`;
-
-             // 3. คำนวณขนาด (Scale)
-             // สูตร: เริ่มต้น 1.0, เพิ่ม 0.05 ทุกเลเวล, ตันที่ 2.5 เท่า
-             let scale = 1 + (level * 0.05);
-             if (scale > 2.5) scale = 2.5;
-
-             // 🟢 ส่งค่าขนาดไปให้ CSS ผ่านตัวแปร (แก้ปัญหา Animation ทับ)
-             auraEl.style.setProperty('--scale', scale);
-
-             // 4. ใส่ Effect การขยับตามเลเวล
-             if (level >= 20) auraEl.classList.add('aura-lv-20');
-             else if (level >= 10) auraEl.classList.add('aura-lv-10');
-             else if (level >= 5) auraEl.classList.add('aura-lv-5');
-             else auraEl.classList.add('aura-lv-1');
+            // 1. ด่านป้องกัน: ถ้ายังไม่มี User ให้หยุดทำงานทันที (ป้องกัน Error หน้าขาว)
+            if(!currentUser) return; 
+    
+            // 2. แสดงผลข้อมูลพื้นฐาน
+            document.getElementById('userName').innerText = currentUser.name;
+            document.getElementById('userRole').innerHTML = `${currentUser.role || 'พนักงาน'} • <span class="text-primary fw-bold">Lv.${currentUser.level || 1}</span>`;
+            document.getElementById('userImg').src = currentUser.img || 'https://dummyimage.com/90x90/cccccc/ffffff&text=User';
+            
+            // 3. คำนวณหลอดพลัง
+            let happyPercent = (parseFloat(currentUser.happyScore || 0) / 10) * 100;
+            document.querySelector('.bar-happy').style.width = `${Math.min(happyPercent, 100)}%`;
+    
+            let currentScore = currentUser.score || 0;
+            let virtuePercent = ((currentScore % 500) / 500) * 100;
+            if (currentScore > 0 && virtuePercent === 0) virtuePercent = 100;
+            document.querySelector('.bar-virtue').style.width = `${virtuePercent}%`;
+    
+            // 4. แสดงผล Aura
+            const auraEl = document.getElementById('userAura');
+            if (auraEl) {
+                 const dominant = (currentUser.dominantVirtue || 'none').toLowerCase();
+                 const level = parseInt(currentUser.level) || 1;
+                 auraEl.className = `aura-glow aura-${dominant}`;
+                 let scale = 1 + (level * 0.05);
+                 if (scale > 2.5) scale = 2.5;
+                 auraEl.style.setProperty('--scale', scale);
+    
+                 if (level >= 20) auraEl.classList.add('aura-lv-20');
+                 else if (level >= 10) auraEl.classList.add('aura-lv-10');
+                 else if (level >= 5) auraEl.classList.add('aura-lv-5');
+                 else auraEl.classList.add('aura-lv-1');
+            }
+            
+            // 5. แสดงผลคำวิเคราะห์ (Stat Analysis)
+            const domVirtue = currentUser.dominantVirtue || 'none';
+            const statConfig = {
+                'volunteer': { title: '💖 จิตอาสาตัวจริง', desc: 'โดดเด่นด้านการเสียสละ', color: '#3498db', bg: '#e8f4fc' },
+                'sufficiency': { title: '🌱 ปราชญ์พอเพียง', desc: 'ใช้ชีวิตสมดุลและคุ้มค่า', color: '#2ecc71', bg: '#eafaf1' },
+                'discipline': { title: '⚡ เจ้าแห่งวินัย', desc: 'ตรงต่อเวลา รับผิดชอบสูง', color: '#9b59b6', bg: '#f5eef8' },
+                'integrity': { title: '🛡️ ผู้พิทักษ์ความถูกต้อง', desc: 'ซื่อสัตย์ โปร่งใส', color: '#00cec9', bg: '#e0fbfc' },
+                'gratitude': { title: '🙏 ยอดคนกตัญญู', desc: 'รู้คุณคน อ่อนน้อม', color: '#e84393', bg: '#fcecf5' },
+                'none': { title: '🌟 ผู้เริ่มต้น', desc: 'เริ่มสะสมความดีกันเถอะ', color: '#95a5a6', bg: '#f4f6f6' }
+            };
+            const cfg = statConfig[domVirtue] || statConfig['none'];
+            const statBox = document.getElementById('statAnalysis');
+            if (statBox) {
+                document.getElementById('statTitle').innerHTML = `<i class="fas fa-quote-left fa-xs me-2 opacity-50"></i>${cfg.title}`;
+                document.getElementById('statTitle').style.color = cfg.color;
+                document.getElementById('statDesc').innerText = cfg.desc;
+                statBox.style.backgroundColor = cfg.bg;
+                statBox.style.borderColor = cfg.color;
+                statBox.style.borderLeftWidth = '5px';
+            }
+    
+            // 6. ✅ เรียกฟังก์ชันย่อย (ย้ายมาจากข้างนอกที่เคย Error)
+            if (typeof initUserRadar === 'function') initUserRadar();
+            if (typeof renderBadges === 'function') renderBadges();
+    
+            // 7. ✅ ระบบกู้ชีพ (ย้ายมาไว้ในนี้ ปลอดภัยหายห่วง)
+            let currentHappyScore = parseFloat(currentUser.happyScore) || 0;
+            if (currentHappyScore > 0 && currentHappyScore < 5) {
+                 console.log("⚠️ Red Zone Detected!");
+                 fetch(GAS_URL, { 
+                    method: 'POST', 
+                    mode: 'no-cors', 
+                    body: JSON.stringify({ 
+                        action: 'trigger_auto_rescue', 
+                        userId: currentUser.userId 
+                    }) 
+                });
+            }
         }
         // -------------------------------------------------------
         // 🧠 STAT ANALYSIS: วิเคราะห์จุดเด่นใต้กราฟ
@@ -658,28 +691,7 @@
         if (typeof renderBadges === 'function') renderBadges();
     }
 
-        // -------------------------------------------------------
-        // ส่วนอื่นๆ คงเดิม
-        // -------------------------------------------------------
-        let currentHappyScore = parseFloat(currentUser.happyScore) || 0; 
-        if (currentHappyScore === 0) currentHappyScore = 10;
 
-        // อัปเดต Radar Chart และ Badges
-        if (typeof initUserRadar === 'function') initUserRadar();
-        if (typeof renderBadges === 'function') renderBadges();
-
-        // ระบบกู้ชีพ (Auto Rescue Logic)
-        if (currentHappyScore < 5) {
-             console.log("⚠️ Red Zone Detected!");
-             fetch(GAS_URL, { 
-                method: 'POST', 
-                mode: 'no-cors', 
-                body: JSON.stringify({ 
-                    action: 'trigger_auto_rescue', 
-                    userId: currentUser.userId 
-                }) 
-            });
-        }
 
     // --- CORE FEATURES: ดึงรายชื่อเพื่อน ---
     function fetchFriendsList() {
@@ -1725,3 +1737,4 @@
 </script>
 </body>
 </html>
+
