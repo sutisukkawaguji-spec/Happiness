@@ -26,6 +26,40 @@
         body { background-image: var(--bg-gradient); font-family: 'Kanit', sans-serif; min-height: 100vh; color: #444; padding-bottom: 100px; overflow-x: hidden; }
         .glass-card { background: var(--glass-bg); backdrop-filter: blur(15px); border-radius: 24px; box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07); padding: 20px; margin-bottom: 20px; border: 1px solid rgba(255,255,255,0.6); }
 
+        /* สไตล์สำหรับรูปย่อยและการลบ */
+        .thumb-item {
+            position: relative;
+            width: 80px;
+            height: 80px;
+            flex-shrink: 0;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 2px solid #ddd;
+        }
+        .thumb-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .btn-remove-img {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            background: rgba(255, 0, 0, 0.8);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 10;
+        }
+        .btn-remove-img:hover { background: red; }
+        
         /* --- ส่วนกรอบรูปโปรไฟล์ (Container) --- */
         .profile-container { 
             position: relative; 
@@ -256,10 +290,20 @@
                     <span class="badge bg-white text-dark border p-2" onclick="addEmoji('🔥')">🔥</span>
                     <span class="badge bg-white text-dark border p-2" onclick="addEmoji('🙏')">🙏</span>
                 </div>
-                <button class="btn btn-outline-secondary w-100 rounded-3 mt-2" onclick="document.getElementById('fileCam').click()"><i class="fas fa-camera me-2"></i>ถ่ายภาพ/เลือกรูป</button>
-                <input type="file" id="fileCam" hidden accept="image/*" multiple onchange="handleImageSelection(this)">
-                <div id="previewArea" class="img-preview-container"></div>
-            </div>
+                <div class="mb-3">
+                    <button class="btn btn-outline-secondary w-100 rounded-3 mt-2" onclick="document.getElementById('fileCam').click()">
+                        <i class="fas fa-camera me-2"></i>ถ่ายภาพ/เลือกรูป (สูงสุด 3 รูป)
+                    </button>
+                    <input type="file" id="fileCam" hidden accept="image/*" multiple onchange="handleFileSelect(this)">
+                
+                    <div id="thumbList" class="d-flex gap-2 mt-2 overflow-auto" style="white-space: nowrap;"></div>
+                
+                    <div id="previewArea" class="img-preview-container mt-2 position-relative">
+                        <small class="text-muted position-absolute top-50 start-50 translate-middle pointer-events-none">
+                            ภาพรวมจะปรากฏที่นี่
+                        </small>
+                    </div>
+                </div>
 
             <div class="d-flex justify-content-between align-items-center mb-2">
                 <label class="form-label fw-bold mb-0">ทำร่วมกับใคร?</label>
@@ -933,43 +977,169 @@
         items.forEach(i => toggleFriend(i)); 
     }
 
-    // --- 📸 IMAGE MERGING SYSTEM (ระบบรวมภาพ) ---
+    // --- 📸 ADVANCED IMAGE COLLAGE SYSTEM ---
     
-    async function handleImageSelection(input) {
-        const files = Array.from(input.files);
+    // ตัวแปรเก็บไฟล์รูปภาพปัจจุบัน (Array ของ File Object)
+    let currentImageFiles = []; 
+
+    // 1. ฟังก์ชันเมื่อเลือกไฟล์จาก Input
+    function handleFileSelect(input) {
+        const newFiles = Array.from(input.files);
         
-        // 1. ตรวจสอบจำนวนรูป
-        if (files.length === 0) return;
-        if (files.length > 3) {
-            Swal.fire('แจ้งเตือน', 'เลือกรูปได้สูงสุด 3 รูปครับ', 'warning');
-            input.value = ''; // ล้างค่า
+        // รวมไฟล์ใหม่กับไฟล์เดิม
+        const totalFiles = currentImageFiles.length + newFiles.length;
+        
+        if (totalFiles > 3) {
+            Swal.fire('แจ้งเตือน', `เลือกได้สูงสุด 3 รูปครับ (ตอนนี้มี ${currentImageFiles.length} รูปแล้ว)`, 'warning');
+            input.value = ''; // Reset input
             return;
         }
 
-        // แสดง Loading ขณะประมวลผลภาพ
-        const preview = document.getElementById('previewArea');
-        preview.style.display = 'flex';
-        preview.innerHTML = '<div class="spinner-border text-secondary"></div>';
-        preview.style.backgroundImage = 'none';
+        // เพิ่มไฟล์เข้า Array หลัก
+        currentImageFiles = [...currentImageFiles, ...newFiles];
+        
+        // สั่งวาดใหม่ทั้งหมด
+        refreshGallery();
+        input.value = ''; // Reset input เพื่อให้เลือกรูปเดิมซ้ำได้ถ้าต้องการ
+    }
 
+    // 2. ฟังก์ชันลบรูป (กดปุ่ม X)
+    function removeImage(index) {
+        currentImageFiles.splice(index, 1); // ลบออกจาก Array
+        refreshGallery(); // วาดใหม่
+    }
+
+    // 3. ฟังก์ชันหลัก: รีเฟรชหน้าจอและ Canvas
+    async function refreshGallery() {
+        const thumbContainer = document.getElementById('thumbList');
+        const preview = document.getElementById('previewArea');
+        
+        // 3.1 สร้าง Thumbnails พร้อมปุ่ม X
+        thumbContainer.innerHTML = '';
+        currentImageFiles.forEach((file, idx) => {
+            const url = URL.createObjectURL(file);
+            const div = document.createElement('div');
+            div.className = 'thumb-item animate__animated animate__fadeInRight';
+            div.innerHTML = `
+                <img src="${url}" class="thumb-img">
+                <button class="btn-remove-img" onclick="removeImage(${idx})"><i class="fas fa-times"></i></button>
+            `;
+            thumbContainer.appendChild(div);
+        });
+
+        // 3.2 ถ้าไม่มีรูป ให้เคลียร์ค่า
+        if (currentImageFiles.length === 0) {
+            selectedImageBase64 = null;
+            preview.style.backgroundImage = 'none';
+            preview.innerHTML = '<small class="text-muted position-absolute top-50 start-50 translate-middle">ภาพรวมจะปรากฏที่นี่</small>';
+            return;
+        }
+
+        // 3.3 เริ่มกระบวนการรวมภาพ (Canvas)
+        preview.innerHTML = '<div class="spinner-border text-secondary m-auto"></div>';
         try {
-            // 2. โหลดรูปทั้งหมดมาเป็น Bitmap
-            const images = await Promise.all(files.map(file => loadImage(file)));
+            // โหลดภาพทั้งหมดเป็น Object Image
+            const imageObjects = await Promise.all(currentImageFiles.map(f => loadImage(f)));
             
-            // 3. รวมรูปใน Canvas
-            const mergedBase64 = await mergeImagesToCanvas(images);
+            // ส่งไปวาดลง Canvas
+            const mergedBase64 = await mergeImagesToCanvas(imageObjects);
             
-            // 4. บันทึกค่าลงตัวแปร Global (เตรียมส่งเข้า submitData)
+            // เก็บค่าและแสดงผล
             selectedImageBase64 = mergedBase64;
-            
-            // 5. แสดงผล Preview
             preview.innerHTML = '';
             preview.style.backgroundImage = `url(${mergedBase64})`;
             
         } catch (err) {
             console.error(err);
-            Swal.fire('Error', 'ไม่สามารถประมวลผลรูปภาพได้', 'error');
         }
+    }
+
+    function loadImage(file) {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    // 4. ฟังก์ชันวาด Canvas (หัวใจสำคัญของการจัด Layout)
+    function mergeImagesToCanvas(images) {
+        return new Promise((resolve) => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            // กำหนดขนาด Canvas (Output Size)
+            const W = 1200; 
+            const H = 800;  
+            canvas.width = W;
+            canvas.height = H;
+
+            // 🎨 พื้นหลังสีดำ (ทำหน้าที่เป็นเส้นขอบไปในตัว)
+            ctx.fillStyle = "#000000"; 
+            ctx.fillRect(0, 0, W, H);
+
+            const count = images.length;
+            const gap = 10; // 🔥 ความหนาของเส้นขอบสีดำ (Grid Gap)
+
+            // --- สูตรการวางภาพ (Layout) ---
+            
+            if (count === 1) {
+                // 1 รูป: เต็มจอ (เว้นขอบนิดหน่อยให้สวย)
+                drawImageProp(ctx, images[0], 0, 0, W, H);
+            } 
+            else if (count === 2) {
+                // 2 รูป: แบ่งครึ่งซ้าย-ขวา (มีเส้นดำตรงกลาง)
+                const halfW = (W - gap) / 2;
+                
+                drawImageProp(ctx, images[0], 0, 0, halfW, H);           // ซ้าย
+                drawImageProp(ctx, images[1], halfW + gap, 0, halfW, H); // ขวา
+            } 
+            else if (count === 3) {
+                // 3 รูป: ซ้ายครึ่ง (50%), ขวาแบ่งบนล่าง (50%)
+                const col1W = (W - gap) / 2;     // ความกว้างคอลัมน์ซ้าย
+                const col2W = (W - gap) / 2;     // ความกว้างคอลัมน์ขวา
+                const col2X = col1W + gap;       // จุดเริ่มคอลัมน์ขวา
+                
+                const rowH = (H - gap) / 2;      // ความสูงแถวขวา
+
+                // รูปที่ 1: ซ้ายเต็มใบ
+                drawImageProp(ctx, images[0], 0, 0, col1W, H);
+
+                // รูปที่ 2: ขวาบน
+                drawImageProp(ctx, images[1], col2X, 0, col2W, rowH);
+
+                // รูปที่ 3: ขวาล่าง
+                drawImageProp(ctx, images[2], col2X, rowH + gap, col2W, rowH);
+            }
+
+            // Export
+            resolve(canvas.toDataURL('image/jpeg', 0.8));
+        });
+    }
+
+    // ฟังก์ชัน Crop ภาพ (คงเดิม)
+    function drawImageProp(ctx, img, x, y, w, h) {
+        const offsetX = 0.5, offsetY = 0.5;
+        const iw = img.width, ih = img.height;
+        const r = Math.min(w / iw, h / ih);
+        let nw = iw * r, nh = ih * r;
+        let cx, cy, cw, ch, ar = 1;
+
+        if (nw < w) ar = w / nw;
+        if (Math.abs(ar - 1) < 1e-14 && nh < h) ar = h / nh;
+        nw *= ar; nh *= ar;
+
+        cw = iw / (nw / w); ch = ih / (nh / h);
+        cx = (iw - cw) * offsetX; cy = (ih - ch) * offsetY;
+
+        if (cx < 0) cx = 0; if (cy < 0) cy = 0;
+        if (cw > iw) cw = iw; if (ch > ih) ch = ih;
+
+        ctx.drawImage(img, cx, cy, cw, ch, x, y, w, h);
     }
 
     function loadImage(file) {
@@ -1552,6 +1722,7 @@
 </script>
 </body>
 </html>
+
 
 
 
