@@ -2,75 +2,253 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>คู่มือการใช้งาน ดี มีสุข (Good & Happy)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>คู่มือการใช้งานระบบ Happy Meter (ฉบับสมบูรณ์)</title>
+    
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600&display=swap" rel="stylesheet">
+    
     <style>
-        body { font-family: 'Kanit', sans-serif; background-color: #f4f7f6; color: #444; }
-        .guide-container { max-width: 500px; margin: auto; padding: 20px; }
-        .card-guide { border: none; border-radius: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.05); margin-bottom: 20px; overflow: hidden; }
-        .step-badge { background: #6c5ce7; color: white; border-radius: 50%; width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; margin-right: 10px; font-weight: bold; }
-        .header-banner { background: linear-gradient(135deg, #6c5ce7, #a29bfe); color: white; padding: 30px 20px; border-radius: 0 0 30px 30px; text-align: center; margin-bottom: 30px; }
-        .icon-box { font-size: 2rem; color: #6c5ce7; margin-bottom: 15px; }
-        img.demo-img { width: 100%; border-radius: 15px; margin-top: 10px; border: 2px solid #eee; }
-        .btn-install { background-color: #00b894; color: white; border-radius: 50px; padding: 12px 30px; font-weight: bold; text-decoration: none; display: inline-block; margin-top: 10px; transition: 0.3s; }
-        .btn-install:hover { background-color: #009475; color: white; transform: translateY(-2px); }
+        :root { --primary: #6c5ce7; --secondary: #a29bfe; --accent: #00cec9; --bg-light: #f0f2f5; }
+        body { font-family: 'Kanit', sans-serif; background-color: var(--bg-light); color: #444; padding-bottom: 80px; }
+        
+        /* Header Banner */
+        .header-banner { 
+            background: linear-gradient(135deg, #0984e3, #74b9ff); 
+            color: white; padding: 40px 20px 30px; 
+            border-radius: 0 0 40px 40px; text-align: center; 
+            box-shadow: 0 10px 30px rgba(9, 132, 227, 0.3);
+            margin-bottom: 20px;
+        }
+        
+        /* Navigation Buttons */
+        .nav-scroller { overflow-x: auto; white-space: nowrap; padding: 10px 20px; margin-bottom: 20px; -webkit-overflow-scrolling: touch; }
+        .nav-pill-btn {
+            display: inline-block; background: white; color: #555; 
+            padding: 8px 20px; border-radius: 50px; margin-right: 10px;
+            text-decoration: none; font-size: 0.9rem; font-weight: bold;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05); transition: 0.2s; border: 1px solid #eee;
+        }
+        .nav-pill-btn:hover, .nav-pill-btn.active { background: var(--primary); color: white; transform: translateY(-2px); }
+
+        /* Card Style */
+        .guide-container { max-width: 700px; margin: auto; padding: 0 20px; }
+        .card-guide { 
+            background: #fff; border: none; border-radius: 24px; 
+            box-shadow: 0 5px 20px rgba(0,0,0,0.05); 
+            margin-bottom: 30px; padding: 25px; 
+            position: relative; overflow: hidden;
+            scroll-margin-top: 20px;
+        }
+        .section-title { font-weight: bold; margin-bottom: 20px; display: flex; align-items: center; color: #2d3436; border-bottom: 2px solid #f1f2f6; padding-bottom: 10px; }
+        .section-title i { margin-right: 10px; font-size: 1.5rem; color: var(--primary); }
+
+        /* Step Badge */
+        .step-item { display: flex; margin-bottom: 15px; }
+        .step-num { 
+            min-width: 30px; height: 30px; background: var(--primary); color: white; 
+            border-radius: 50%; display: flex; align-items: center; justify-content: center; 
+            margin-right: 15px; font-weight: bold; margin-top: 2px;
+        }
+
+        /* --- 📊 Executive Charts Simulation --- */
+        .chart-box { background: #f8f9fa; border-radius: 15px; padding: 15px; position: relative; height: 180px; display: flex; align-items: flex-end; justify-content: space-around; border: 1px dashed #ccc; overflow: hidden; }
+        .chart-bar { width: 20%; border-radius: 5px 5px 0 0; position: relative; transition: height 1s; display: flex; align-items: flex-end; justify-content: center; color: white; font-weight: bold; font-size: 0.8rem; padding-bottom: 5px; }
+        .chart-bar span { position: absolute; top: -25px; left: 50%; transform: translateX(-50%); color: #555; font-size: 0.7rem; }
+        
+        .trend-line { 
+            position: absolute; bottom: 0; left: 0; width: 100%; height: 100%; 
+            background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50" preserveAspectRatio="none"><path d="M0,50 L10,40 L30,45 L50,20 L70,30 L90,10 L100,5" fill="rgba(9,132,227,0.1)" stroke="%230984e3" stroke-width="1"/></svg>');
+            background-size: 100% 100%; opacity: 0.5; z-index: 0;
+        }
+
+        /* Policy Badge */
+        .policy-card { background: #f8f9fa; border-radius: 15px; padding: 15px; margin-bottom: 10px; border-left: 5px solid #ccc; transition: 0.2s; }
+        .policy-card:hover { transform: translateX(5px); background: #fff; box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
+        .policy-t { border-left-color: #00cec9; }
+        .policy-r { border-left-color: #fdcb6e; }
+        .policy-d { border-left-color: #ff7675; }
+        
+        .policy-badge { display: inline-block; padding: 3px 8px; border-radius: 6px; color: white; font-size: 0.7rem; font-weight: bold; margin-bottom: 5px; }
+
+        /* --- ✨ Aura & Bars --- */
+        .bar-label { font-size: 0.8rem; font-weight: bold; display: flex; justify-content: space-between; margin-bottom: 5px; }
+        .progress { height: 12px; border-radius: 10px; background: #dfe6e9; margin-bottom: 15px; }
+        .bar-happy { background: linear-gradient(90deg, #ffeaa7, #fdcb6e); }
+        .bar-virtue { background: linear-gradient(90deg, #81ecec, #00cec9); }
+
+        .aura-demo-container { display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; margin-top: 20px; }
+        .aura-item { width: 100px; text-align: center; margin-bottom: 15px; }
+        .profile-wrapper { position: relative; width: 80px; height: 80px; margin: 0 auto 10px; }
+        .demo-img { width: 70px; height: 70px; border-radius: 50%; border: 3px solid #fff; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 2; object-fit: cover; background: #eee; }
+        .aura-glow { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85px; height: 85px; border-radius: 50%; z-index: 1; filter: blur(10px); opacity: 0.8; animation: pulse-slow 3s infinite; }
+        @keyframes pulse-slow { 0% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.2); } 100% { transform: translate(-50%, -50%) scale(1); } }
+        
+        .aura-volunteer { background: radial-gradient(circle, #3498db 0%, transparent 70%); }
+        .aura-sufficiency { background: radial-gradient(circle, #2ecc71 0%, transparent 70%); }
+        .aura-discipline { background: radial-gradient(circle, #9b59b6 0%, transparent 70%); }
+        .aura-integrity { background: radial-gradient(circle, #00cec9 0%, transparent 70%); }
+        .aura-gratitude { background: radial-gradient(circle, #e84393 0%, transparent 70%); }
+
+        .btn-install { background: linear-gradient(90deg, #00b894, #00cec9); color: white; border-radius: 50px; padding: 12px 35px; font-weight: bold; text-decoration: none; display: block; text-align: center; box-shadow: 0 5px 15px rgba(0, 184, 148, 0.4); margin-top: 20px; }
     </style>
 </head>
 <body>
 
     <div class="header-banner">
-        <h2 class="fw-bold mb-0">ดี มีสุข (Good & Happy)</h2>
-        <p class="mb-0 opacity-75">สำนักงานธนารักษ์พื้นที่หนองบัวลำภู</p>
+        <h1 class="fw-bold mb-1"><i class="fas fa-book-reader"></i> คู่มือการใช้งาน</h1>
+        <p class="mb-0 opacity-75 small">ระบบ Happy Meter & KPI องค์กร</p>
+    </div>
+
+    <div class="nav-scroller">
+        <a href="#install" class="nav-pill-btn"><i class="fas fa-download"></i> ติดตั้ง</a>
+        <a href="#executive" class="nav-pill-btn active"><i class="fas fa-user-tie"></i> ผู้บริหาร</a>
+        <a href="#record" class="nav-pill-btn"><i class="fas fa-edit"></i> บันทึก</a>
+        <a href="#witness" class="nav-pill-btn"><i class="fas fa-user-check"></i> พยาน</a>
+        <a href="#level" class="nav-pill-btn"><i class="fas fa-chart-line"></i> เลเวล</a>
     </div>
 
     <div class="guide-container">
         
-        <h5 class="fw-bold mb-3"><i class="fas fa-mobile-alt me-2 text-primary"></i>วิธีติดตั้งแอปบนมือถือ</h5>
-        
-        <div class="card card-guide p-4">
-            <div class="mb-4">
-                <h6><span class="step-badge">1</span> สำหรับ iPhone (Safari)</h6>
-                <p class="small text-muted">1. เปิดลิงก์แอปใน Safari แล้วกดปุ่ม <b>แชร์ (Share)</b> <i class="fa-solid fa-arrow-up-from-bracket mx-1"></i> ด้านล่าง</p>
-                <p class="small text-muted">2. เลือกเมนู <b>"เพิ่มลงในหน้าจอโฮม" (Add to Home Screen)</b></p>
+        <div id="executive" class="card-guide" style="border: 2px solid #0984e3; background: #fdfeff;">
+            <h5 class="section-title text-primary"><i class="fas fa-chart-pie"></i> สำหรับผู้บริหาร (Executive View)</h5>
+            
+            <p class="text-muted small mb-4">
+                ระบบนี้ถูกออกแบบมาเพื่อเป็นเครื่องมือขับเคลื่อนยุทธศาสตร์กรมธนารักษ์ โดยเน้นการพัฒนาทรัพยากรบุคคล <b>(Unity)</b> ผ่านการวัดผลที่เป็นรูปธรรม
+            </p>
+
+            <h6 class="fw-bold mb-3"><i class="fas fa-link text-secondary"></i> การเชื่อมโยงอัตลักษณ์ TRD</h6>
+            
+            <div class="policy-card policy-t">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="badge bg-info text-dark">T - Transparency</span>
+                    <small class="text-muted fw-bold">โปร่งใส</small>
+                </div>
+                <p class="small mb-1 text-muted">ปฏิบัติหน้าที่ด้วยความโปร่งใส ไร้ทุจริต ตรวจสอบได้</p>
+                <div class="d-flex align-items-center mt-2 small">
+                    <i class="fas fa-arrow-right text-info me-2"></i> วัดผลจาก: <b>หมวดสุจริต (Integrity)</b>
+                </div>
             </div>
-            <div>
-                <h6><span class="step-badge">2</span> สำหรับ Android (Chrome)</h6>
-                <p class="small text-muted">1. กดปุ่ม <b>จุด 3 จุด (⋮)</b> มุมบนขวา</p>
-                <p class="small text-muted">2. เลือกเมนู <b>"ติดตั้งแอป" (Install App)</b> หรือ "เพิ่มลงในหน้าจอหลัก"</p>
+
+            <div class="policy-card policy-r">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="badge bg-warning text-dark">R - Responsibility</span>
+                    <small class="text-muted fw-bold">รับผิดชอบ</small>
+                </div>
+                <p class="small mb-1 text-muted">ปฏิบัติงานเต็มความสามารถ ใช้ทรัพยากรคุ้มค่า</p>
+                <div class="d-flex align-items-center mt-2 small">
+                    <i class="fas fa-arrow-right text-warning me-2"></i> วัดผลจาก: <b>หมวดวินัย & พอเพียง</b>
+                </div>
             </div>
-            <div class="text-center mt-3">
-                <a href="https://sutisukkawaguji-spec.github.io/Happiness/" class="btn-install">เข้าสู่เว็บไซต์เพื่อติดตั้ง</a>
+
+            <div class="policy-card policy-d">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="badge bg-danger">D - Dedication</span>
+                    <small class="text-muted fw-bold">ทุ่มเท เสียสละ</small>
+                </div>
+                <p class="small mb-1 text-muted">มุ่งมั่น ตั้งใจจริง และเสียสละเพื่อส่วนรวม</p>
+                <div class="d-flex align-items-center mt-2 small">
+                    <i class="fas fa-arrow-right text-danger me-2"></i> วัดผลจาก: <b>หมวดจิตอาสา & กตัญญู</b>
+                </div>
+            </div>
+
+            <div class="alert alert-success small mt-3">
+                <h6 class="fw-bold mb-1"><i class="fas fa-gem"></i> กลยุทธ์ VALUE: Unity (U)</h6>
+                แอปพลิเคชันนี้คือกลไกหลักในการขับเคลื่อนเสาหลัก <b>"U - Unity (พัฒนาบุคลากร)"</b> เพื่อสร้างความผูกพัน ความสามัคคี และความสุขในการทำงาน
+            </div>
+
+            <hr class="my-4">
+            <h6 class="fw-bold mb-2"><i class="fas fa-chart-area text-primary"></i> Executive Dashboard (ตัวอย่างการแสดงผล)</h6>
+            <p class="small text-muted mb-3">ผู้บริหารสามารถติดตามสถานะองค์กรได้แบบ Real-time ผ่านกราฟสรุปผล</p>
+            
+            <div class="chart-box mb-3">
+                <div class="trend-line"></div> <div class="chart-bar bg-info" style="height: 60%;">T</div>
+                <div class="chart-bar bg-warning" style="height: 45%;">R</div>
+                <div class="chart-bar bg-danger" style="height: 80%;">D</div>
+            </div>
+            
+            <div class="row g-2 text-center small text-muted">
+                <div class="col-4 border-end"><b>Happy Index</b><br><span class="text-success">88%</span> (สูง)</div>
+                <div class="col-4 border-end"><b>Burnout Risk</b><br><span class="text-danger">2 คน</span> (ต่ำ)</div>
+                <div class="col-4"><b>Top Value</b><br><span class="text-primary">Dedication</span></div>
+            </div>
+
+            <div class="alert alert-danger bg-white border-danger text-danger rounded-3 small mt-3">
+                <h6 class="fw-bold"><i class="fas fa-exclamation-triangle"></i> ระบบเตือนภัย (Early Warning)</h6>
+                เมื่อบุคลากรมีความสุขต่ำกว่าเกณฑ์ (Red Zone) ระบบจะ:
+                <ol class="mb-0 mt-1 ps-3">
+                    <li>แจ้งเตือนในหน้า Dashboard ของผู้บริหาร</li>
+                    <li>แนะนำ <b>"Buddy"</b> (เพื่อนสนิทที่สุดในระบบ) ให้ช่วยดูแลและพูดคุย เพื่อป้องกันปัญหาสุขภาพจิต</li>
+                </ol>
             </div>
         </div>
 
-        <h5 class="fw-bold mb-3"><i class="fas fa-user-check me-2 text-success"></i>การใช้งานครั้งแรก</h5>
-        <div class="card card-guide p-4 text-center">
-            <div class="icon-box"><i class="fas fa-id-card"></i></div>
-            <p>เมื่อเข้าสู่ระบบครั้งแรก ระบบจะดึงข้อมูลจาก LINE อัตโนมัติ</p>
-            <p class="small text-danger fw-bold">* โปรดตรวจสอบชื่อและเลือก "ส่วนงาน" ของคุณให้ถูกต้อง เพื่อการสรุปผลโครงการที่แม่นยำ</p>
+        <div id="install" class="card-guide">
+            <h5 class="section-title"><i class="fas fa-mobile-alt"></i> 1. วิธีติดตั้งบนมือถือ</h5>
+            <div class="bg-light p-3 rounded-4 mb-3">
+                <h6 class="fw-bold text-primary"><i class="fab fa-apple"></i> iPhone (Safari)</h6>
+                <p class="small mb-1">1. เปิดลิงก์ใน Safari กดปุ่ม <b>แชร์ (Share)</b> <i class="fa-solid fa-arrow-up-from-bracket"></i></p>
+                <p class="small mb-0">2. เลือกเมนู <b>"เพิ่มไปยังหน้าจอโฮม"</b></p>
+            </div>
+            <div class="bg-light p-3 rounded-4 mb-3">
+                <h6 class="fw-bold text-success"><i class="fab fa-android"></i> Android (Chrome)</h6>
+                <p class="small mb-1">1. กดปุ่ม <b>จุด 3 จุด (⋮)</b> มุมขวาบน</p>
+                <p class="small mb-0">2. เลือกเมนู <b>"ติดตั้งแอป"</b> หรือ "เพิ่มลงในหน้าจอหลัก"</p>
+            </div>
+            <a href="https://sutisukkawaguji-spec.github.io/Happiness/" class="btn-install">
+                <i class="fas fa-rocket me-2"></i> เข้าสู่แอปพลิเคชัน
+            </a>
         </div>
 
-        <h5 class="fw-bold mb-3"><i class="fas fa-pen-nib me-2 text-warning"></i>วิธีบันทึกความดี</h5>
-        <div class="card card-guide p-4">
-            <div class="mb-3">
-                <i class="fas fa-check-circle text-success me-2"></i> <b>เลือกประเภทกิจกรรม:</b> ระบบจะจัดหมวดหมู่คุณธรรม 5 ประการให้โดยอัตโนมัติ
+        <div id="record" class="card-guide">
+            <h5 class="section-title"><i class="fas fa-pen-nib"></i> 2. วิธีบันทึกความดี</h5>
+            <div class="step-item">
+                <div class="step-num">1</div>
+                <div><span class="fw-bold d-block">เลือกหมวด & อารมณ์</span><small class="text-muted">เลือกประเภทความดี (เช่น จิตอาสา) และระดับความสุข</small></div>
             </div>
-            <div class="mb-3">
-                <i class="fas fa-smile text-warning me-2"></i> <b>บอกความรู้สึก:</b> เลือกหน้ายิ้ม/บึ้ง เพื่อวัดระดับความสุข (Happy Index)
+            <div class="step-item">
+                <div class="step-num">2</div>
+                <div><span class="fw-bold d-block">ถ่ายภาพ & บันทึก</span><small class="text-muted">ถ่ายรูปกิจกรรม (สูงสุด 3 รูป) ระบบจะรวมภาพให้อัตโนมัติ</small></div>
             </div>
-            <div class="mb-3">
-                <i class="fas fa-users text-info me-2"></i> <b>ร่วมกับใคร:</b> เลือกชื่อเพื่อนร่วมงาน (ปุ่มสีม่วง/ฟ้า) เพื่อส่งแต้มบุญให้เพื่อน
-            </div>
-            <div>
-                <i class="fas fa-camera text-secondary me-2"></i> <b>แนบรูป:</b> ถ่ายภาพกิจกรรมแล้วกดบันทึก ข้อมูลจะขึ้นหน้า Feed ทันที
+            <div class="step-item">
+                <div class="step-num">3</div>
+                <div><span class="fw-bold d-block">แท็กเพื่อน (Teamwork)</span><small class="text-muted">เลือกชื่อเพื่อนที่ทำร่วมกัน เพื่อนจะได้รับคะแนนและแจ้งเตือนทันที</small></div>
             </div>
         </div>
 
-        <div class="text-center mt-4 mb-5">
-            <p class="small text-muted">สร้างสรรค์โดย KAI (Sutthisak Kawaguchi)<br>ธนารักษ์พื้นที่หนองบัวลำภู ✨</p>
+        <div id="witness" class="card-guide">
+            <h5 class="section-title"><i class="fas fa-shield-alt"></i> 3. ระบบพยาน (Witness)</h5>
+            <p class="small text-muted">ช่วยกันตรวจสอบเพื่อสังคมที่โปร่งใส (Transparency)</p>
+            <ul class="list-unstyled small">
+                <li class="mb-2"><i class="fas fa-check-circle text-success me-2"></i><b>กดยืนยัน:</b> เมื่อเห็นโพสต์เพื่อน กดปุ่มยืนยัน</li>
+                <li class="mb-2"><i class="fas fa-gift text-warning me-2"></i><b>รับแต้ม:</b> ผู้กดเป็นพยานรับทันที <b>+3 คะแนน</b></li>
+                <li class="mb-2"><i class="fas fa-crown text-primary me-2"></i><b>โบนัส:</b> ครบ 4 พยาน เจ้าของโพสต์ได้โบนัสพิเศษ!</li>
+            </ul>
+        </div>
+
+        <div id="level" class="card-guide">
+            <h5 class="section-title"><i class="fas fa-chart-line"></i> 4. ระบบเลเวล & ออร่า</h5>
+            
+            <div class="bar-label"><span><i class="fas fa-star text-info"></i> หลอดคะแนน (Score)</span><span>Lv.2</span></div>
+            <div class="progress"><div class="progress-bar bar-virtue" style="width: 50%"></div></div>
+            <p class="small text-muted mb-3">ทุกๆ 500 คะแนน = 1 เลเวล (ยิ่งทำดี ยิ่งเลเวลสูง)</p>
+
+            <div class="p-3 bg-light rounded-4 text-center">
+                <h6 class="fw-bold mb-3">🌟 สีออร่าจะเปลี่ยนตาม "จุดเด่น" ของคุณ</h6>
+                <div class="aura-demo-container">
+                    <div class="aura-item"><div class="profile-wrapper"><div class="aura-glow aura-volunteer"></div><img src="https://dummyimage.com/70x70/eee/000&text=V" class="demo-img"></div><small class="text-primary fw-bold">จิตอาสา</small></div>
+                    <div class="aura-item"><div class="profile-wrapper"><div class="aura-glow aura-sufficiency"></div><img src="https://dummyimage.com/70x70/eee/000&text=S" class="demo-img"></div><small class="text-success fw-bold">พอเพียง</small></div>
+                    <div class="aura-item"><div class="profile-wrapper"><div class="aura-glow aura-discipline"></div><img src="https://dummyimage.com/70x70/eee/000&text=D" class="demo-img"></div><small style="color:#9b59b6" class="fw-bold">วินัย</small></div>
+                    <div class="aura-item"><div class="profile-wrapper"><div class="aura-glow aura-integrity"></div><img src="https://dummyimage.com/70x70/eee/000&text=I" class="demo-img"></div><small style="color:#00cec9" class="fw-bold">สุจริต</small></div>
+                    <div class="aura-item"><div class="profile-wrapper"><div class="aura-glow aura-gratitude"></div><img src="https://dummyimage.com/70x70/eee/000&text=G" class="demo-img"></div><small style="color:#e84393" class="fw-bold">กตัญญู</small></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="text-center mt-5 mb-3 text-muted opacity-50 small">
+            สำนักงานธนารักษ์พื้นที่หนองบัวลำภู<br>
+            Developed by KAI (Sutthisak Kawaguchi)
         </div>
 
     </div>
