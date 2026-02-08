@@ -1453,94 +1453,52 @@
             }
             
             feed.forEach(post => {
-                // --- 🛡️ แก้บั๊ก Verify (ตรวจสอบทั้ง Server และ LocalStorage) ---
+                // ... (Logic การแสดงผลเดิม) ...
                 let verifyList = post.verifies || [];
-                
-                // 1. เช็คจาก Server (แปลงเป็น String ทั้งคู่เพื่อความชัวร์)
                 let isVerifiedOnServer = verifyList.some(v => String(v.lineId) === String(currentUser.userId));
-                
-                // 2. เช็คจากเครื่องเราเอง (LocalStorage) กันพลาด
                 let isVerifiedLocal = localStorage.getItem('verified_' + post.id) === 'true';
-
-                // สรุปว่า "กดไปแล้ว" ถ้าอันใดอันหนึ่งเป็นจริง
                 let isVerifiedByMe = isVerifiedOnServer || isVerifiedLocal;
                 
                 let isMyPost = String(post.user_line_id) === String(currentUser.userId);
                 let isLiked = post.likes && post.likes.some(u => String(u.lineId) === String(currentUser.userId));
 
-                // --- 🔍 Logic ตัวกรอง (Filtering) ---
-                if (currentFeedFilter === 'related') {
+                // กรองข้อมูล
+                if (typeof currentFeedFilter !== 'undefined' && currentFeedFilter === 'related') {
                     if (!isMyPost && !isVerifiedByMe && !isLiked) return; 
                 }
 
-                // ... (ส่วนการแสดงผล HTML) ...
-                let timeAgo = "-";
-                try { timeAgo = new Date(post.timestamp).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute:'2-digit' }); } catch(e) {}
-                
-                let imgUrl = post.image;
-                if(imgUrl && imgUrl.startsWith('http:')) imgUrl = imgUrl.replace('http:', 'https:');
+                // สร้าง HTML
+                let timeAgo = "-"; try { timeAgo = new Date(post.timestamp).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute:'2-digit' }); } catch(e) {}
+                let imgUrl = post.image; if(imgUrl && imgUrl.startsWith('http:')) imgUrl = imgUrl.replace('http:', 'https:');
                 const imgHtml = (imgUrl && imgUrl.length > 10) ? `<img src="${imgUrl}" class="feed-img" onclick="viewImage('${imgUrl}')">` : '';
                 const moodEmoji = post.happy == 3 ? '😁' : (post.happy == 2 ? '😐' : '😞');
 
-                // ปุ่ม Verify
                 let verifyBtnHtml = '';
-                let verifyCount = verifyList.length;
-                let isBonus = post.bonusGiven === "TRUE" || verifyCount >= 4;
-
                 if (isMyPost) {
-                    if (post.taggedFriends && post.taggedFriends.length > 0) {
-                        verifyBtnHtml = `<span class="badge bg-success rounded-pill ms-auto"><i class="fas fa-users"></i> กิจกรรมทีม (+10)</span>`;
-                    } else {
-                        if (isBonus) verifyBtnHtml = `<span class="badge bg-warning text-dark rounded-pill ms-auto"><i class="fas fa-crown"></i> โบนัสแตก!</span>`;
-                        else verifyBtnHtml = `<span class="badge bg-secondary rounded-pill ms-auto"><i class="fas fa-hourglass-half"></i> รอพยาน (${verifyCount}/4)</span>`;
-                    }
+                    if (post.taggedFriends && post.taggedFriends.length > 0) verifyBtnHtml = `<span class="badge bg-success rounded-pill ms-auto">กิจกรรมทีม</span>`;
+                    else verifyBtnHtml = (post.bonusGiven==="TRUE") ? `<span class="badge bg-warning text-dark rounded-pill ms-auto">โบนัสแตก!</span>` : `<span class="badge bg-secondary rounded-pill ms-auto">รอพยาน</span>`;
                 } else {
                     if (isVerifiedByMe) {
-                        // ถ้ากดแล้ว (ไม่ว่าจะ Server หรือ Local) ให้ปุ่มเขียว + กดไม่ได้
                         verifyBtnHtml = `<button class="btn btn-sm btn-success rounded-pill ms-auto disabled" style="opacity:0.8"><i class="fas fa-check-circle"></i> ยืนยันแล้ว (+3)</button>`;
                     } else {
-                        // ถ้ายังไม่กด ส่ง this ไปด้วย
-                        verifyBtnHtml = `<button onclick="verifyPost('${post.id}', '${post.user_line_id}', '${post.user_name}', this)" class="btn btn-sm btn-outline-primary rounded-pill ms-auto shadow-sm"><i class="fas fa-shield-alt"></i> ยืนยัน (+3)</button>`;
+                        verifyBtnHtml = `<button onclick="verifyPost('${post.id}', '${post.user_line_id}', '${post.user_name}', this)" class="btn btn-sm btn-outline-primary rounded-pill ms-auto shadow-sm">ยืนยัน (+3)</button>`;
                     }
                 }
 
-                // Avatar พยาน
                 let avatarsHtml = '';
                 if (verifyList.length > 0) {
-                    verifyList.forEach(v => { avatarsHtml += `<img src="${v.img}" class="rounded-circle border border-white ms-1" width="25" height="25" title="${v.name}" style="object-fit:cover;">`; });
-                    avatarsHtml = `<div class="d-flex align-items-center mt-2 p-2 bg-light rounded small"><span class="text-primary me-2 fw-bold"><i class="fas fa-user-check"></i> พยาน:</span>${avatarsHtml}</div>`;
+                    verifyList.forEach(v => { avatarsHtml += `<img src="${v.img}" class="rounded-circle border border-white ms-1" width="25" height="25">`; });
+                    avatarsHtml = `<div class="d-flex align-items-center mt-2 p-2 bg-light rounded small"><span class="text-primary me-2 fw-bold">พยาน:</span>${avatarsHtml}</div>`;
                 }
 
-                // ปุ่ม Like
                 let likeCount = post.likes ? post.likes.length : 0;
                 let likeBtnHtml = `<div class="action-btn ${isLiked ? 'liked' : ''}" onclick="likePost('${post.id}')"><i class="${isLiked ? 'fas' : 'far'} fa-heart me-1"></i> ${likeCount} ถูกใจ</div>`;
 
-                const html = `
-                    <div class="glass-card feed-card p-3 mb-3 animate__animated animate__fadeIn">
-                        <div class="feed-header d-flex align-items-center">
-                            <img src="${post.user_img || 'https://dummyimage.com/45x45/cccccc/ffffff&text=User'}" class="feed-avatar me-2">
-                            <div class="feed-user">
-                                <h6 class="mb-0 fw-bold">${post.user_name}</h6>
-                                <small class="text-muted">${timeAgo} • <span class="feed-badge badge bg-light text-dark border">${post.virtue}</span></small>
-                            </div>
-                            ${verifyBtnHtml}
-                        </div>
-                        <div class="feed-content mt-2 mb-2">${post.note || ''}</div>
-                        ${imgHtml}
-                        ${avatarsHtml}
-                        <div class="feed-actions mt-2 pt-2 border-top d-flex align-items-center justify-content-between">
-                            ${likeBtnHtml}
-                            <div class="fs-4">${moodEmoji}</div>
-                        </div>
-                    </div>`;
-                
+                const html = `<div class="glass-card feed-card p-3 mb-3 animate__animated animate__fadeIn"><div class="feed-header d-flex align-items-center"><img src="${post.user_img}" class="feed-avatar me-2"><div class="feed-user"><h6 class="mb-0 fw-bold">${post.user_name}</h6><small class="text-muted">${timeAgo} • ${post.virtue}</small></div>${verifyBtnHtml}</div><div class="feed-content mt-2 mb-2">${post.note || ''}</div>${imgHtml}${avatarsHtml}<div class="feed-actions mt-2 pt-2 border-top d-flex align-items-center justify-content-between">${likeBtnHtml}<div class="fs-4">${moodEmoji}</div></div></div>`;
                 container.innerHTML += html;
             });
         })
-        .catch(err => {
-            console.error(err);
-            container.innerHTML = `<div class="alert alert-danger">โหลดไม่สำเร็จ: ${err.message}</div>`;
-        });
+        .catch(err => container.innerHTML = 'โหลดไม่สำเร็จ');
     }
 
     // ✅ ฟังก์ชัน Like (เพิ่มใหม่)
