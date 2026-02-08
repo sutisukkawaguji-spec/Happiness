@@ -977,51 +977,50 @@
     // --- 🎁 แสดงผลเหรียญ ---
     // 🟡 แก้ไข renderBadges เพื่อใส่แสงวิบวับ
     function renderBadges() {
-        // ... (Code เดิมส่วนหา container) ...
+        // ... (โค้ดเดิมส่วน container) ...
         const container = document.getElementById('badgeContainer');
         if(!container || !currentUser) return;
         container.innerHTML = '';
         
-        const myVirtueStats = currentUser.virtueStats || {};
-        const myTotalScore = currentUser.score || 0;
-        const myTotalCount = currentUser.totalCount || 0;
-
+        // ... (ตัวแปร stats เหมือนเดิม) ...
         let storageKey = `happyMeter_badges_${currentUser.userId}`;
         let storedLevels = JSON.parse(localStorage.getItem(storageKey)) || {};
-        let hasNewBadge = false; // ตัวแปรเช็คเหรียญใหม่
+        let hasNewBadge = false; // 🟡 ตัวเช็ค
 
         Object.keys(badgeConfig).forEach(badgeKey => {
             const config = badgeConfig[badgeKey];
-            const realLevelIdx = getCalculatedLevel(badgeKey, myVirtueStats, myTotalScore, myTotalCount);
+            // ... (คำนวณ realLevelIdx เหมือนเดิม) ...
+            const myStats = currentUser.virtueStats || {};
+            const myTotalScore = currentUser.score || 0;
+            const myTotalCount = currentUser.totalCount || 0;
+            
+            let currentCount = 0;
+            if(config.source==='score') currentCount=myTotalScore;
+            else if(config.source==='total') currentCount=myTotalCount;
+            else currentCount=myStats[badgeKey]||0;
+
+            let realLevelIdx = 0;
+            for (let i = config.levels.length - 1; i >= 0; i--) {
+                if (currentCount >= config.levels[i].count) { realLevelIdx = i + 1; break; }
+            }
+            
             const seenLevelIdx = storedLevels[badgeKey] || 0;
             
-            // ถ้า Level จริง มากกว่า Level ที่เคยบันทึกไว้ แสดงว่ามีเหรียญใหม่
-            if (realLevelIdx > seenLevelIdx) {
-                hasNewBadge = true;
-            }
+            // 🟡 เช็คว่ามีเหรียญใหม่ไหม
+            if (realLevelIdx > seenLevelIdx) hasNewBadge = true;
 
-            // ... (Code วาด HTML เหรียญ เหมือนเดิมทุกประการ) ...
+            // ... (วาด HTML เหมือนเดิม) ...
             let html = '';
-            // ... (Copy Logic เดิมมาวางตรงนี้ หรือใช้ของเดิม) ...
-             if (realLevelIdx === 0) {
-                html = `<div class="badge-item badge-locked" onclick="viewBadge('${config.title}', 'ยังทำไม่ถึงเกณฑ์ขั้นแรก', '🔒')"><div class="badge-icon">🔒</div><small>${config.title}</small></div>`;
-            } else if (realLevelIdx > seenLevelIdx) {
-                const nextLvConfig = config.levels[realLevelIdx - 1];
-                html = `<div class="badge-item badge-mystery-upgrade" onclick="revealUpgrade('${badgeKey}', ${realLevelIdx}, '${config.title} ${nextLvConfig.rank}', '${nextLvConfig.icon}')"><div class="badge-icon">🎁</div><small>อัปเกรด!</small></div>`;
-            } else {
-                const currentLvConfig = config.levels[realLevelIdx - 1];
-                html = `<div class="badge-item" onclick="viewBadge('${config.title} ${currentLvConfig.rank}', '${currentLvConfig.desc}', '${currentLvConfig.icon}')"><div class="badge-icon">${currentLvConfig.icon}</div><small>${config.title} ${currentLvConfig.rank}</small></div>`;
-            }
+            if (realLevelIdx === 0) { html = `<div class="badge-item badge-locked" onclick="viewBadge('${config.title}','ยังไม่ปลดล็อค','🔒')"><div class="badge-icon">🔒</div><small>${config.title}</small></div>`; } 
+            else if (realLevelIdx > seenLevelIdx) { const nxt = config.levels[realLevelIdx - 1]; html = `<div class="badge-item badge-mystery-upgrade" onclick="revealUpgrade('${badgeKey}', ${realLevelIdx}, '${config.title} ${nxt.rank}', '${nxt.icon}')"><div class="badge-icon">🎁</div><small>อัปเกรด!</small></div>`; } 
+            else { const cur = config.levels[realLevelIdx - 1]; html = `<div class="badge-item" onclick="viewBadge('${config.title} ${cur.rank}','${cur.desc}','${cur.icon}')"><div class="badge-icon">${cur.icon}</div><small>${config.title} ${cur.rank}</small></div>`; }
             container.innerHTML += html;
         });
 
-        // ✨ ใส่แสงวิบวับถ้ามีเหรียญใหม่
+        // 🟡 สั่งให้เมนูวิบวับ
         const badgeNav = document.getElementById('nav-badges-btn');
-        if (hasNewBadge) {
-            badgeNav.classList.add('nav-glow');
-        } else {
-            badgeNav.classList.remove('nav-glow');
-        }
+        if (hasNewBadge) badgeNav.classList.add('nav-glow');
+        else badgeNav.classList.remove('nav-glow');
     }
 
     // --- MANAGER FEATURES ---
@@ -1245,39 +1244,30 @@
     // --- NAVIGATION ---
     // 🟡 แก้ไข switchTab เพื่อจัดการจุดแดง
     function switchTab(pageId, el) {
-        // ... (Logic เช็ค Manager เดิมคงไว้) ...
-        if (pageId === 'manager') {
-            if (!currentUser || (currentUser.role !== 'Manager' && currentUser.role !== 'Admin')) {
-                Swal.fire({ icon: 'error', title: 'Access Denied', text: 'สงวนสิทธิ์เฉพาะผู้บริหารเท่านั้นครับ', confirmButtonColor: '#6c5ce7' });
-                return;
-            }
+        if (pageId === 'manager' && (!currentUser || (currentUser.role !== 'Manager' && currentUser.role !== 'Admin'))) {
+            return Swal.fire('Access Denied');
         }
-
+        
         document.querySelectorAll('.page-section').forEach(p => p.classList.remove('active'));
         document.getElementById('page-' + pageId).classList.add('active');
-        
         document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
         if (el) el.classList.add('active');
-        
-        // --- 🔔 Logic เคลียร์จุดแดง ---
+
+        // 🟡 เคลียร์แจ้งเตือนเรื่องราว
         if (pageId === 'stories') {
-             // เอากล่องแจ้งเตือนออก
-             const badge = document.querySelector('#nav-stories-btn .nav-notify-badge');
-             if(badge) badge.remove();
-             
-             // อัปเดตว่าดูครบแล้ว (นับจำนวนลูก children ใน feed container หรือดึงใหม่)
-             // เพื่อความชัวร์ ให้ fetchFeed ทำหน้าที่อัปเดต localStorage เมื่อเปิดหน้านี้
-             fetchFeed(); 
+            const badge = document.querySelector('#nav-stories-btn .nav-notify-badge');
+            if(badge) badge.remove();
+            fetchFeed(); // เรียกเพื่ออัปเดตตัวนับล่าสุดลงเครื่อง
         }
-        // ---------------------------
+        
+        // 🟡 เคลียร์แจ้งเตือนเหรียญ
+        if (pageId === 'badges') {
+            document.getElementById('nav-badges-btn').classList.remove('nav-glow');
+        }
 
         document.getElementById('header-user').style.display = (pageId === 'manager') ? 'none' : 'block';
         if(pageId === 'manager') fetchManagerData();
-        // if(pageId === 'stories') fetchFeed(); // เอาออก เพราะเรียกข้างบนแล้ว
-        if (pageId === 'badges' && document.getElementById('nav-badges-btn').classList.contains('nav-glow')) {
-             // ถ้ากดเข้ามาดูเหรียญ ให้เอาแสงวิบวับออก
-             document.getElementById('nav-badges-btn').classList.remove('nav-glow');
-        }
+        // fetchFeed() ถูกเรียกใน if ด้านบนแล้ว
     }
 
     // --- UTILS & FEED ---
@@ -1729,5 +1719,6 @@
 </script>
 </body>
 </html>
+
 
 
