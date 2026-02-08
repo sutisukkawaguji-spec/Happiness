@@ -506,8 +506,6 @@
     // --- 🌍 IMAGE VARS ---
     let currentImageFiles = []; 
     let selectedImageBase64 = null;
-    let currentImageFiles = []; // เก็บไฟล์รูป
-    let imageOffsets = [];      // เก็บตำแหน่ง X,Y ของแต่ละรูป (0.5 = ตรงกลาง)
 
     // --- MAIN FUNCTION ---
     async function main() {
@@ -684,6 +682,8 @@
         imgElement.addEventListener('touchstart', onStart);
     }
 
+    let currentImageFiles = []; // เก็บไฟล์รูป
+    let imageOffsets = [];      // เก็บตำแหน่ง X,Y ของแต่ละรูป (0.5 = ตรงกลาง)
     // 5. [สำคัญ] กดปุ่มยืนยัน -> วาดลง Canvas จริง
     async function finalizeImage() {
         if(currentImageFiles.length === 0) return;
@@ -1790,6 +1790,7 @@
 </script>
 </body>
 </html>
+
 
 
 
