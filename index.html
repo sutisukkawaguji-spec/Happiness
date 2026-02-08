@@ -559,7 +559,7 @@
             const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d');
             const W = 1000; const H = 800; canvas.width = W; canvas.height = H;
             ctx.fillStyle = "#000000"; ctx.fillRect(0, 0, W, H);
-            const count = images.length; const gap = 15;
+            const count = images.length; const gap = 7;
 
             if (count === 1) drawImageProp(ctx, images[0], 0, 0, W, H);
             else if (count === 2) {
@@ -1512,3 +1512,4 @@
 </script>
 </body>
 </html>
+
