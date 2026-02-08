@@ -422,13 +422,9 @@
 
 <div class="bottom-nav">
     <div class="nav-item active" onclick="switchTab('record', this)"><i class="fas fa-plus-circle"></i><span>บันทึก</span></div>
-    
     <div class="nav-item" id="nav-stories-btn" onclick="switchTab('stories', this)"><i class="fas fa-images"></i><span>เรื่องราว</span></div>
-    
     <div class="nav-item" onclick="switchTab('stats', this)"><i class="fas fa-chart-pie"></i><span>สถิติ</span></div>
-    
     <div class="nav-item" id="nav-badges-btn" onclick="switchTab('badges', this)"><i class="fas fa-medal"></i><span>เหรียญ</span></div>
-    
     <div class="nav-item" onclick="switchTab('manager', this)"><i class="fas fa-user-tie"></i><span>ผู้บริหาร</span></div>
 </div>
 
@@ -978,9 +974,10 @@
         return calculatedLevel;
     }
 
-
-    // 🟡 ฟังก์ชันแสดงเหรียญ + แสงวิบวับเมื่อมีเหรียญใหม่
+    // --- 🎁 แสดงผลเหรียญ ---
+    // 🟡 แก้ไข renderBadges เพื่อใส่แสงวิบวับ
     function renderBadges() {
+        // ... (Code เดิมส่วนหา container) ...
         const container = document.getElementById('badgeContainer');
         if(!container || !currentUser) return;
         container.innerHTML = '';
@@ -991,41 +988,39 @@
 
         let storageKey = `happyMeter_badges_${currentUser.userId}`;
         let storedLevels = JSON.parse(localStorage.getItem(storageKey)) || {};
-        let hasNewBadge = false; // ตัวแปรเช็คว่ามีเหรียญใหม่หรือไม่
+        let hasNewBadge = false; // ตัวแปรเช็คเหรียญใหม่
 
         Object.keys(badgeConfig).forEach(badgeKey => {
             const config = badgeConfig[badgeKey];
-            
-            let currentCount = 0;
-            if(config.source==='score') currentCount=myTotalScore;
-            else if(config.source==='total') currentCount=myTotalCount;
-            else currentCount=myStats[badgeKey]||0;
-
-            let realLevelIdx = 0;
-            for (let i = config.levels.length - 1; i >= 0; i--) {
-                if (currentCount >= config.levels[i].count) { realLevelIdx = i + 1; break; }
-            }
-            
+            const realLevelIdx = getCalculatedLevel(badgeKey, myVirtueStats, myTotalScore, myTotalCount);
             const seenLevelIdx = storedLevels[badgeKey] || 0;
             
-            // ถ้าเลเวลจริง มากกว่า เลเวลที่เคยดู -> แสดงว่ามีเหรียญใหม่
+            // ถ้า Level จริง มากกว่า Level ที่เคยบันทึกไว้ แสดงว่ามีเหรียญใหม่
             if (realLevelIdx > seenLevelIdx) {
                 hasNewBadge = true;
             }
 
-            // ... (ส่วนวาด HTML เหมือนเดิม) ...
+            // ... (Code วาด HTML เหรียญ เหมือนเดิมทุกประการ) ...
             let html = '';
-            if (realLevelIdx === 0) { html = `<div class="badge-item badge-locked" onclick="viewBadge('${config.title}','ยังไม่ปลดล็อค','🔒')"><div class="badge-icon">🔒</div><small>${config.title}</small></div>`; } 
-            else if (realLevelIdx > seenLevelIdx) { const nxt = config.levels[realLevelIdx - 1]; html = `<div class="badge-item badge-mystery-upgrade" onclick="revealUpgrade('${badgeKey}', ${realLevelIdx}, '${config.title} ${nxt.rank}', '${nxt.icon}')"><div class="badge-icon">🎁</div><small>อัปเกรด!</small></div>`; } 
-            else { const cur = config.levels[realLevelIdx - 1]; html = `<div class="badge-item" onclick="viewBadge('${config.title} ${cur.rank}','${cur.desc}','${cur.icon}')"><div class="badge-icon">${cur.icon}</div><small>${config.title} ${cur.rank}</small></div>`; }
+            // ... (Copy Logic เดิมมาวางตรงนี้ หรือใช้ของเดิม) ...
+             if (realLevelIdx === 0) {
+                html = `<div class="badge-item badge-locked" onclick="viewBadge('${config.title}', 'ยังทำไม่ถึงเกณฑ์ขั้นแรก', '🔒')"><div class="badge-icon">🔒</div><small>${config.title}</small></div>`;
+            } else if (realLevelIdx > seenLevelIdx) {
+                const nextLvConfig = config.levels[realLevelIdx - 1];
+                html = `<div class="badge-item badge-mystery-upgrade" onclick="revealUpgrade('${badgeKey}', ${realLevelIdx}, '${config.title} ${nextLvConfig.rank}', '${nextLvConfig.icon}')"><div class="badge-icon">🎁</div><small>อัปเกรด!</small></div>`;
+            } else {
+                const currentLvConfig = config.levels[realLevelIdx - 1];
+                html = `<div class="badge-item" onclick="viewBadge('${config.title} ${currentLvConfig.rank}', '${currentLvConfig.desc}', '${currentLvConfig.icon}')"><div class="badge-icon">${currentLvConfig.icon}</div><small>${config.title} ${currentLvConfig.rank}</small></div>`;
+            }
             container.innerHTML += html;
         });
 
-        // สั่งให้เมนูวิบวับ ถ้ามีเหรียญใหม่
+        // ✨ ใส่แสงวิบวับถ้ามีเหรียญใหม่
         const badgeNav = document.getElementById('nav-badges-btn');
-        if (badgeNav) {
-            if (hasNewBadge) badgeNav.classList.add('nav-glow');
-            else badgeNav.classList.remove('nav-glow');
+        if (hasNewBadge) {
+            badgeNav.classList.add('nav-glow');
+        } else {
+            badgeNav.classList.remove('nav-glow');
         }
     }
 
@@ -1412,36 +1407,37 @@
         Swal.fire({ html: `<img src="${user.img}" style="width:90px; height:90px; border-radius:50%; margin-bottom:10px;"><br><h5 class="fw-bold">${user.name}</h5><span class="badge bg-secondary mb-3">${user.role}</span><div class="row g-2 text-center"><div class="col-6"><div class="border rounded p-2"><h6>ความสุข</h6><span class="${score<5?'text-danger':''}">${score}/10</span></div></div><div class="col-6"><div class="border rounded p-2"><h6>คะแนนสะสม</h6><span>${user.score}</span></div></div></div>${helperHtml}`, showConfirmButton: false, showCloseButton: true });
     }
 
-    // 🟡 ฟังก์ชันดึง Feed + แจ้งเตือนจุดแดง
+    // 🟡 ฟังก์ชันดึง Feed (ฉบับอัปเกรด: กรองได้ + แจ้งเตือน + แก้บั๊ก Verify จำค่าแม่นยำ)
     function fetchFeed() {
         const container = document.getElementById('feedContainer');
         if (!container) return;
         
-        // ถ้าเป็นการกดกรอง ไม่ต้องขึ้น Loading ใหญ่ ให้แค่หมุนเล็กๆ
-        if (container.innerHTML.trim() === '') 
-             container.innerHTML = '<div class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm mb-2"></div><br>กำลังดึงข้อมูล...</div>';
+        // ถ้าเป็นการกดกรอง ไม่ต้องขึ้น Loading ใหญ่ ให้แค่เคลียร์
+        if (container.innerHTML === '') {
+            container.innerHTML = '<div class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm mb-2"></div><br>กำลังดึงข้อมูล...</div>';
+        }
         
         fetch(GAS_URL + '?action=get_feed&t=' + new Date().getTime())
         .then(res => res.json())
         .then(feed => {
             container.innerHTML = '';
             
-            // --- 🔔 เริ่มส่วนแจ้งเตือน (Notification) ---
+            // --- 🔔 Logic แจ้งเตือน (Notification) ---
             const lastSeenCount = parseInt(localStorage.getItem('lastSeenStoryCount')) || 0;
             const currentCount = feed.length;
             const newStories = currentCount - lastSeenCount;
             const navBadge = document.getElementById('nav-stories-btn');
             
-            // ลบจุดแดงเก่าออกก่อน (ถ้ามี)
+            // ลบจุดแดงเก่าออกก่อน
             if (navBadge) {
                 const oldBadge = navBadge.querySelector('.nav-notify-badge');
                 if(oldBadge) oldBadge.remove();
 
-                // ถ้ามีเรื่องใหม่ (>0) และเราไม่ได้เปิดหน้า Stories อยู่ -> ให้ขึ้นจุดแดง
+                // ถ้ามีเรื่องใหม่ และไม่ได้อยู่ที่หน้า Stories ให้ขึ้นจุดแดง
                 if (newStories > 0 && !document.getElementById('page-stories').classList.contains('active')) {
                     navBadge.innerHTML += `<div class="nav-notify-badge">${newStories}</div>`;
                 } else if (document.getElementById('page-stories').classList.contains('active')) {
-                    // ถ้าเปิดหน้า Stories ค้างไว้อยู่แล้ว ให้อัปเดตว่าดูครบแล้วทันที
+                    // ถ้าเปิดหน้า Stories อยู่ ให้อัปเดตว่าดูครบแล้ว
                     localStorage.setItem('lastSeenStoryCount', currentCount);
                 }
             }
@@ -1453,52 +1449,94 @@
             }
             
             feed.forEach(post => {
-                // ... (Logic การแสดงผลเดิม) ...
+                // --- 🛡️ แก้บั๊ก Verify (ตรวจสอบทั้ง Server และ LocalStorage) ---
                 let verifyList = post.verifies || [];
+                
+                // 1. เช็คจาก Server (แปลงเป็น String ทั้งคู่เพื่อความชัวร์)
                 let isVerifiedOnServer = verifyList.some(v => String(v.lineId) === String(currentUser.userId));
+                
+                // 2. เช็คจากเครื่องเราเอง (LocalStorage) กันพลาด
                 let isVerifiedLocal = localStorage.getItem('verified_' + post.id) === 'true';
+
+                // สรุปว่า "กดไปแล้ว" ถ้าอันใดอันหนึ่งเป็นจริง
                 let isVerifiedByMe = isVerifiedOnServer || isVerifiedLocal;
                 
                 let isMyPost = String(post.user_line_id) === String(currentUser.userId);
                 let isLiked = post.likes && post.likes.some(u => String(u.lineId) === String(currentUser.userId));
 
-                // กรองข้อมูล
-                if (typeof currentFeedFilter !== 'undefined' && currentFeedFilter === 'related') {
+                // --- 🔍 Logic ตัวกรอง (Filtering) ---
+                if (currentFeedFilter === 'related') {
                     if (!isMyPost && !isVerifiedByMe && !isLiked) return; 
                 }
 
-                // สร้าง HTML
-                let timeAgo = "-"; try { timeAgo = new Date(post.timestamp).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute:'2-digit' }); } catch(e) {}
-                let imgUrl = post.image; if(imgUrl && imgUrl.startsWith('http:')) imgUrl = imgUrl.replace('http:', 'https:');
+                // ... (ส่วนการแสดงผล HTML) ...
+                let timeAgo = "-";
+                try { timeAgo = new Date(post.timestamp).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute:'2-digit' }); } catch(e) {}
+                
+                let imgUrl = post.image;
+                if(imgUrl && imgUrl.startsWith('http:')) imgUrl = imgUrl.replace('http:', 'https:');
                 const imgHtml = (imgUrl && imgUrl.length > 10) ? `<img src="${imgUrl}" class="feed-img" onclick="viewImage('${imgUrl}')">` : '';
                 const moodEmoji = post.happy == 3 ? '😁' : (post.happy == 2 ? '😐' : '😞');
 
+                // ปุ่ม Verify
                 let verifyBtnHtml = '';
+                let verifyCount = verifyList.length;
+                let isBonus = post.bonusGiven === "TRUE" || verifyCount >= 4;
+
                 if (isMyPost) {
-                    if (post.taggedFriends && post.taggedFriends.length > 0) verifyBtnHtml = `<span class="badge bg-success rounded-pill ms-auto">กิจกรรมทีม</span>`;
-                    else verifyBtnHtml = (post.bonusGiven==="TRUE") ? `<span class="badge bg-warning text-dark rounded-pill ms-auto">โบนัสแตก!</span>` : `<span class="badge bg-secondary rounded-pill ms-auto">รอพยาน</span>`;
+                    if (post.taggedFriends && post.taggedFriends.length > 0) {
+                        verifyBtnHtml = `<span class="badge bg-success rounded-pill ms-auto"><i class="fas fa-users"></i> กิจกรรมทีม (+10)</span>`;
+                    } else {
+                        if (isBonus) verifyBtnHtml = `<span class="badge bg-warning text-dark rounded-pill ms-auto"><i class="fas fa-crown"></i> โบนัสแตก!</span>`;
+                        else verifyBtnHtml = `<span class="badge bg-secondary rounded-pill ms-auto"><i class="fas fa-hourglass-half"></i> รอพยาน (${verifyCount}/4)</span>`;
+                    }
                 } else {
                     if (isVerifiedByMe) {
+                        // ถ้ากดแล้ว (ไม่ว่าจะ Server หรือ Local) ให้ปุ่มเขียว + กดไม่ได้
                         verifyBtnHtml = `<button class="btn btn-sm btn-success rounded-pill ms-auto disabled" style="opacity:0.8"><i class="fas fa-check-circle"></i> ยืนยันแล้ว (+3)</button>`;
                     } else {
-                        verifyBtnHtml = `<button onclick="verifyPost('${post.id}', '${post.user_line_id}', '${post.user_name}', this)" class="btn btn-sm btn-outline-primary rounded-pill ms-auto shadow-sm">ยืนยัน (+3)</button>`;
+                        // ถ้ายังไม่กด ส่ง this ไปด้วย
+                        verifyBtnHtml = `<button onclick="verifyPost('${post.id}', '${post.user_line_id}', '${post.user_name}', this)" class="btn btn-sm btn-outline-primary rounded-pill ms-auto shadow-sm"><i class="fas fa-shield-alt"></i> ยืนยัน (+3)</button>`;
                     }
                 }
 
+                // Avatar พยาน
                 let avatarsHtml = '';
                 if (verifyList.length > 0) {
-                    verifyList.forEach(v => { avatarsHtml += `<img src="${v.img}" class="rounded-circle border border-white ms-1" width="25" height="25">`; });
-                    avatarsHtml = `<div class="d-flex align-items-center mt-2 p-2 bg-light rounded small"><span class="text-primary me-2 fw-bold">พยาน:</span>${avatarsHtml}</div>`;
+                    verifyList.forEach(v => { avatarsHtml += `<img src="${v.img}" class="rounded-circle border border-white ms-1" width="25" height="25" title="${v.name}" style="object-fit:cover;">`; });
+                    avatarsHtml = `<div class="d-flex align-items-center mt-2 p-2 bg-light rounded small"><span class="text-primary me-2 fw-bold"><i class="fas fa-user-check"></i> พยาน:</span>${avatarsHtml}</div>`;
                 }
 
+                // ปุ่ม Like
                 let likeCount = post.likes ? post.likes.length : 0;
                 let likeBtnHtml = `<div class="action-btn ${isLiked ? 'liked' : ''}" onclick="likePost('${post.id}')"><i class="${isLiked ? 'fas' : 'far'} fa-heart me-1"></i> ${likeCount} ถูกใจ</div>`;
 
-                const html = `<div class="glass-card feed-card p-3 mb-3 animate__animated animate__fadeIn"><div class="feed-header d-flex align-items-center"><img src="${post.user_img}" class="feed-avatar me-2"><div class="feed-user"><h6 class="mb-0 fw-bold">${post.user_name}</h6><small class="text-muted">${timeAgo} • ${post.virtue}</small></div>${verifyBtnHtml}</div><div class="feed-content mt-2 mb-2">${post.note || ''}</div>${imgHtml}${avatarsHtml}<div class="feed-actions mt-2 pt-2 border-top d-flex align-items-center justify-content-between">${likeBtnHtml}<div class="fs-4">${moodEmoji}</div></div></div>`;
+                const html = `
+                    <div class="glass-card feed-card p-3 mb-3 animate__animated animate__fadeIn">
+                        <div class="feed-header d-flex align-items-center">
+                            <img src="${post.user_img || 'https://dummyimage.com/45x45/cccccc/ffffff&text=User'}" class="feed-avatar me-2">
+                            <div class="feed-user">
+                                <h6 class="mb-0 fw-bold">${post.user_name}</h6>
+                                <small class="text-muted">${timeAgo} • <span class="feed-badge badge bg-light text-dark border">${post.virtue}</span></small>
+                            </div>
+                            ${verifyBtnHtml}
+                        </div>
+                        <div class="feed-content mt-2 mb-2">${post.note || ''}</div>
+                        ${imgHtml}
+                        ${avatarsHtml}
+                        <div class="feed-actions mt-2 pt-2 border-top d-flex align-items-center justify-content-between">
+                            ${likeBtnHtml}
+                            <div class="fs-4">${moodEmoji}</div>
+                        </div>
+                    </div>`;
+                
                 container.innerHTML += html;
             });
         })
-        .catch(err => container.innerHTML = 'โหลดไม่สำเร็จ');
+        .catch(err => {
+            console.error(err);
+            container.innerHTML = `<div class="alert alert-danger">โหลดไม่สำเร็จ: ${err.message}</div>`;
+        });
     }
 
     // ✅ ฟังก์ชัน Like (เพิ่มใหม่)
@@ -1703,5 +1741,4 @@
 </script>
 </body>
 </html>
-
 
