@@ -422,9 +422,13 @@
 
 <div class="bottom-nav">
     <div class="nav-item active" onclick="switchTab('record', this)"><i class="fas fa-plus-circle"></i><span>บันทึก</span></div>
+    
     <div class="nav-item" id="nav-stories-btn" onclick="switchTab('stories', this)"><i class="fas fa-images"></i><span>เรื่องราว</span></div>
+    
     <div class="nav-item" onclick="switchTab('stats', this)"><i class="fas fa-chart-pie"></i><span>สถิติ</span></div>
+    
     <div class="nav-item" id="nav-badges-btn" onclick="switchTab('badges', this)"><i class="fas fa-medal"></i><span>เหรียญ</span></div>
+    
     <div class="nav-item" onclick="switchTab('manager', this)"><i class="fas fa-user-tie"></i><span>ผู้บริหาร</span></div>
 </div>
 
@@ -974,10 +978,9 @@
         return calculatedLevel;
     }
 
-    // --- 🎁 แสดงผลเหรียญ ---
-    // 🟡 แก้ไข renderBadges เพื่อใส่แสงวิบวับ
+
+    // 🟡 ฟังก์ชันแสดงเหรียญ + แสงวิบวับเมื่อมีเหรียญใหม่
     function renderBadges() {
-        // ... (Code เดิมส่วนหา container) ...
         const container = document.getElementById('badgeContainer');
         if(!container || !currentUser) return;
         container.innerHTML = '';
@@ -988,39 +991,41 @@
 
         let storageKey = `happyMeter_badges_${currentUser.userId}`;
         let storedLevels = JSON.parse(localStorage.getItem(storageKey)) || {};
-        let hasNewBadge = false; // ตัวแปรเช็คเหรียญใหม่
+        let hasNewBadge = false; // ตัวแปรเช็คว่ามีเหรียญใหม่หรือไม่
 
         Object.keys(badgeConfig).forEach(badgeKey => {
             const config = badgeConfig[badgeKey];
-            const realLevelIdx = getCalculatedLevel(badgeKey, myVirtueStats, myTotalScore, myTotalCount);
+            
+            let currentCount = 0;
+            if(config.source==='score') currentCount=myTotalScore;
+            else if(config.source==='total') currentCount=myTotalCount;
+            else currentCount=myStats[badgeKey]||0;
+
+            let realLevelIdx = 0;
+            for (let i = config.levels.length - 1; i >= 0; i--) {
+                if (currentCount >= config.levels[i].count) { realLevelIdx = i + 1; break; }
+            }
+            
             const seenLevelIdx = storedLevels[badgeKey] || 0;
             
-            // ถ้า Level จริง มากกว่า Level ที่เคยบันทึกไว้ แสดงว่ามีเหรียญใหม่
+            // ถ้าเลเวลจริง มากกว่า เลเวลที่เคยดู -> แสดงว่ามีเหรียญใหม่
             if (realLevelIdx > seenLevelIdx) {
                 hasNewBadge = true;
             }
 
-            // ... (Code วาด HTML เหรียญ เหมือนเดิมทุกประการ) ...
+            // ... (ส่วนวาด HTML เหมือนเดิม) ...
             let html = '';
-            // ... (Copy Logic เดิมมาวางตรงนี้ หรือใช้ของเดิม) ...
-             if (realLevelIdx === 0) {
-                html = `<div class="badge-item badge-locked" onclick="viewBadge('${config.title}', 'ยังทำไม่ถึงเกณฑ์ขั้นแรก', '🔒')"><div class="badge-icon">🔒</div><small>${config.title}</small></div>`;
-            } else if (realLevelIdx > seenLevelIdx) {
-                const nextLvConfig = config.levels[realLevelIdx - 1];
-                html = `<div class="badge-item badge-mystery-upgrade" onclick="revealUpgrade('${badgeKey}', ${realLevelIdx}, '${config.title} ${nextLvConfig.rank}', '${nextLvConfig.icon}')"><div class="badge-icon">🎁</div><small>อัปเกรด!</small></div>`;
-            } else {
-                const currentLvConfig = config.levels[realLevelIdx - 1];
-                html = `<div class="badge-item" onclick="viewBadge('${config.title} ${currentLvConfig.rank}', '${currentLvConfig.desc}', '${currentLvConfig.icon}')"><div class="badge-icon">${currentLvConfig.icon}</div><small>${config.title} ${currentLvConfig.rank}</small></div>`;
-            }
+            if (realLevelIdx === 0) { html = `<div class="badge-item badge-locked" onclick="viewBadge('${config.title}','ยังไม่ปลดล็อค','🔒')"><div class="badge-icon">🔒</div><small>${config.title}</small></div>`; } 
+            else if (realLevelIdx > seenLevelIdx) { const nxt = config.levels[realLevelIdx - 1]; html = `<div class="badge-item badge-mystery-upgrade" onclick="revealUpgrade('${badgeKey}', ${realLevelIdx}, '${config.title} ${nxt.rank}', '${nxt.icon}')"><div class="badge-icon">🎁</div><small>อัปเกรด!</small></div>`; } 
+            else { const cur = config.levels[realLevelIdx - 1]; html = `<div class="badge-item" onclick="viewBadge('${config.title} ${cur.rank}','${cur.desc}','${cur.icon}')"><div class="badge-icon">${cur.icon}</div><small>${config.title} ${cur.rank}</small></div>`; }
             container.innerHTML += html;
         });
 
-        // ✨ ใส่แสงวิบวับถ้ามีเหรียญใหม่
+        // สั่งให้เมนูวิบวับ ถ้ามีเหรียญใหม่
         const badgeNav = document.getElementById('nav-badges-btn');
-        if (hasNewBadge) {
-            badgeNav.classList.add('nav-glow');
-        } else {
-            badgeNav.classList.remove('nav-glow');
+        if (badgeNav) {
+            if (hasNewBadge) badgeNav.classList.add('nav-glow');
+            else badgeNav.classList.remove('nav-glow');
         }
     }
 
@@ -1407,37 +1412,36 @@
         Swal.fire({ html: `<img src="${user.img}" style="width:90px; height:90px; border-radius:50%; margin-bottom:10px;"><br><h5 class="fw-bold">${user.name}</h5><span class="badge bg-secondary mb-3">${user.role}</span><div class="row g-2 text-center"><div class="col-6"><div class="border rounded p-2"><h6>ความสุข</h6><span class="${score<5?'text-danger':''}">${score}/10</span></div></div><div class="col-6"><div class="border rounded p-2"><h6>คะแนนสะสม</h6><span>${user.score}</span></div></div></div>${helperHtml}`, showConfirmButton: false, showCloseButton: true });
     }
 
-    // 🟡 ฟังก์ชันดึง Feed (ฉบับอัปเกรด: กรองได้ + แจ้งเตือน + แก้บั๊ก Verify จำค่าแม่นยำ)
+    // 🟡 ฟังก์ชันดึง Feed + แจ้งเตือนจุดแดง
     function fetchFeed() {
         const container = document.getElementById('feedContainer');
         if (!container) return;
         
-        // ถ้าเป็นการกดกรอง ไม่ต้องขึ้น Loading ใหญ่ ให้แค่เคลียร์
-        if (container.innerHTML === '') {
-            container.innerHTML = '<div class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm mb-2"></div><br>กำลังดึงข้อมูล...</div>';
-        }
+        // ถ้าเป็นการกดกรอง ไม่ต้องขึ้น Loading ใหญ่ ให้แค่หมุนเล็กๆ
+        if (container.innerHTML.trim() === '') 
+             container.innerHTML = '<div class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm mb-2"></div><br>กำลังดึงข้อมูล...</div>';
         
         fetch(GAS_URL + '?action=get_feed&t=' + new Date().getTime())
         .then(res => res.json())
         .then(feed => {
             container.innerHTML = '';
             
-            // --- 🔔 Logic แจ้งเตือน (Notification) ---
+            // --- 🔔 เริ่มส่วนแจ้งเตือน (Notification) ---
             const lastSeenCount = parseInt(localStorage.getItem('lastSeenStoryCount')) || 0;
             const currentCount = feed.length;
             const newStories = currentCount - lastSeenCount;
             const navBadge = document.getElementById('nav-stories-btn');
             
-            // ลบจุดแดงเก่าออกก่อน
+            // ลบจุดแดงเก่าออกก่อน (ถ้ามี)
             if (navBadge) {
                 const oldBadge = navBadge.querySelector('.nav-notify-badge');
                 if(oldBadge) oldBadge.remove();
 
-                // ถ้ามีเรื่องใหม่ และไม่ได้อยู่ที่หน้า Stories ให้ขึ้นจุดแดง
+                // ถ้ามีเรื่องใหม่ (>0) และเราไม่ได้เปิดหน้า Stories อยู่ -> ให้ขึ้นจุดแดง
                 if (newStories > 0 && !document.getElementById('page-stories').classList.contains('active')) {
                     navBadge.innerHTML += `<div class="nav-notify-badge">${newStories}</div>`;
                 } else if (document.getElementById('page-stories').classList.contains('active')) {
-                    // ถ้าเปิดหน้า Stories อยู่ ให้อัปเดตว่าดูครบแล้ว
+                    // ถ้าเปิดหน้า Stories ค้างไว้อยู่แล้ว ให้อัปเดตว่าดูครบแล้วทันที
                     localStorage.setItem('lastSeenStoryCount', currentCount);
                 }
             }
