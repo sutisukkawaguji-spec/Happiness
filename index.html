@@ -26,6 +26,31 @@
         body { background-image: var(--bg-gradient); font-family: 'Kanit', sans-serif; min-height: 100vh; color: #444; padding-bottom: 100px; overflow-x: hidden; }
         .glass-card { background: var(--glass-bg); backdrop-filter: blur(15px); border-radius: 24px; box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07); padding: 20px; margin-bottom: 20px; border: 1px solid rgba(255,255,255,0.6); }
 
+        /* --- ส่วนกรอบรูปโปรไฟล์ (Container) --- */
+        .profile-container { 
+            position: relative; 
+            display: inline-block; 
+            width: 100px; /* 👈 ล็อคความกว้างกรอบ */
+            height: 100px; /* 👈 ล็อคความสูงกรอบ */
+            margin-bottom: 15px; 
+            z-index: 1;
+        }
+        
+        /* --- ส่วนรูปภาพโปรไฟล์ (Image) --- */
+        .profile-img { 
+            width: 90px !important;  /* 👈 บังคับขนาดกว้าง 90px */
+            height: 90px !important; /* 👈 บังคับขนาดสูง 90px */
+            border-radius: 50%; 
+            border: 3px solid #fff; 
+            position: absolute; /* จัดให้อยู่ตรงกลาง */
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%); /* ดึงรูปมาตรงกลางเป๊ะๆ */
+            z-index: 5; /* 👈 สำคัญ! ต้องเลขสูงกว่า Aura รูปจะได้ทับแสง */
+            object-fit: cover; 
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1); 
+            background: #fff;
+        }
         /* ฐานของออร่า (แก้ใหม่รับค่า scale) */
         .aura-glow { 
             position: absolute; 
@@ -1391,6 +1416,7 @@
 </script>
 </body>
 </html>
+
 
 
 
