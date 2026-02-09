@@ -1492,14 +1492,14 @@
                 // ปุ่ม Verify
                 let verifyBtnHtml = '';
                 let verifyCount = verifyList.length;
-                let isBonus = post.bonusGiven === "TRUE" || verifyCount >= 4;
+                let isBonus = post.bonusGiven === "TRUE" || verifyCount >= 2;
 
                 if (isMyPost) {
                     if (post.taggedFriends && post.taggedFriends.length > 0) {
                         verifyBtnHtml = `<span class="badge bg-success rounded-pill ms-auto"><i class="fas fa-users"></i> กิจกรรมทีม (+10)</span>`;
                     } else {
                         if (isBonus) verifyBtnHtml = `<span class="badge bg-warning text-dark rounded-pill ms-auto"><i class="fas fa-crown"></i> โบนัสแตก!</span>`;
-                        else verifyBtnHtml = `<span class="badge bg-secondary rounded-pill ms-auto"><i class="fas fa-hourglass-half"></i> รอพยาน (${verifyCount}/4)</span>`;
+                        else verifyBtnHtml = `<span class="badge bg-secondary rounded-pill ms-auto"><i class="fas fa-hourglass-half"></i> รอพยาน (${verifyCount}/2)</span>`;
                     }
                 } else {
                     if (isVerifiedByMe) {
@@ -1752,4 +1752,5 @@
 </script>
 </body>
 </html>
+
 
