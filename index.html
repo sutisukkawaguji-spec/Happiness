@@ -370,8 +370,27 @@
                 <label class="form-label fw-bold mb-0">ทำร่วมกับใคร?</label>
                 <button class="btn btn-sm btn-outline-primary rounded-pill px-3" id="btnSelectAll" onclick="selectAllFriends()"><i class="fas fa-check-double me-1"></i>All</button>
             </div>
-            <div class="friend-list row" id="friendListArea"></div> 
+			<div class="friend-list row" id="friendListArea"></div> 
             
+            <div class="mt-3 p-3 bg-light rounded border">
+                <label class="form-label fw-bold mb-2"><i class="fas fa-eye"></i> การมองเห็น & คะแนน</label>
+                <div class="d-flex gap-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="privacyOption" id="privacyPublic" value="public" checked>
+                        <label class="form-check-label" for="privacyPublic">
+                            สาธารณะ <span class="badge bg-success rounded-pill" style="font-size:0.6rem">+คะแนน</span>
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="privacyOption" id="privacyPrivate" value="private">
+                        <label class="form-check-label" for="privacyPrivate">
+                            ส่วนตัว <span class="badge bg-secondary rounded-pill" style="font-size:0.6rem">ไม่ได้คะแนน</span>
+                        </label>
+                    </div>
+                </div>
+                <small class="text-muted" style="font-size: 0.75rem;">*โพสต์ส่วนตัวจะบันทึกแค่อารมณ์ เพื่อนไม่เห็นข้อความ/รูป</small>
+            </div>
+
             <button class="btn btn-primary w-100 py-3 rounded-4 shadow mt-3 fw-bold" onclick="submitData()">บันทึกความดี</button>
         </div>
     </div>
@@ -1305,23 +1324,17 @@
         items.forEach(i => toggleFriend(i)); 
     }
 
-    async function submitData() {
-        // 1. เช็คว่ามี User ไหม
+	async function submitData() {
         if(!currentUser) return Swal.fire('Error', 'ไม่พบข้อมูลผู้ใช้', 'error');
 
-        // ✨ 2. [เพิ่มใหม่] บังคับเลือกหมวดความดี ✨
         const virtueTag = document.getElementById('virtueSelect').value;
         if (!virtueTag) {
-            return Swal.fire({
-                icon: 'warning',
-                title: 'ลืมเลือกหมวดครับ!',
-                text: 'กรุณาระบุประเภทความดีก่อนกดบันทึกนะ',
-                confirmButtonText: 'โอเค',
-                confirmButtonColor: '#6c5ce7' // สีม่วงตามธีม
-            });
+            return Swal.fire({ icon: 'warning', title: 'ลืมเลือกหมวดครับ!', text: 'กรุณาระบุประเภทความดี', confirmButtonColor: '#6c5ce7' });
         }
 
-        // --- เริ่มกระบวนการบันทึก ---
+        // ✅ 1. ดึงค่า Privacy
+        const privacyVal = document.querySelector('input[name="privacyOption"]:checked').value;
+
         const btn = document.querySelector('button[onclick="submitData()"]');
         const originalText = btn.innerHTML;
         btn.disabled = true; 
@@ -1356,36 +1369,27 @@
             btn.innerHTML = 'กำลังบันทึกข้อมูล...';
             
             // ส่งข้อมูลทั้งหมดไป Google Sheet
-            await fetch(GAS_URL, { 
-                method: 'POST', 
-                mode: 'no-cors', 
+			await fetch(GAS_URL, { 
+                method: 'POST', mode: 'no-cors',
                 body: JSON.stringify({ 
-                    action: 'submit_activity', 
-                    userId: currentUser.userId, 
-                    userName: currentUser.name, 
-                    happyLevel: selectedMood, 
-                    virtueTag: virtueTag, // ส่งค่าที่เช็คแล้วไป
-                    note: document.getElementById('noteInput').value, 
-                    taggedFriends: tagged, 
-                    uploadId: uploadId, 
-                    totalChunks: totalChunks 
+                    action: 'submit_activity',
+                    userId: currentUser.userId,
+                    userName: currentUser.name,
+                    happyLevel: selectedMood,
+                    virtueTag: virtueTag,
+                    note: document.getElementById('noteInput').value,
+                    taggedFriends: tagged,
+                    uploadId: uploadId,
+                    totalChunks: totalChunks,
+                    privacy: privacyVal // ✅ 2. ส่งค่า privacy ไปด้วย
                 }) 
             });
             
-            // สำเร็จ!
-            Swal.fire({ 
-                icon: 'success', 
-                title: 'บันทึกสำเร็จ!', 
-                text: 'ขอบคุณที่ร่วมแบ่งปันความสุข', 
-                showConfirmButton: false, 
-                timer: 2000 
-            }).then(() => { 
-                location.reload(); 
-            });
+            Swal.fire({ icon: 'success', title: 'บันทึกสำเร็จ!', showConfirmButton: false, timer: 1500 }).then(() => { location.reload(); });
 
         } catch (err) { 
             console.error(err); 
-            Swal.fire('Error', 'เกิดข้อผิดพลาด: ' + err.message, 'error'); 
+            Swal.fire('Error', err.message, 'error'); 
             btn.disabled = false; 
             btn.innerHTML = originalText;
         }
@@ -1522,28 +1526,25 @@
     }
 
 	// --- 📊 กราฟผู้บริหารฉบับ Pro (Responsive + Scrollable) ---
-    function renderManagerChart() {
+	function renderManagerChart() {
         const ctx = document.getElementById('managerLineChart');
         const range = document.getElementById('chartRangeSelector').value;
         const container = document.getElementById('chartContainer');
 
         if(window.myManagerChart) window.myManagerChart.destroy();
 
-        // 1. จำลองข้อมูล (ถ้าข้อมูลจริงน้อยกว่า 365 วัน ระบบจะ Mock เพื่อให้เห็นภาพ)
-        // ⚠️ ในการใช้งานจริง chartData ควรเป็น Array ยาวๆ ที่ส่งมาจากหลังบ้าน
-        let rawData = chartData || [];
+        // ใช้ Mock Data ที่สวิงแรงขึ้น
+        let rawData = (chartData && chartData.length > 30) ? chartData : generateMockData(365); 
 
         let labels = [];
         let dataPoints = [];
         let today = new Date();
 
-        // 2. ปรับแต่งข้อมูลตามช่วงเวลาที่เลือก
+        // --- Logic การแบ่งช่วงเวลา (เหมือนเดิม) ---
         if (range === '15d') {
-            // --- รายวัน 15 วัน ---
-            container.style.minWidth = "100%"; // ไม่ต้องกว้างมาก พอดีจอ
+            container.style.minWidth = "100%"; 
             let days = 15;
             let slicedData = rawData.slice(-days);
-            
             for(let i=days-1; i>=0; i--) {
                 let d = new Date(); d.setDate(today.getDate() - i);
                 labels.push(d.toLocaleDateString('th-TH', {day:'numeric', month:'short'}));
@@ -1551,11 +1552,9 @@
             dataPoints = slicedData;
 
         } else if (range === '30d') {
-            // --- รายวัน 30 วัน ---
-            container.style.minWidth = "600px"; // 👈 บังคับกว้าง เพื่อให้เลื่อนดูได้ ไม่บี้
+            container.style.minWidth = "600px"; 
             let days = 30;
             let slicedData = rawData.slice(-days);
-            
             for(let i=days-1; i>=0; i--) {
                 let d = new Date(); d.setDate(today.getDate() - i);
                 labels.push(d.toLocaleDateString('th-TH', {day:'numeric', month:'short'}));
@@ -1563,29 +1562,20 @@
             dataPoints = slicedData;
 
         } else if (range === '1y') {
-            // --- รายเดือน 12 เดือน (หาค่าเฉลี่ย) ---
-            container.style.minWidth = "100%"; // พอดีจอ เพราะมีแค่ 12 แท่ง
-            
+            container.style.minWidth = "100%";
             let monthNames = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
-            
-            // วนลูปย้อนหลัง 12 เดือน
             for (let i = 11; i >= 0; i--) {
-                let d = new Date();
-                d.setMonth(today.getMonth() - i);
+                let d = new Date(); d.setMonth(today.getMonth() - i);
                 labels.push(monthNames[d.getMonth()]);
-                
-                // หาค่าเฉลี่ยของเดือนนั้น (จำลองการดึงกลุ่มข้อมูล)
-                // ของจริงต้องเขียน Logic แบ่ง Array ตามเดือน แต่นี่สุ่มเอาจาก Mock เพื่อความเร็ว
                 let startIdx = rawData.length - ((i+1)*30);
                 let endIdx = rawData.length - (i*30);
                 let monthChunk = rawData.slice(Math.max(0, startIdx), Math.max(0, endIdx));
-                
                 let avg = monthChunk.reduce((a, b) => a + b, 0) / (monthChunk.length || 1);
-                dataPoints.push(avg.toFixed(1)); // ทศนิยม 1 ตำแหน่ง
+                dataPoints.push(avg.toFixed(1));
             }
         }
 
-        // 3. วาดกราฟ
+        // --- วาดกราฟ ---
         window.myManagerChart = new Chart(ctx, {
             type: 'line',
             data: {
@@ -1594,22 +1584,23 @@
                     label: 'Happy Index',
                     data: dataPoints,
                     borderColor: '#0984e3',
-                    backgroundColor: 'rgba(9, 132, 227, 0.1)',
+                    backgroundColor: 'rgba(9, 132, 227, 0.15)', // สีพื้นเข้มขึ้นนิดนึง
                     borderWidth: 2,
                     pointBackgroundColor: '#fff',
                     pointBorderColor: '#0984e3',
-                    pointRadius: 4,
+                    pointRadius: 4, // จุดขนาดกำลังดี
                     fill: true,
-                    tension: 0.3 // เส้นโค้งนิดๆ
+                    tension: 0.1 // 👈 สำคัญ: ค่าต่ำ = เส้นหยัก/คม (ไม่โค้งมน)
                 }]
             },
             options: {
                 responsive: true,
-                maintainAspectRatio: false, // 👈 สำคัญ! ให้ยืดหดตาม Container
+                maintainAspectRatio: false,
                 plugins: { legend: { display: false } },
                 scales: {
                     y: { 
-                        suggestedMin: 5, 
+                        // 👈 ปล่อยให้กราฟซูมเอง (เอา min/max ออก) หรือกำหนดให้แคบ
+                        suggestedMin: 4, 
                         suggestedMax: 10,
                         grid: { borderDash: [5, 5] }
                     },
@@ -1622,11 +1613,21 @@
     }
 
     // ฟังก์ชันช่วยสร้างข้อมูลจำลอง (ใช้เทสเฉยๆ ถ้าข้อมูลจริงมาครบ ลบอันนี้ทิ้งได้)
+	// ฟังก์ชันสร้างข้อมูลจำลอง (แบบกราฟหุ้น สวิงแรง)
     function generateMockData(count) {
         let arr = [];
+        let currentValue = 7.5; // เริ่มต้นที่ 7.5
+        
         for(let i=0; i<count; i++) {
-            // สุ่มเลขระหว่าง 6.5 ถึง 9.5
-            arr.push(Math.random() * (9.5 - 6.5) + 6.5);
+            // ปรับตรงนี้: * 1.5 (เดิม 0.6) เพื่อให้กราฟกระชากแรงขึ้น
+            let change = (Math.random() - 0.5) * 1.5; 
+            currentValue += change;
+
+            // ตบกลับเข้าเลน ถ้าหลุดขอบ (เลี้ยงให้อยู่ช่วง 5-9.5)
+            if(currentValue > 9.5) currentValue -= 0.8; 
+            if(currentValue < 5.0) currentValue += 0.8;
+
+            arr.push(parseFloat(currentValue.toFixed(1)));
         }
         return arr;
     }
@@ -1665,9 +1666,9 @@
     }
 
        // --- 🚀 ฟังก์ชันดึง Feed (อัปเกรดใหม่ 5 ฟีเจอร์) ---
-function fetchFeed() {
+	function fetchFeed() {
         const container = document.getElementById('feedContainer');
-        const filterType = currentFeedFilter; 
+        const filterType = currentFeedFilter;
         const filterDate = document.getElementById('filterDate').value;
         const filterYear = document.getElementById('filterYear').value;
 
@@ -1678,27 +1679,29 @@ function fetchFeed() {
         .then(r => r.json())
         .then(feed => {
             container.innerHTML = '';
-            globalFeedData = feed; // เก็บข้อมูลกลาง
+            globalFeedData = feed; 
 
-            // --- 🔔 Logic แจ้งเตือน Badge ---
+            // ... (ส่วน Logic Badge/Notification คงเดิม) ...
             const lastSeen = parseInt(localStorage.getItem('lastSeenStoryCount') || 0);
             const newStories = feed.length - lastSeen;
             const badgeBox = document.getElementById('nav-stories-btn');
             if(badgeBox.querySelector('.nav-notify-badge')) badgeBox.querySelector('.nav-notify-badge').remove();
-
             if (newStories > 0 && !document.getElementById('page-stories').classList.contains('active')) {
                 badgeBox.innerHTML += `<div class="nav-notify-badge">${newStories}</div>`;
             } else if (document.getElementById('page-stories').classList.contains('active')) {
                 localStorage.setItem('lastSeenStoryCount', feed.length);
             }
 
-            // --- 🔍 Logic กรองข้อมูล ---
+            // ... (ส่วน Logic Filter คงเดิม) ...
             const filteredFeed = feed.filter(post => {
                 let pass = true;
                 let postDate = new Date(post.timestamp);
                 let isMyPost = String(post.user_line_id) === String(currentUser.userId);
                 let amITagged = (post.taggedFriends || "").includes(currentUser.userId);
                 
+                let isPrivate = post.privacy === 'private';
+                if (isPrivate && !isMyPost) return false;
+
                 if (filterType === 'related' && !isMyPost && !amITagged) pass = false;
                 if (filterType === 'request') {
                     let isPending = post.status !== 'approved';
@@ -1706,7 +1709,6 @@ function fetchFeed() {
                 }
                 if (filterDate && postDate.toISOString().split('T')[0] !== filterDate) pass = false;
                 if (filterYear && String(postDate.getFullYear()) !== filterYear) pass = false;
-                
                 return pass;
             });
 
@@ -1715,11 +1717,12 @@ function fetchFeed() {
                 return;
             }
 
-            // --- 🎨 วาด HTML ---
+            // --- 🎨 เริ่มวาด HTML ---
             filteredFeed.forEach(post => {
                 let isMyPost = String(post.user_line_id) === String(currentUser.userId);
-                
-                // ตัดช่องว่าง ID เพื่อน
+                let isPrivate = post.privacy === 'private';
+                let canSeeContent = !isPrivate || isMyPost;
+
                 let taggedIds = (post.taggedFriends && post.taggedFriends.length > 5) 
                     ? post.taggedFriends.split(',').map(s => s.trim()) 
                     : [];
@@ -1728,20 +1731,22 @@ function fetchFeed() {
                 let verifyList = post.verifies || [];
                 let isVerifiedByMe = verifyList.some(v => String(v.lineId) === String(currentUser.userId));
                 
-                // 🔹 1. แสดง Avatar ทีม (Tagged)
+                // 🔹 1. [แก้ไขใหม่] อวาตาร์ทีม (แสดงบรรทัดใหม่)
                 let taggedHtml = '';
-                if (isTeam) {
-                    taggedHtml = '<div class="tagged-group mb-2">';
+                if (isTeam && canSeeContent) {
+                    taggedHtml = '<div class="d-flex align-items-center mt-2 ps-1 animate__animated animate__fadeIn">'; // เว้นบรรทัดใหม่
+                    taggedHtml += '<small class="text-muted me-2" style="font-size:0.75rem;"><i class="fas fa-users text-info"></i> ร่วมกับ:</small>';
+                    taggedHtml += '<div class="tagged-group">';
                     taggedIds.forEach(fid => {
                         let fInfo = allUsersMap[fid];
                         if(fInfo) taggedHtml += `<img src="${fInfo.img}" class="tagged-img" title="${fInfo.name}" onerror="this.style.display='none'">`;
                     });
-                    taggedHtml += '</div>';
+                    taggedHtml += '</div></div>';
                 }
 
-                // 🔹 2. แสดง Avatar พยาน (Witness) - ✅ แก้ให้แสดงแล้ว
+                // 🔹 2. อวาตาร์พยาน (Witness) - (คงเดิม อยู่ด้านล่าง)
                 let witnessHtml = '';
-                if (verifyList.length > 0) {
+                if (verifyList.length > 0 && canSeeContent) {
                     witnessHtml = '<div class="witness-group"><span class="text-success me-2 fw-bold" style="font-size:0.7rem"><i class="fas fa-check-circle"></i> พยาน:</span>';
                     verifyList.forEach(v => {
                         witnessHtml += `<img src="${v.img}" class="witness-img" title="${v.name}" onerror="this.style.display='none'">`;
@@ -1749,9 +1754,9 @@ function fetchFeed() {
                     witnessHtml += '</div>';
                 }
 
-                // 🔹 3. แจ้งเตือน Reciprocal
+                // 🔹 3. Reciprocal Alert
                 let reciprocalHtml = '';
-                if (isTeam && isMyPost) {
+                if (isTeam && isMyPost && canSeeContent) {
                     let history = feed.filter(p => 
                         p.id !== post.id && 
                         String(p.user_line_id) !== String(currentUser.userId) && 
@@ -1763,38 +1768,35 @@ function fetchFeed() {
                     }
                 }
 
-                // 🔹 4. Logic ปุ่มกด (ปรับปรุง)
+                // 🔹 4. Logic ปุ่มกด
                 let btnHtml = '';
-                if (isMyPost) {
-                    if (isTeam) {
-                        btnHtml = `<span class="badge bg-info text-dark rounded-pill ms-auto"><i class="fas fa-users"></i> Team Work</span>`;
-                    } else {
-                        if (verifyList.length > 0) btnHtml = `<span class="badge bg-success rounded-pill ms-auto"><i class="fas fa-check"></i> อนุมัติแล้ว</span>`;
-                        else btnHtml = `<span class="badge bg-secondary rounded-pill ms-auto"><i class="fas fa-clock"></i> รอพยาน</span>`;
-                    }
+                if (isPrivate) {
+                    if (isMyPost) btnHtml = `<span class="badge bg-secondary rounded-pill ms-auto"><i class="fas fa-lock"></i> ส่วนตัว</span>`;
                 } else {
-                    let amITagged = taggedIds.includes(String(currentUser.userId));
-                    if (isTeam) {
-                        btnHtml = ``; // ทีมไม่ต้องกด
+                    if (isMyPost) {
+                        if (isTeam) btnHtml = `<span class="badge bg-info text-dark rounded-pill ms-auto"><i class="fas fa-users"></i> Team Work</span>`;
+                        else {
+                            if (verifyList.length > 0) btnHtml = `<span class="badge bg-success rounded-pill ms-auto"><i class="fas fa-check"></i> อนุมัติแล้ว</span>`;
+                            else btnHtml = `<span class="badge bg-secondary rounded-pill ms-auto"><i class="fas fa-clock"></i> รอพยาน</span>`;
+                        }
                     } else {
-                        if (isVerifiedByMe) btnHtml = `<button class="btn btn-sm btn-success rounded-pill ms-auto disabled">เป็นพยานแล้ว</button>`;
-                        else btnHtml = `<button onclick="verifyPost('${post.id}', '${post.user_line_id}', '${post.user_name}', this)" class="btn btn-sm btn-outline-primary rounded-pill ms-auto">เป็นพยาน (+3)</button>`;
+                        let amITagged = taggedIds.includes(String(currentUser.userId));
+                        if (isTeam) { /* ทีมไม่ต้องกด */ } 
+                        else {
+                            if (isVerifiedByMe) btnHtml = `<button class="btn btn-sm btn-success rounded-pill ms-auto disabled">เป็นพยานแล้ว</button>`;
+                            else btnHtml = `<button onclick="verifyPost('${post.id}', '${post.user_line_id}', '${post.user_name}', this)" class="btn btn-sm btn-outline-primary rounded-pill ms-auto">เป็นพยาน (+3)</button>`;
+                        }
                     }
                 }
 
-                // 🔹 5. ระบบ Multi-Reaction
-                // เช็คว่าเราเคยกด Reaction อะไรไปไหม (สมมติเก็บใน likes เป็น object {userId, type})
-                // หมายเหตุ: โค้ดเดิม likes เก็บเป็น Array ของ User Object
+                // Multi-Reaction
                 let myReaction = (post.likes || []).find(u => String(u.lineId) === String(currentUser.userId));
-                let reactIcon = '🤍'; // default
-                let reactClass = 'text-muted';
-                
-                // Map Icon
+                let reactIcon = '🤍'; 
                 const iconMap = { 'like': '👍', 'love': '❤️', 'wow': '😮', 'laugh': '😂', 'sad': '😢', 'pray': '🙏' };
-                if (myReaction) {
-                    reactIcon = iconMap[myReaction.type] || '❤️'; // ถ้า backend ยังไม่ส่ง type มา ให้ default เป็น ❤️
-                    reactClass = 'text-danger'; // หรือสีตาม icon
-                }
+                if (myReaction) reactIcon = iconMap[myReaction.type] || '❤️'; 
+
+                let noteContent = canSeeContent ? post.note : '<span class="text-muted fst-italic"><i class="fas fa-lock"></i> เนื้อหาส่วนตัว</span>';
+                let imageContent = (canSeeContent && post.image) ? `<img src="${post.image}" class="feed-img" onclick="viewImage('${post.image}')">` : '';
 
                 container.innerHTML += `
                 <div class="glass-card feed-card p-3 mb-3 animate__animated animate__fadeIn">
@@ -1806,17 +1808,20 @@ function fetchFeed() {
                                 <small class="text-muted" style="font-size:0.7rem">${new Date(post.timestamp).toLocaleDateString('th-TH', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'})}</small>
                             </div>
                             <small class="text-primary mb-1 d-block">${post.virtue}</small>
-                            ${taggedHtml}
                         </div>
                     </div>
                     
-                    <div class="text-end mb-2">${btnHtml}</div>
+                    ${taggedHtml}
+
+                    <div class="text-end mb-2 mt-2">${btnHtml}</div>
                     ${reciprocalHtml}
-                    <div class="mt-2 mb-2 p-2 bg-light rounded text-dark">${post.note}</div>
-                    ${post.image ? `<img src="${post.image}" class="feed-img" onclick="viewImage('${post.image}')">` : ''}
                     
-                    ${witnessHtml} <div class="feed-actions border-top pt-2 d-flex justify-content-between align-items-center mt-2">
-                        
+                    <div class="mt-2 mb-2 p-2 bg-light rounded text-dark">${noteContent}</div>
+                    ${imageContent}
+                    
+                    ${witnessHtml} 
+
+                    <div class="feed-actions border-top pt-2 d-flex justify-content-between align-items-center mt-2">
                         <div class="reaction-wrapper" id="react-wrap-${post.id}">
                             <div class="reaction-popup" id="popup-${post.id}" style="display:none;" onmouseleave="closeReaction('${post.id}')">
                                 <span class="reaction-btn" onclick="submitReaction('${post.id}', 'like')">👍</span>
@@ -1830,7 +1835,6 @@ function fetchFeed() {
                                 <span id="count-${post.id}">${post.likes ? post.likes.length : 0}</span>
                             </div>
                         </div>
-
                         <div class="fs-4">${post.happy==3?'😁':(post.happy==2?'😐':'😞')}</div>
                     </div>
                 </div>`;
@@ -2094,6 +2098,9 @@ function fetchFeed() {
 </script>
 </body>
 </html>
+
+
+
 
 
 
