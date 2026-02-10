@@ -2,307 +2,334 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>คู่มือการใช้งานระบบ Happy Meter (ฉบับสมบูรณ์)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>คู่มือการใช้งาน Happy Meter</title>
     
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600&display=swap" rel="stylesheet">
-    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
     <style>
-        :root { --primary: #6c5ce7; --secondary: #a29bfe; --accent: #00cec9; --bg-light: #f0f2f5; }
-        body { font-family: 'Kanit', sans-serif; background-color: var(--bg-light); color: #444; padding-bottom: 80px; }
-        
-        /* 🟡 ปุ่มย้อนกลับ (เหลืออันเดียว ลอยเด่นๆ มุมซ้ายบน) */
-        .btn-back-floating {
-            position: fixed; top: 15px; left: 15px; z-index: 9999;
-            width: 45px; height: 45px; background: #ffffff; color: var(--primary);
-            border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            text-decoration: none; box-shadow: 0 4px 15px rgba(0,0,0,0.3); border: 2px solid white;
-            transition: 0.3s;
+        :root {
+            --bg-gradient: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
+            --glass-bg: rgba(255, 255, 255, 0.95);
+            --primary: #6c5ce7;
+            --accent: #fd79a8;
         }
-        .btn-back-floating:hover { transform: scale(1.1); background: #f8f9fa; }
+        body {
+            background-image: var(--bg-gradient);
+            font-family: 'Kanit', sans-serif;
+            color: #444;
+            padding-bottom: 80px;
+        }
+        .header-section {
+            background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+            color: white;
+            padding: 40px 20px 60px 20px;
+            border-radius: 0 0 30px 30px;
+            text-align: center;
+            box-shadow: 0 10px 20px rgba(108, 92, 231, 0.2);
+            position: relative;
+            margin-bottom: -40px;
+        }
+        /* Scrollable Tabs */
+        .nav-pills-wrapper {
+            overflow-x: auto;
+            white-space: nowrap;
+            padding-bottom: 10px;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none; /* Firefox */
+        }
+        .nav-pills-wrapper::-webkit-scrollbar { display: none; } /* Chrome/Safari */
+        
+        .nav-pills { display: inline-flex; flex-wrap: nowrap; }
+        .nav-pills .nav-link {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border-radius: 50px;
+            margin: 0 5px;
+            border: 1px solid rgba(255,255,255,0.5);
+            white-space: nowrap;
+            font-size: 0.85rem;
+            padding: 8px 16px;
+        }
+        .nav-pills .nav-link.active {
+            background: white;
+            color: var(--primary);
+            font-weight: bold;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
 
-        /* Header Banner */
-        .header-banner { 
-            background: linear-gradient(135deg, #0984e3, #74b9ff); 
-            color: white; padding: 50px 20px 30px; /* เพิ่ม Padding บนหลบปุ่ม */
-            border-radius: 0 0 40px 40px; text-align: center; 
-            box-shadow: 0 10px 30px rgba(9, 132, 227, 0.3);
+        .content-container { padding: 0 15px; }
+        .guide-card {
+            background: var(--glass-bg);
+            border-radius: 20px;
+            padding: 20px;
             margin-bottom: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+            border: 1px solid white;
         }
         
-        /* Navigation Buttons */
-        .nav-scroller { overflow-x: auto; white-space: nowrap; padding: 10px 20px; margin-bottom: 20px; -webkit-overflow-scrolling: touch; }
-        .nav-pill-btn {
-            display: inline-block; background: white; color: #555; 
-            padding: 8px 20px; border-radius: 50px; margin-right: 10px;
-            text-decoration: none; font-size: 0.9rem; font-weight: bold;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.05); transition: 0.2s; border: 1px solid #eee;
+        /* Elements Styling */
+        .step-circle {
+            width: 35px; height: 35px; background: var(--primary); color: white;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            font-weight: bold; margin-right: 10px; flex-shrink: 0;
         }
-        .nav-pill-btn:hover, .nav-pill-btn.active { background: var(--primary); color: white; transform: translateY(-2px); }
+        .step-item { display: flex; align-items: start; margin-bottom: 20px; }
+        .step-desc { font-size: 0.95rem; line-height: 1.6; }
 
-        /* Card Style */
-        .guide-container { max-width: 700px; margin: auto; padding: 0 20px; }
-        .card-guide { 
-            background: #fff; border: none; border-radius: 24px; 
-            box-shadow: 0 5px 20px rgba(0,0,0,0.05); 
-            margin-bottom: 30px; padding: 25px; 
-            position: relative; overflow: hidden;
-            scroll-margin-top: 70px; /* เว้นระยะ Scroll ให้ไม่โดนปุ่มบัง */
+        .virtue-icon {
+            width: 50px; height: 50px; border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.5rem; color: white; margin-right: 15px; flex-shrink: 0;
         }
-        .section-title { font-weight: bold; margin-bottom: 20px; display: flex; align-items: center; color: #2d3436; border-bottom: 2px solid #f1f2f6; padding-bottom: 10px; }
-        .section-title i { margin-right: 10px; font-size: 1.5rem; color: var(--primary); }
-
-        /* Step Badge */
-        .step-item { display: flex; margin-bottom: 15px; }
-        .step-num { 
-            min-width: 30px; height: 30px; background: var(--primary); color: white; 
-            border-radius: 50%; display: flex; align-items: center; justify-content: center; 
-            margin-right: 15px; font-weight: bold; margin-top: 2px;
+        .example-list { list-style: none; padding-left: 0; font-size: 0.85rem; margin-top: 10px; }
+        .example-list li { margin-bottom: 5px; position: relative; padding-left: 20px; }
+        .example-list li::before {
+            content: '\f00c'; font-family: 'Font Awesome 6 Free'; font-weight: 900;
+            position: absolute; left: 0; color: #2ecc71;
         }
 
-        /* --- 📊 Executive Charts Simulation --- */
-        .chart-box { background: #f8f9fa; border-radius: 15px; padding: 15px; position: relative; height: 180px; display: flex; align-items: flex-end; justify-content: space-around; border: 1px dashed #ccc; overflow: hidden; }
-        .chart-bar { width: 20%; border-radius: 5px 5px 0 0; position: relative; transition: height 1s; display: flex; align-items: flex-end; justify-content: center; color: white; font-weight: bold; font-size: 0.8rem; padding-bottom: 5px; }
-        .chart-bar span { position: absolute; top: -25px; left: 50%; transform: translateX(-50%); color: #555; font-size: 0.7rem; }
-        
-        .trend-line { 
-            position: absolute; bottom: 0; left: 0; width: 100%; height: 100%; 
-            background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50" preserveAspectRatio="none"><path d="M0,50 L10,40 L30,45 L50,20 L70,30 L90,10 L100,5" fill="rgba(9,132,227,0.1)" stroke="%230984e3" stroke-width="1"/></svg>');
-            background-size: 100% 100%; opacity: 0.5; z-index: 0;
-        }
+        /* Chart Simulation CSS */
+        .chart-bar-container { display: flex; align-items: flex-end; height: 100px; gap: 10px; padding: 10px; border-bottom: 2px solid #eee; margin-bottom: 5px;}
+        .chart-bar { flex: 1; border-radius: 5px 5px 0 0; position: relative; transition: height 1s; }
+        .chart-bar span { position: absolute; top: -20px; width: 100%; text-align: center; font-size: 0.7rem; font-weight: bold; color: #666; }
+        .chart-label-container { display: flex; gap: 10px; }
+        .chart-label { flex: 1; text-align: center; font-size: 0.7rem; color: #888; }
 
-        /* --- 🕸️ Radar Chart Simulation --- */
-        .radar-box { position: relative; width: 200px; height: 200px; margin: 0 auto; background: radial-gradient(circle, #fff, #f0f0f0); border-radius: 50%; border: 1px dashed #ccc; }
-        .radar-shape { 
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 0; height: 0;
-            border-left: 60px solid transparent; border-right: 60px solid transparent; border-bottom: 90px solid rgba(108, 92, 231, 0.4);
-        }
-        .radar-shape::after {
-            content: ''; position: absolute; top: 30px; left: -60px;
-            width: 0; height: 0;
-            border-left: 60px solid transparent; border-right: 60px solid transparent; border-top: 90px solid rgba(108, 92, 231, 0.4);
-        }
-        .radar-label { position: absolute; font-size: 0.7rem; font-weight: bold; color: #666; }
-        .rl-top { top: 5px; left: 50%; transform: translateX(-50%); }
-        .rl-right { top: 40%; right: 5px; }
-        .rl-left { top: 40%; left: 5px; }
-        .rl-bot-r { bottom: 15px; right: 20px; }
-        .rl-bot-l { bottom: 15px; left: 20px; }
+        /* Gradients */
+        .bg-gradient-volunteer { background: linear-gradient(135deg, #00a8ff, #0097e6); }
+        .bg-gradient-sufficiency { background: linear-gradient(135deg, #44bd32, #4cd137); }
+        .bg-gradient-discipline { background: linear-gradient(135deg, #8c7ae6, #9c88ff); }
+        .bg-gradient-integrity { background: linear-gradient(135deg, #00cec9, #81ecec); }
+        .bg-gradient-gratitude { background: linear-gradient(135deg, #e84393, #fd79a8); }
 
-        /* --- ✨ Aura & Bars --- */
-        .bar-label { font-size: 0.8rem; font-weight: bold; display: flex; justify-content: space-between; margin-bottom: 5px; }
-        .progress { height: 12px; border-radius: 10px; background: #dfe6e9; margin-bottom: 15px; }
-        .bar-happy { background: linear-gradient(90deg, #ffeaa7, #fdcb6e); }
-        .bar-virtue { background: linear-gradient(90deg, #81ecec, #00cec9); }
-
-        .aura-demo-container { display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; margin-top: 20px; }
-        .aura-item { width: 100px; text-align: center; margin-bottom: 15px; }
-        .profile-wrapper { position: relative; width: 80px; height: 80px; margin: 0 auto 10px; }
-        .demo-img { width: 70px; height: 70px; border-radius: 50%; border: 3px solid #fff; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 2; object-fit: cover; background: #eee; }
-        .aura-glow { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85px; height: 85px; border-radius: 50%; z-index: 1; filter: blur(10px); opacity: 0.8; animation: pulse-slow 3s infinite; }
-        @keyframes pulse-slow { 0% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.2); } 100% { transform: translate(-50%, -50%) scale(1); } }
-        
-        /* Policy Badge */
-        .policy-card { background: #f8f9fa; border-radius: 15px; padding: 15px; margin-bottom: 10px; border-left: 5px solid #ccc; transition: 0.2s; }
-        .policy-t { border-left-color: #00cec9; } .policy-r { border-left-color: #fdcb6e; } .policy-d { border-left-color: #ff7675; }
-        
-        .aura-volunteer { background: radial-gradient(circle, #3498db 0%, transparent 70%); }
-        .aura-sufficiency { background: radial-gradient(circle, #2ecc71 0%, transparent 70%); }
-        .aura-discipline { background: radial-gradient(circle, #9b59b6 0%, transparent 70%); }
-        .aura-integrity { background: radial-gradient(circle, #00cec9 0%, transparent 70%); }
-        .aura-gratitude { background: radial-gradient(circle, #e84393 0%, transparent 70%); }
-
-        .btn-install { background: linear-gradient(90deg, #00b894, #00cec9); color: white; border-radius: 50px; padding: 12px 35px; font-weight: bold; text-decoration: none; display: block; text-align: center; box-shadow: 0 5px 15px rgba(0, 184, 148, 0.4); margin-top: 20px; }
+        .score-table th, .score-table td { font-size: 0.85rem; vertical-align: middle; }
     </style>
 </head>
 <body>
 
-    <a href="./index.html" class="btn-back-floating" onclick="try{history.back()}catch(e){}">
-        <i class="fas fa-chevron-left fa-lg"></i>
-    </a>
-
-    <div class="header-banner">
-        <h1 class="fw-bold mb-1"><i class="fas fa-book-reader"></i> คู่มือการใช้งาน</h1>
-        <p class="mb-0 opacity-75 small">ระบบ Happy Meter & KPI องค์กร</p>
-    </div>
-
-    <div class="nav-scroller">
-        <a href="#executive" class="nav-pill-btn active"><i class="fas fa-user-tie"></i> ผู้บริหาร</a>
-        <a href="#install" class="nav-pill-btn"><i class="fas fa-download"></i> ติดตั้ง</a>
-        <a href="#record" class="nav-pill-btn"><i class="fas fa-edit"></i> บันทึก</a>
-        <a href="#stats" class="nav-pill-btn"><i class="fas fa-chart-pie"></i> กราฟ</a>
-        <a href="#level" class="nav-pill-btn"><i class="fas fa-chart-line"></i> เลเวล</a>
-    </div>
-
-    <div class="guide-container">
+    <div class="header-section">
+        <h2 class="fw-bold"><i class="fas fa-book-open me-2"></i>คู่มือการใช้งาน</h2>
+        <p class="small opacity-75 mb-3">Happy Meter : Executive Intelligence</p>
         
-        <div id="executive" class="card-guide" style="border: 2px solid #0984e3; background: #fdfeff;">
-            <h5 class="section-title text-primary"><i class="fas fa-chart-pie"></i> สำหรับผู้บริหาร (Executive View)</h5>
-            
-            <p class="text-muted small mb-4">
-                ระบบนี้ถูกออกแบบมาเพื่อเป็นเครื่องมือขับเคลื่อนยุทธศาสตร์กรมธนารักษ์ โดยเน้นการพัฒนาทรัพยากรบุคคล <b>(Unity)</b> ผ่านการวัดผลที่เป็นรูปธรรม
-            </p>
-
-            <h6 class="fw-bold mb-3"><i class="fas fa-link text-secondary"></i> การเชื่อมโยงอัตลักษณ์ TRD</h6>
-            
-            <div class="policy-card policy-t">
-                <div class="d-flex justify-content-between align-items-center mb-1">
-                    <span class="badge bg-info text-dark">T - Transparency</span>
-                    <small class="text-muted fw-bold">โปร่งใส</small>
-                </div>
-                <p class="small mb-1 text-muted">ปฏิบัติหน้าที่ด้วยความโปร่งใส ไร้ทุจริต ตรวจสอบได้</p>
-                <div class="d-flex align-items-center mt-2 small">
-                    <i class="fas fa-arrow-right text-info me-2"></i> วัดผลจาก: <b>หมวดสุจริต (Integrity)</b>
-                </div>
-            </div>
-
-            <div class="policy-card policy-r">
-                <div class="d-flex justify-content-between align-items-center mb-1">
-                    <span class="badge bg-warning text-dark">R - Responsibility</span>
-                    <small class="text-muted fw-bold">รับผิดชอบ</small>
-                </div>
-                <p class="small mb-1 text-muted">ปฏิบัติงานเต็มความสามารถ ใช้ทรัพยากรคุ้มค่า</p>
-                <div class="d-flex align-items-center mt-2 small">
-                    <i class="fas fa-arrow-right text-warning me-2"></i> วัดผลจาก: <b>หมวดวินัย & พอเพียง</b>
-                </div>
-            </div>
-
-            <div class="policy-card policy-d">
-                <div class="d-flex justify-content-between align-items-center mb-1">
-                    <span class="badge bg-danger">D - Dedication</span>
-                    <small class="text-muted fw-bold">ทุ่มเท เสียสละ</small>
-                </div>
-                <p class="small mb-1 text-muted">มุ่งมั่น ตั้งใจจริง และเสียสละเพื่อส่วนรวม</p>
-                <div class="d-flex align-items-center mt-2 small">
-                    <i class="fas fa-arrow-right text-danger me-2"></i> วัดผลจาก: <b>หมวดจิตอาสา & กตัญญู</b>
-                </div>
-            </div>
-
-            <hr class="my-4">
-            <h6 class="fw-bold mb-2"><i class="fas fa-chart-area text-primary"></i> Executive Dashboard (ตัวอย่าง)</h6>
-            <div class="chart-box mb-3">
-                <div class="trend-line"></div>
-                <div class="chart-bar bg-info" style="height: 60%;">T</div>
-                <div class="chart-bar bg-warning" style="height: 45%;">R</div>
-                <div class="chart-bar bg-danger" style="height: 80%;">D</div>
-            </div>
-            
-            <div class="alert alert-danger bg-white border-danger text-danger rounded-3 small mt-3">
-                <h6 class="fw-bold"><i class="fas fa-exclamation-triangle"></i> ระบบเตือนภัย (Early Warning)</h6>
-                เมื่อบุคลากรมีความสุขต่ำกว่าเกณฑ์ ระบบจะแนะนำ <b>"Buddy"</b> ให้ช่วยดูแลเพื่อป้องกันภาวะหมดไฟ
-            </div>
-        </div>
-
-        <div id="install" class="card-guide">
-            <h5 class="section-title"><i class="fas fa-mobile-alt"></i> 1. วิธีติดตั้งบนมือถือ</h5>
-            <div class="bg-light p-3 rounded-4 mb-3">
-                <h6 class="fw-bold text-primary"><i class="fab fa-apple"></i> iPhone (Safari)</h6>
-                <p class="small mb-1">1. เปิดลิงก์ใน Safari กดปุ่ม <b>แชร์ (Share)</b> <i class="fa-solid fa-arrow-up-from-bracket"></i></p>
-                <p class="small mb-0">2. เลือกเมนู <b>"เพิ่มไปยังหน้าจอโฮม"</b></p>
-            </div>
-            <div class="bg-light p-3 rounded-4 mb-3">
-                <h6 class="fw-bold text-success"><i class="fab fa-android"></i> Android (Chrome)</h6>
-                <p class="small mb-1">1. กดปุ่ม <b>จุด 3 จุด (⋮)</b> มุมขวาบน</p>
-                <p class="small mb-0">2. เลือกเมนู <b>"ติดตั้งแอป"</b> หรือ "เพิ่มลงในหน้าจอหลัก"</p>
-            </div>
-            <a href="https://sutisukkawaguji-spec.github.io/Happiness/" class="btn-install">
-                <i class="fas fa-rocket me-2"></i> เข้าสู่แอปพลิเคชัน
-            </a>
-        </div>
-
-        <div id="record" class="card-guide">
-            <h5 class="section-title"><i class="fas fa-pen-nib"></i> 2. วิธีบันทึกความดี</h5>
-            <div class="step-item">
-                <div class="step-num">1</div>
-                <div><span class="fw-bold d-block">เลือกหมวด & อารมณ์</span><small class="text-muted">เลือกประเภทความดี (เช่น จิตอาสา) และระดับความสุข</small></div>
-            </div>
-            <div class="step-item">
-                <div class="step-num">2</div>
-                <div><span class="fw-bold d-block">ถ่ายภาพ & บันทึก</span><small class="text-muted">ถ่ายรูปกิจกรรม (สูงสุด 3 รูป) ระบบจะรวมภาพให้อัตโนมัติ</small></div>
-            </div>
-            <div class="step-item">
-                <div class="step-num">3</div>
-                <div><span class="fw-bold d-block">แท็กเพื่อน (Teamwork)</span><small class="text-muted">เลือกชื่อเพื่อนที่ทำร่วมกัน เพื่อนจะได้รับคะแนนและแจ้งเตือนทันที</small></div>
-            </div>
-        </div>
-
-        <div id="stats" class="card-guide">
-            <h5 class="section-title"><i class="fas fa-chart-pie"></i> 3. สถิติสมดุลพลัง (Radar Chart)</h5>
-            <div class="row align-items-center">
-                <div class="col-6">
-                    <div class="radar-box">
-                        <div class="radar-shape"></div>
-                        <span class="radar-label rl-top">จิตอาสา</span>
-                        <span class="radar-label rl-right">พอเพียง</span>
-                        <span class="radar-label rl-bot-r">วินัย</span>
-                        <span class="radar-label rl-bot-l">สุจริต</span>
-                        <span class="radar-label rl-left">กตัญญู</span>
-                    </div>
-                </div>
-                <div class="col-6">
-                    <h6 class="fw-bold text-primary">ความหมาย</h6>
-                    <p class="small text-muted mb-2">กราฟนี้แสดงให้เห็นว่าคุณ <b>"หนัก"</b> ไปทางด้านไหน</p>
-                    <ul class="small text-muted ps-3 mb-0">
-                        <li><b>กราฟเบี้ยว:</b> มีจุดเด่นเฉพาะด้าน</li>
-                        <li><b>กราฟกลม:</b> มีสมดุลครบทุกด้าน (Balanced)</li>
-                    </ul>
-                </div>
-            </div>
-            <div class="alert alert-info small mt-3 mb-0">
-                <i class="fas fa-lightbulb me-1"></i> <b>เป้าหมาย:</b> พยายามทำให้กราฟขยายออกเต็มวง เพื่อเป็นบุคลากรต้นแบบที่สมบูรณ์
-            </div>
-        </div>
-
-        <div id="witness" class="card-guide">
-            <h5 class="section-title"><i class="fas fa-shield-alt"></i> 4. ระบบพยาน (Witness)</h5>
-            <p class="small text-muted">ช่วยกันตรวจสอบเพื่อสังคมที่โปร่งใส</p>
-            <ul class="list-unstyled small">
-                <li class="mb-2"><i class="fas fa-check-circle text-success me-2"></i><b>กดยืนยัน:</b> เมื่อเห็นโพสต์เพื่อน กดปุ่มยืนยัน</li>
-                <li class="mb-2"><i class="fas fa-gift text-warning me-2"></i><b>รับแต้ม:</b> ผู้กดเป็นพยานรับทันที <b>+3 คะแนน</b></li>
-                <li class="mb-2"><i class="fas fa-crown text-primary me-2"></i><b>โบนัส:</b> ครบ 4 พยาน เจ้าของโพสต์ได้โบนัสพิเศษ!</li>
+        <div class="nav-pills-wrapper">
+            <ul class="nav nav-pills" id="pills-tab" role="tablist">
+                <li class="nav-item"><button class="nav-link active" id="pills-about-tab" data-bs-toggle="pill" data-bs-target="#pills-about" type="button">เกี่ยวกับ</button></li>
+                <li class="nav-item"><button class="nav-link" id="pills-howto-tab" data-bs-toggle="pill" data-bs-target="#pills-howto" type="button">วิธีใช้</button></li>
+                <li class="nav-item"><button class="nav-link" id="pills-virtue-tab" data-bs-toggle="pill" data-bs-target="#pills-virtue" type="button">5 หมวด</button></li>
+                <li class="nav-item"><button class="nav-link" id="pills-symbol-tab" data-bs-toggle="pill" data-bs-target="#pills-symbol" type="button">รางวัล</button></li>
+                <li class="nav-item"><button class="nav-link" id="pills-admin-tab" data-bs-toggle="pill" data-bs-target="#pills-admin" type="button">ผู้บริหาร</button></li>
             </ul>
         </div>
-
-        <div id="level" class="card-guide">
-            <h5 class="section-title"><i class="fas fa-chart-line"></i> 5. ระบบเลเวล & ออร่า</h5>
-            <div class="bar-label"><span><i class="fas fa-star text-info"></i> หลอดคะแนน (Score)</span><span>Lv.2</span></div>
-            <div class="progress"><div class="progress-bar bar-virtue" style="width: 50%"></div></div>
-            <p class="small text-muted mb-3">ทุกๆ 500 คะแนน = 1 เลเวล (ยิ่งทำดี ยิ่งเลเวลสูง)</p>
-
-            <div class="p-3 bg-light rounded-4 text-center">
-                <h6 class="fw-bold mb-3">🌟 สีออร่าจะเปลี่ยนตาม "จุดเด่น" ของคุณ</h6>
-                <div class="aura-demo-container">
-                    <div class="aura-item"><div class="profile-wrapper"><div class="aura-glow aura-volunteer"></div><img src="https://dummyimage.com/70x70/eee/000&text=V" class="demo-img"></div><small class="text-primary fw-bold">จิตอาสา</small></div>
-                    <div class="aura-item"><div class="profile-wrapper"><div class="aura-glow aura-sufficiency"></div><img src="https://dummyimage.com/70x70/eee/000&text=S" class="demo-img"></div><small class="text-success fw-bold">พอเพียง</small></div>
-                    <div class="aura-item"><div class="profile-wrapper"><div class="aura-glow aura-discipline"></div><img src="https://dummyimage.com/70x70/eee/000&text=D" class="demo-img"></div><small style="color:#9b59b6" class="fw-bold">วินัย</small></div>
-                    <div class="aura-item"><div class="profile-wrapper"><div class="aura-glow aura-integrity"></div><img src="https://dummyimage.com/70x70/eee/000&text=I" class="demo-img"></div><small style="color:#00cec9" class="fw-bold">สุจริต</small></div>
-                    <div class="aura-item"><div class="profile-wrapper"><div class="aura-glow aura-gratitude"></div><img src="https://dummyimage.com/70x70/eee/000&text=G" class="demo-img"></div><small style="color:#e84393" class="fw-bold">กตัญญู</small></div>
-                </div>
-            </div>
-        </div>
-
-        <div id="badge" class="card-guide">
-            <h5 class="section-title"><i class="fas fa-medal"></i> 6. เหรียญความสำเร็จ</h5>
-            <div class="d-flex align-items-center mb-3 border-bottom pb-2">
-                <div class="fs-1 me-3">🥉</div><div><h6 class="fw-bold mb-0">Rookie</h6><small class="text-muted">สะสมครบ 100 คะแนน</small></div>
-            </div>
-            <div class="d-flex align-items-center mb-3 border-bottom pb-2">
-                <div class="fs-1 me-3">🥈</div><div><h6 class="fw-bold mb-0">Pro</h6><small class="text-muted">สะสมครบ 1,000 คะแนน</small></div>
-            </div>
-            <div class="d-flex align-items-center mb-3">
-                <div class="fs-1 me-3">👑</div><div><h6 class="fw-bold mb-0">Legend</h6><small class="text-muted">สะสมครบ 10,000 คะแนน</small></div>
-            </div>
-        </div>
-
-        <div class="text-center mt-5 mb-3 text-muted opacity-50 small">
-            สำนักงานธนารักษ์พื้นที่หนองบัวลำภู<br>
-            Developed by KAI (Sutthisak Kawaguchi)
-        </div>
-
     </div>
 
+    <div class="content-container mt-5">
+        <div class="tab-content" id="pills-tabContent">
+            
+            <div class="tab-pane fade show active" id="pills-about">
+                <div class="guide-card">
+                    <h5 class="fw-bold text-primary mb-3"><i class="fas fa-bullseye me-2"></i>นิยามโครงการ</h5>
+                    <p class="text-muted" style="line-height: 1.8; font-size: 0.95rem;">
+                        <b>Happy Meter</b> คือ นวัตกรรมบริหารความสุขและขับเคลื่อนวัฒนธรรมองค์กรด้วยกลไกเกม (Gamification) 
+                        ทำหน้าที่เป็น <b>"มาตรวัดความสุขดิจิทัล"</b> เพื่อให้บุคลากรในสำนักงานธนารักษ์พื้นที่หนองบัวลำภู 
+                        ได้บันทึกความรู้สึกและสะสมแต้มความดี (TRD Core Values) ในรูปแบบที่สนุกและจับต้องได้
+                    </p>
+                </div>
+
+                <div class="guide-card">
+                    <h5 class="fw-bold text-success mb-3"><i class="fas fa-seedling me-2"></i>วัตถุประสงค์ (ทำเพื่ออะไร?)</h5>
+                    <ul class="example-list">
+                        <li><b>เฝ้าระวังสุขภาพใจ:</b> ตรวจจับภาวะหมดไฟ (Burnout) เพื่อช่วยเหลือเพื่อนร่วมงานได้ทันท่วงที</li>
+                        <li><b>ขับเคลื่อนค่านิยม:</b> ปลูกฝัง TRD (สุจริต, วินัย, จิตอาสา) ให้เป็นพฤติกรรมประจำวัน</li>
+                        <li><b>สร้างทีมเวิร์ก:</b> กระตุ้นการทำกิจกรรมร่วมกันผ่านระบบ Team Tagging</li>
+                    </ul>
+                </div>
+
+                <div class="guide-card">
+                    <h5 class="fw-bold text-warning mb-3"><i class="fas fa-gift me-2"></i>ประโยชน์ที่ได้รับ</h5>
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="fs-1 me-3">👩‍💼</div>
+                        <div>
+                            <strong class="text-dark">บุคลากร</strong>
+                            <small class="d-block text-muted">ทำงานสนุกขึ้น มีเป้าหมายในการสะสมเลเวล และได้รับการยอมรับจากเพื่อนๆ</small>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <div class="fs-1 me-3">📊</div>
+                        <div>
+                            <strong class="text-dark">ผู้บริหาร</strong>
+                            <small class="d-block text-muted">เห็นภาพรวมความสุของค์กรแบบ Real-time และประเมินผลงานได้ชัดเจน</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="pills-howto">
+                <div class="guide-card">
+                    <h5 class="fw-bold text-primary mb-4"><i class="fas fa-edit me-2"></i>วิธีบันทึกกิจกรรม</h5>
+                    <div class="step-item">
+                        <div class="step-circle">1</div>
+                        <div><span class="fw-bold">เลือกอารมณ์</span><div class="step-desc text-muted">บอกความรู้สึกวันนี้ (😞 แย่, 😐 เฉยๆ, 😁 มีความสุข)</div></div>
+                    </div>
+                    <div class="step-item">
+                        <div class="step-circle">2</div>
+                        <div><span class="fw-bold">เลือกหมวดความดี</span><div class="step-desc text-muted">เลือก 1 ใน 5 หมวด (TRD) ที่ตรงกับสิ่งที่คุณทำ</div></div>
+                    </div>
+                    <div class="step-item">
+                        <div class="step-circle">3</div>
+                        <div><span class="fw-bold">แนบรูป หรือ ลิงก์</span><div class="step-desc text-muted">ใส่รูปได้สูงสุด 3 รูป หรือแปะลิงก์ YouTube/TikTok</div></div>
+                    </div>
+                    <div class="step-item">
+                        <div class="step-circle">4</div>
+                        <div><span class="fw-bold">แท็กเพื่อน (สำคัญ!)</span><div class="step-desc text-muted">ถ้าทำเป็นทีม แท็กเพื่อนรับ <b class="text-warning">10 คะแนน</b> ทันที</div></div>
+                    </div>
+                    <div class="step-item">
+                        <div class="step-circle">5</div>
+                        <div><span class="fw-bold">กดบันทึก</span><div class="step-desc text-muted">เสร็จสิ้น! ข้อมูลจะไปโชว์ในหน้า "เรื่องราว"</div></div>
+                    </div>
+                </div>
+                
+                <div class="guide-card">
+                    <h5 class="fw-bold text-success mb-3"><i class="fas fa-check-circle me-2"></i>การเป็นพยาน</h5>
+                    <p class="small text-muted">เมื่อเห็นเพื่อนทำดี ให้กดปุ่ม <b>"เป็นพยาน" (Verify)</b> เพื่อยืนยัน<br>คุณจะได้รับค่าตอบแทน <b>+3 คะแนน</b> ทันที</p>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="pills-virtue">
+                <div class="guide-card">
+                    <div class="d-flex mb-3">
+                        <div class="virtue-icon bg-gradient-volunteer"><i class="fas fa-hands-helping"></i></div>
+                        <div>
+                            <h6 class="fw-bold text-primary mb-1">1. จิตอาสา (Volunteer)</h6>
+                            <p class="small text-muted mb-0">เสียสละเพื่อส่วนรวม มีน้ำใจ</p>
+                        </div>
+                    </div>
+                    <hr class="opacity-25 my-2">
+                    <ul class="example-list"><li>บริจาคสิ่งของ / โลหิต</li><li>ช่วยงานเพื่อนที่กำลังยุ่ง</li><li>เก็บขยะ / ทำความสะอาดพื้นที่</li></ul>
+                </div>
+                <div class="guide-card">
+                    <div class="d-flex mb-3">
+                        <div class="virtue-icon bg-gradient-sufficiency"><i class="fas fa-leaf"></i></div>
+                        <div>
+                            <h6 class="fw-bold text-success mb-1">2. พอเพียง (Sufficiency)</h6>
+                            <p class="small text-muted mb-0">พอประมาณ มีเหตุผล</p>
+                        </div>
+                    </div>
+                    <hr class="opacity-25 my-2">
+                    <ul class="example-list"><li>ปิดไฟ/แอร์ เมื่อไม่ใช้</li><li>ใช้กระดาษ 2 หน้า (Reuse)</li><li>ออมเงิน / ห่อข้าวมาทาน</li></ul>
+                </div>
+                <div class="guide-card">
+                    <div class="d-flex mb-3">
+                        <div class="virtue-icon bg-gradient-discipline"><i class="fas fa-user-clock"></i></div>
+                        <div>
+                            <h6 class="fw-bold" style="color:#8c7ae6">3. วินัย (Discipline)</h6>
+                            <p class="small text-muted mb-0">เคารพกฎ ระเบียบ เวลา</p>
+                        </div>
+                    </div>
+                    <hr class="opacity-25 my-2">
+                    <ul class="example-list"><li>เข้างาน-เลิกงาน ตรงเวลา</li><li>แต่งกายถูกระเบียบ</li><li>ส่งงานตรงตามกำหนด</li></ul>
+                </div>
+                <div class="guide-card">
+                    <div class="d-flex mb-3">
+                        <div class="virtue-icon bg-gradient-integrity"><i class="fas fa-shield-alt"></i></div>
+                        <div>
+                            <h6 class="fw-bold" style="color:#00cec9">4. สุจริต (Integrity)</h6>
+                            <p class="small text-muted mb-0">ซื่อสัตย์ โปร่งใส ตรวจสอบได้</p>
+                        </div>
+                    </div>
+                    <hr class="opacity-25 my-2">
+                    <ul class="example-list"><li>ปฏิเสธของขวัญ (No Gift Policy)</li><li>ทำงานโปร่งใส</li><li>รายงานข้อมูลจริง</li></ul>
+                </div>
+                <div class="guide-card">
+                    <div class="d-flex mb-3">
+                        <div class="virtue-icon bg-gradient-gratitude"><i class="fas fa-praying-hands"></i></div>
+                        <div>
+                            <h6 class="fw-bold" style="color:#e84393">5. กตัญญู (Gratitude)</h6>
+                            <p class="small text-muted mb-0">รู้คุณองค์กรและแผ่นดิน</p>
+                        </div>
+                    </div>
+                    <hr class="opacity-25 my-2">
+                    <ul class="example-list"><li>ร่วมกิจกรรมวันสำคัญ</li><li>รักษาภาพลักษณ์องค์กร</li><li>ดูแลทรัพย์สินสำนักงาน</li></ul>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="pills-symbol">
+                
+                <div class="guide-card">
+                    <h5 class="fw-bold mb-3" style="color: #6c5ce7;"><i class="fas fa-fire me-2"></i>ระบบออร่า (User Glow)</h5>
+                    <p class="small text-muted">แสงรอบตัวจะเปลี่ยนสีตาม <b>"ความดีที่ทำบ่อยที่สุด"</b></p>
+                    
+                    <div class="row text-center mt-3">
+                        <div class="col-6 mb-2"><span class="badge rounded-pill bg-gradient-volunteer w-100">สีฟ้า = จิตอาสา</span></div>
+                        <div class="col-6 mb-2"><span class="badge rounded-pill bg-gradient-sufficiency w-100">สีเขียว = พอเพียง</span></div>
+                        <div class="col-6 mb-2"><span class="badge rounded-pill bg-gradient-discipline w-100">สีม่วง = วินัย</span></div>
+                        <div class="col-6 mb-2"><span class="badge rounded-pill bg-gradient-integrity w-100">สีฟ้าอ่อน = สุจริต</span></div>
+                    </div>
+                    <div class="text-center"><span class="badge rounded-pill bg-gradient-gratitude px-4">สีชมพู = กตัญญู</span></div>
+                </div>
+
+                <div class="guide-card">
+                    <h5 class="fw-bold mb-3 text-warning"><i class="fas fa-medal me-2"></i>เหรียญรางวัล (Badges)</h5>
+                    <table class="table table-bordered score-table">
+                        <thead class="table-light"><tr><th>ระดับ</th><th>ชื่อยศ</th><th>เงื่อนไข</th></tr></thead>
+                        <tbody>
+                            <tr><td class="text-center">🥉</td><td>Newbie</td><td>1 ครั้ง</td></tr>
+                            <tr><td class="text-center">🥈</td><td>Rookie</td><td>10 ครั้ง</td></tr>
+                            <tr><td class="text-center">🥇</td><td>Pro</td><td>50 ครั้ง</td></tr>
+                            <tr><td class="text-center">👑</td><td>Legend</td><td>100 ครั้ง</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="pills-admin">
+                
+                <div class="guide-card">
+                    <h5 class="fw-bold text-primary mb-3"><i class="fas fa-chart-line me-2"></i>ดัชนีความสุข (Happy Trend)</h5>
+                    <p class="small text-muted">กราฟเส้นแสดงแนวโน้มความสุขเฉลี่ยของบุคลากรทั้งองค์กร ย้อนหลังตามช่วงเวลา</p>
+                    <div class="p-3 bg-light rounded border text-center">
+                        <i class="fas fa-chart-line fa-3x text-primary opacity-50"></i>
+                        <p class="small mt-2 text-muted">ตัวอย่าง: กราฟพุ่งขึ้นแสดงว่าองค์กรมีความสุข</p>
+                    </div>
+                </div>
+
+                <div class="guide-card">
+                    <h5 class="fw-bold text-success mb-3"><i class="fas fa-chart-bar me-2"></i>สมดุลค่านิยม (TRD Analysis)</h5>
+                    <p class="small text-muted">กราฟแท่งเปรียบเทียบสัดส่วนการทำความดีใน 3 ด้านหลัก (Transparent, Responsible, Dedicated)</p>
+                    
+                    <div class="chart-bar-container mt-3">
+                        <div class="chart-bar bg-primary opacity-75" style="height: 60%;"><span>60</span></div>
+                        <div class="chart-bar bg-warning opacity-75" style="height: 40%;"><span>40</span></div>
+                        <div class="chart-bar bg-danger opacity-75" style="height: 80%;"><span>80</span></div>
+                    </div>
+                    <div class="chart-label-container">
+                        <div class="chart-label">T (สุจริต)</div>
+                        <div class="chart-label">R (วินัย)</div>
+                        <div class="chart-label">D (ทุ่มเท)</div>
+                    </div>
+                </div>
+
+                <div class="guide-card">
+                    <h5 class="fw-bold text-danger mb-3"><i class="fas fa-users me-2"></i>สถานะบุคลากร</h5>
+                    <p class="small text-muted">ระบบไฟจราจรเฝ้าระวังสุขภาพใจ</p>
+                    <ul class="example-list">
+                        <li><span class="badge bg-success rounded-circle p-1 me-2"> </span><b>สีเขียว (Normal):</b> สุขภาพใจดี (Happy Score > 7)</li>
+                        <li><span class="badge bg-warning rounded-circle p-1 me-2"> </span><b>สีเหลือง (Warning):</b> เริ่มเครียด (Happy Score 5-7)</li>
+                        <li><span class="badge bg-danger rounded-circle p-1 me-2"> </span><b>สีแดง (Critical):</b> หมดไฟ/ต้องการความช่วยเหลือด่วน (Happy Score < 5)</li>
+                    </ul>
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
+    <div class="text-center mt-5 text-muted small">
+        <p>— Happy Meter Project —<br>สำนักงานธนารักษ์พื้นที่หนองบัวลำภู</p>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
