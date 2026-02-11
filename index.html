@@ -279,30 +279,9 @@
             100% { transform: translate(1px, -2px) rotate(-1deg); }
         }
 	/* Avatar กลุ่มในโพสต์ */
-	/* แถวที่ 1: ผู้ร่วมกิจกรรม (Tagged) */
-	    .row-participants {
-	        display: flex; 
-	        align-items: center; 
-	        margin-top: 8px; 
-	        padding: 4px 8px; 
-	        background-color: rgba(108, 92, 231, 0.05); /* สีม่วงจางๆ */
-	        border-radius: 10px;
-	        font-size: 0.8rem;
-	    }
-	    .tagged-img { width: 30px; height: 30px; border-radius: 50%; border: 2px solid white; margin-left: -8px; object-fit: cover; }
-	    .tagged-img:first-child { margin-left: 0; }
-	
-	    /* แถวที่ 2: พยาน (Witness) */
-	    .row-witness {
-	        display: flex; 
-	        align-items: center; 
-	        margin-top: 8px; 
-	        padding: 4px 8px;
-	        background-color: rgba(0, 184, 148, 0.05); /* สีเขียวจางๆ */
-	        border-radius: 10px;
-	        font-size: 0.8rem;
-	    }
-	    .witness-img { width: 25px; height: 25px; border-radius: 50%; border: 1px solid white; margin-right: 4px; object-fit: cover; }
+        .tagged-group { display: flex; align-items: center; margin-top: 5px; }
+        .tagged-img { width: 30px; height: 30px; border-radius: 50%; border: 2px solid white; margin-left: -10px; object-fit: cover; }
+        .tagged-img:first-child { margin-left: 0; }
         
         /* การแจ้งเตือน Reciprocal (เคยแท็กกัน) */
         .reciprocal-alert { background-color: #f0f8ff; border-left: 4px solid #00a8ff; padding: 8px; margin-top: 8px; font-size: 0.8rem; border-radius: 4px; display: flex; align-items: center; }
@@ -688,42 +667,14 @@
         }
     }
     // --- 📸 IMAGE LOGIC ---
-	function handleFileSelect(input) {
+    function handleFileSelect(input) {
         if (!input.files || input.files.length === 0) return;
-        
-        // แปลง FileList เป็น Array
-        const rawFiles = Array.from(input.files);
-        const processedFiles = [];
-
-        // วนลูปเช็คไฟล์ที่มีปัญหา (.bin)
-        rawFiles.forEach(file => {
-            // เช็คว่าถ้าเป็น .bin หรือไม่มีนามสกุล หรือ type แปลกๆ ให้บังคับเป็น image/jpeg
-            if (file.name.endsWith('.bin') || !file.type || file.type === 'application/octet-stream') {
-                
-                // สร้างชื่อไฟล์ใหม่
-                const newName = "fixed_img_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5) + ".jpg";
-                
-                // สร้างไฟล์ใหม่โดยบังคับ Type เป็น Jpeg
-                try {
-                    const newFile = new File([file], newName, { type: "image/jpeg" });
-                    processedFiles.push(newFile);
-                } catch (e) {
-                    // Fallback สำหรับ Browser เก่ามากๆ ที่ไม่รองรับ new File constructor
-                    // ให้ใช้ไฟล์เดิมแต่พยายามไปต่อ
-                    processedFiles.push(file); 
-                }
-            } else {
-                // ไฟล์ปกติ (.jpg, .png) ใช้ได้เลย
-                processedFiles.push(file);
-            }
-        });
-
-        if (currentImageFiles.length + processedFiles.length > 3) {
+        const newFiles = Array.from(input.files);
+        if (currentImageFiles.length + newFiles.length > 3) {
             Swal.fire('แจ้งเตือน', 'เลือกได้สูงสุด 3 รูปครับ', 'warning');
             input.value = ''; return;
         }
-
-        currentImageFiles = [...currentImageFiles, ...processedFiles];
+        currentImageFiles = [...currentImageFiles, ...newFiles];
         refreshGallery();
         input.value = ''; 
     }
@@ -915,46 +866,40 @@
     }
 	
     // ค้นหาฟังก์ชัน checkUser แล้วเปลี่ยนเป็นตัวนี้ครับ
-	function checkUser(userId, profile) {
-        console.log("กำลังเชื่อมต่อไประบบ..."); 
+    function checkUser(userId, profile) {
+        console.log("กำลังเชื่อมต่อไประบบ..."); // เช็คใน Console
         
+        // ใช้ fetch แบบระบุ Header เพื่อกัน Browser บล็อก
         fetch(GAS_URL, { 
             method: 'POST', 
-            headers: { "Content-Type": "text/plain;charset=utf-8" }, 
+            headers: { "Content-Type": "text/plain;charset=utf-8" }, // 👈 สำคัญมาก! ช่วยให้ผ่าน CORS
             body: JSON.stringify({ action: 'check_user', userId: userId }) 
         })
-        .then(res => res.json())
+        .then(res => {
+            // ถ้าเชื่อมต่อไม่ได้ ให้แสดง Error
+            if (!res.ok) throw new Error("HTTP error " + res.status);
+            return res.json();
+        })
         .then(data => {
-            console.log("รับข้อมูลแล้ว:", data);
-            
+            console.log("รับข้อมูลแล้ว:", data); // เช็คว่าได้ข้อมูลมาไหม
             if (data.exists) { 
-                // 1. เก็บข้อมูล User
                 currentUser = { ...data.user, userId: userId }; 
                 renderProfile(); 
-                
-                // ✅ 2. โหลดรูปเพื่อนให้เสร็จก่อน -> แล้วค่อยโหลด Feed (หัวใจสำคัญ)
-                cacheUsers().then(() => {
-                    console.log("โหลดรูปเพื่อนเสร็จแล้ว... เริ่มวาด Feed");
-                    fetchFeed(); 
-                });
-
-                // 3. โหลดข้อมูลอื่นๆ
+				cacheUsers();
                 fetchManagerData();
                 fetchFriendsList(); 
-
             } else { 
-                // กรณีสมาชิกใหม่
                 registerUser(userId, profile); 
             }
-            
             document.getElementById('loading').style.display = 'none';
         })
         .catch(err => {
             console.error('Connection Failed:', err);
+            // แจ้งเตือนบนหน้าจอว่าเชื่อมไม่ได้
             Swal.fire({
                 icon: 'error',
                 title: 'เชื่อมต่อระบบไม่สำเร็จ',
-                text: 'กรุณาตรวจสอบ URL หรือการตั้งค่า Deploy',
+                text: 'กรุณาตรวจสอบ URL หรือการตั้งค่า Deploy (ต้องเป็น Anyone)',
                 footer: err.message
             });
             document.getElementById('loading').style.display = 'none';
@@ -1732,36 +1677,11 @@
 
         fetch(GAS_URL + '?action=get_feed&t=' + Date.now())
         .then(r => r.json())
-        .then(data => { 
+        .then(feed => {
             container.innerHTML = '';
-            
-            // --- 🛡️ ส่วนป้องกัน Error (Robust Data Handling) ---
-            let feed = [];
-            
-            // กรณี 1: Backend ส่ง error กลับมา
-            if (data && data.status === 'error') {
-                console.error("Server Error:", data.message);
-                container.innerHTML = `<div class="text-danger text-center mt-5">เกิดข้อผิดพลาด: ${data.message}</div>`;
-                return;
-            }
+            globalFeedData = feed; 
 
-            // กรณี 2: แยกข้อมูล feed และ userMap
-            if (Array.isArray(data)) {
-                feed = data; // รองรับระบบเก่า
-            } else if (data && typeof data === 'object') {
-                feed = data.feed || []; // รับค่า feed (ถ้าไม่มีให้เป็น array ว่าง)
-                
-                // อัปเดตข้อมูลเพื่อนเข้าตัวแปรกลางทันที
-                if (data.userMap) {
-                    Object.assign(allUsersMap, data.userMap);
-                }
-            } else {
-                feed = []; // กันตาย
-            }
-
-            globalFeedData = feed;
-
-            // --- 🔔 Logic Badge ---
+            // ... (ส่วน Logic Badge/Notification คงเดิม) ...
             const lastSeen = parseInt(localStorage.getItem('lastSeenStoryCount') || 0);
             const newStories = feed.length - lastSeen;
             const badgeBox = document.getElementById('nav-stories-btn');
@@ -1772,15 +1692,16 @@
                 localStorage.setItem('lastSeenStoryCount', feed.length);
             }
 
-            // --- 🔍 Logic Filter ---
+            // ... (ส่วน Logic Filter คงเดิม) ...
             const filteredFeed = feed.filter(post => {
                 let pass = true;
                 let postDate = new Date(post.timestamp);
                 let isMyPost = String(post.user_line_id) === String(currentUser.userId);
                 let amITagged = (post.taggedFriends || "").includes(currentUser.userId);
-                let isPrivate = post.privacy === 'private';
                 
+                let isPrivate = post.privacy === 'private';
                 if (isPrivate && !isMyPost) return false;
+
                 if (filterType === 'related' && !isMyPost && !amITagged) pass = false;
                 if (filterType === 'request') {
                     let isPending = post.status !== 'approved';
@@ -1796,55 +1717,58 @@
                 return;
             }
 
-            // --- 🎨 วาด HTML ---
+            // --- 🎨 เริ่มวาด HTML ---
             filteredFeed.forEach(post => {
                 let isMyPost = String(post.user_line_id) === String(currentUser.userId);
                 let isPrivate = post.privacy === 'private';
                 let canSeeContent = !isPrivate || isMyPost;
 
-                // แปลง Tagged ID
-                let rawTagged = post.taggedFriends ? String(post.taggedFriends) : "";
-                let taggedIds = (rawTagged.length > 5) ? rawTagged.split(',').map(s => s.trim()) : [];
+                let taggedIds = (post.taggedFriends && post.taggedFriends.length > 5) 
+                    ? post.taggedFriends.split(',').map(s => s.trim()) 
+                    : [];
                 
                 let isTeam = taggedIds.length > 0;
-                let amITagged = taggedIds.includes(String(currentUser.userId)); 
-
                 let verifyList = post.verifies || [];
                 let isVerifiedByMe = verifyList.some(v => String(v.lineId) === String(currentUser.userId));
                 
-                // 1️⃣ แถวที่ 1: ผู้ร่วมกิจกรรม (Team)
+                // 🔹 1. [แก้ไขใหม่] อวาตาร์ทีม (แสดงบรรทัดใหม่)
                 let taggedHtml = '';
-                // ⚠️ ใช้ post.tagged_avatars จากหลังบ้าน ถ้าไม่มีให้ใช้ allUsersMap
-                let teamList = post.tagged_avatars || []; 
-                if (teamList.length === 0 && taggedIds.length > 0) {
-                    // Fallback: ถ้าหลังบ้านไม่ส่ง object มา ให้หาจาก map หน้าบ้าน
-                    teamList = taggedIds.map(id => allUsersMap[id]).filter(Boolean);
-                }
-
                 if (isTeam && canSeeContent) {
-                    taggedHtml = `<div class="row-participants animate__animated animate__fadeIn">
-                        <small class="text-primary me-2 fw-bold"><i class="fas fa-users"></i> ทีม:</small>
-                        <div class="d-flex align-items-center">`;
-                    
-                    teamList.forEach(u => {
-                        taggedHtml += `<img src="${u.img}" class="tagged-img" title="${u.name}" onerror="this.style.display='none'">`;
+                    taggedHtml = '<div class="d-flex align-items-center mt-2 ps-1 animate__animated animate__fadeIn">'; // เว้นบรรทัดใหม่
+                    taggedHtml += '<small class="text-muted me-2" style="font-size:0.75rem;"><i class="fas fa-users text-info"></i> ร่วมกับ:</small>';
+                    taggedHtml += '<div class="tagged-group">';
+                    taggedIds.forEach(fid => {
+                        let fInfo = allUsersMap[fid];
+                        if(fInfo) taggedHtml += `<img src="${fInfo.img}" class="tagged-img" title="${fInfo.name}" onerror="this.style.display='none'">`;
                     });
-                    taggedHtml += `</div></div>`;
+                    taggedHtml += '</div></div>';
                 }
 
-                // 2️⃣ แถวที่ 2: พยาน (Witness)
+                // 🔹 2. อวาตาร์พยาน (Witness) - (คงเดิม อยู่ด้านล่าง)
                 let witnessHtml = '';
                 if (verifyList.length > 0 && canSeeContent) {
-                    witnessHtml = `<div class="row-witness animate__animated animate__fadeIn">
-                        <small class="text-success me-2 fw-bold"><i class="fas fa-check-circle"></i> พยาน:</small>
-                        <div class="d-flex align-items-center">`;
+                    witnessHtml = '<div class="witness-group"><span class="text-success me-2 fw-bold" style="font-size:0.7rem"><i class="fas fa-check-circle"></i> พยาน:</span>';
                     verifyList.forEach(v => {
                         witnessHtml += `<img src="${v.img}" class="witness-img" title="${v.name}" onerror="this.style.display='none'">`;
                     });
-                    witnessHtml += `</div></div>`;
+                    witnessHtml += '</div>';
                 }
 
-                // 🔘 Logic ปุ่มกด
+                // 🔹 3. Reciprocal Alert
+                let reciprocalHtml = '';
+                if (isTeam && isMyPost && canSeeContent) {
+                    let history = feed.filter(p => 
+                        p.id !== post.id && 
+                        String(p.user_line_id) !== String(currentUser.userId) && 
+                        (p.taggedFriends || "").includes(currentUser.userId) && 
+                        taggedIds.includes(String(p.user_line_id))
+                    );
+                    if (history.length > 0) {
+                        reciprocalHtml = `<div class="reciprocal-alert"><i class="fas fa-history me-2 text-primary"></i> คุณและ ${history[0].user_name} เคยทำดีร่วมกันล่าสุดเมื่อ ${new Date(history[0].timestamp).toLocaleDateString('th-TH')}</div>`;
+                    }
+                }
+
+                // 🔹 4. Logic ปุ่มกด
                 let btnHtml = '';
                 if (isPrivate) {
                     if (isMyPost) btnHtml = `<span class="badge bg-secondary rounded-pill ms-auto"><i class="fas fa-lock"></i> ส่วนตัว</span>`;
@@ -1856,22 +1780,16 @@
                             else btnHtml = `<span class="badge bg-secondary rounded-pill ms-auto"><i class="fas fa-clock"></i> รอพยาน</span>`;
                         }
                     } else {
-                        if (amITagged) {
-                            btnHtml = `<span class="badge bg-light text-primary border rounded-pill ms-auto"><i class="fas fa-user-tag"></i> คุณอยู่ในทีม</span>`;
-                        } else {
+                        let amITagged = taggedIds.includes(String(currentUser.userId));
+                        if (isTeam) { /* ทีมไม่ต้องกด */ } 
+                        else {
                             if (isVerifiedByMe) btnHtml = `<button class="btn btn-sm btn-success rounded-pill ms-auto disabled">เป็นพยานแล้ว</button>`;
                             else btnHtml = `<button onclick="verifyPost('${post.id}', '${post.user_line_id}', '${post.user_name}', this)" class="btn btn-sm btn-outline-primary rounded-pill ms-auto">เป็นพยาน (+3)</button>`;
                         }
                     }
                 }
 
-                // Reaction & Content
-                let reciprocalHtml = '';
-                if (isTeam && isMyPost && canSeeContent) {
-                    let history = feed.filter(p => p.id !== post.id && String(p.user_line_id) !== String(currentUser.userId) && (p.taggedFriends || "").includes(currentUser.userId) && taggedIds.includes(String(p.user_line_id)));
-                    if (history.length > 0) reciprocalHtml = `<div class="reciprocal-alert"><i class="fas fa-history me-2 text-primary"></i> เคยทำดีร่วมกันเมื่อ ${new Date(history[0].timestamp).toLocaleDateString('th-TH')}</div>`;
-                }
-
+                // Multi-Reaction
                 let myReaction = (post.likes || []).find(u => String(u.lineId) === String(currentUser.userId));
                 let reactIcon = '🤍'; 
                 const iconMap = { 'like': '👍', 'love': '❤️', 'wow': '😮', 'laugh': '😂', 'sad': '😢', 'pray': '🙏' };
@@ -1880,7 +1798,6 @@
                 let noteContent = canSeeContent ? post.note : '<span class="text-muted fst-italic"><i class="fas fa-lock"></i> เนื้อหาส่วนตัว</span>';
                 let imageContent = (canSeeContent && post.image) ? `<img src="${post.image}" class="feed-img" onclick="viewImage('${post.image}')">` : '';
 
-                // Render HTML Card
                 container.innerHTML += `
                 <div class="glass-card feed-card p-3 mb-3 animate__animated animate__fadeIn">
                     <div class="feed-header d-flex align-items-start">
@@ -1901,6 +1818,7 @@
                     
                     <div class="mt-2 mb-2 p-2 bg-light rounded text-dark">${noteContent}</div>
                     ${imageContent}
+                    
                     ${witnessHtml} 
 
                     <div class="feed-actions border-top pt-2 d-flex justify-content-between align-items-center mt-2">
@@ -1924,7 +1842,7 @@
         })
         .catch(err => {
             console.error(err);
-            container.innerHTML = '<div class="text-danger text-center mt-5">โหลดข้อมูลไม่สำเร็จ <br><small class="text-muted">กรุณาลองรีเฟรชหน้าจอ</small></div>';
+            container.innerHTML = '<div class="text-danger text-center mt-5">โหลดข้อมูลไม่สำเร็จ</div>';
         });
     }
     // ✅ ฟังก์ชัน Like (เพิ่มใหม่)
@@ -2180,14 +2098,6 @@
 </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
 
 
 
