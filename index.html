@@ -372,7 +372,27 @@
                 <button class="mood-btn" onclick="setMood(2, this)">😐</button>
                 <button class="mood-btn active" onclick="setMood(3, this)">😁</button>
             </div>
-
+            <div id="view-farm" class="page-section">
+		    <h2 style="color:#2E7D32; margin-top:0;">🌱 แปลงผักช่างสำรวจ</h2>
+		    
+		    <div id="farm-loading" style="text-align:center; color:#888; margin-top:20px;">
+		      กำลังโหลดข้อมูลผัก...
+		    </div>
+		
+		    <div id="farm-list"></div>
+		  </div>
+		
+		
+		  <div class="bottom-nav">
+		    <div class="nav-item active" onclick="switchTab('happy', this)">
+		      <span class="nav-icon">😊</span>
+		      ความสุข
+		    </div>
+		    <div class="nav-item" onclick="switchTab('farm', this)">
+		      <span class="nav-icon">🌱</span>
+		      แปลงผัก
+		    </div>
+		  </div>
             <label class="form-label fw-bold d-flex align-items-center">หมวดความดี <i class="fas fa-circle-question info-btn fa-lg" onclick="showVirtueInfo()"></i></label>
             <select class="form-select mb-3" id="virtueSelect" style="border-radius: 12px; height: 50px; font-weight: bold;">
                 <option value="" disabled selected>— เลือกหมวดความดี —</option>
@@ -392,35 +412,7 @@
                     <span class="badge bg-white text-dark border p-2" onclick="addEmoji('🔥')">🔥</span>
                     <span class="badge bg-white text-dark border p-2" onclick="addEmoji('🙏')">🙏</span>
                 </div>
-
-				</div>
-				
-				<div id="view-farm" class="page-section">
-				    <div style="background: white; padding: 20px; border-radius: 15px; min-height: 80vh;">
-				        <h2 style="color:#2E7D32; margin-top:0; border-bottom: 2px solid #eee; padding-bottom: 10px;">
-				            🌱 แปลงผักช่างสำรวจ
-				        </h2>
-				    
-				        <div id="farm-loading" style="text-align:center; color:#888; margin-top:40px;">
-				            <div class="spinner-border text-success" role="status"></div>
-				            <p class="mt-2">กำลังโหลดข้อมูลผัก...</p>
-				        </div>
-				
-				        <div id="farm-list"></div>
-				    </div>
-				</div>
-				
-				<div class="bottom-nav">
-				    <div class="nav-item active" onclick="switchTab('happy', this)">
-				        <span class="nav-icon">😊</span>
-				        ความสุข
-				    </div>
-				    <div class="nav-item" onclick="switchTab('farm', this)">
-				        <span class="nav-icon">🌱</span>
-				        แปลงผัก
-				    </div>
-				</div>
-				
+                
 			<div class="mb-4">
                 
                 <div class="p-3 bg-white border rounded-4 shadow-sm">
@@ -2350,36 +2342,4 @@
 </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
