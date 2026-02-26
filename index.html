@@ -3942,14 +3942,6 @@
             });
         }
 
-        // =====================================================
-        // 🔔 แสดงปุ่ม + ตาม Role Level
-        // =====================================================
-        function updateAddAnnounceButton() {
-            const btn = document.getElementById('addAnnounceBtnInPanel');
-            if (!btn || !currentUser) return;
-            btn.classList.toggle('d-none', !canPostNews()); // Level 1, 2, 3 เห็นปุ่ม
-        }
 
         // ✅ ฟังก์ชัน Like (เพิ่มใหม่)
         function likePost(postId) {
@@ -4335,13 +4327,13 @@
             }
         });
 
-        // แสดง/ซ่อนปุ่ม + ตาม role
+        // แสดง/ซ่อนปุ่ม + ตาม role level (Level 1-2-3 เห็นปุ่ม)
         function updateAddAnnounceButton() {
             const btn = document.getElementById('addAnnounceBtnInPanel');
             if (!btn || !currentUser) return;
-            const role = String(currentUser.role || '').toLowerCase();
-            const isManager = ['manager', 'admin', 'ผู้บริหาร', 'ผู้อำนวยการ', 'head', 'supervisor', 'executive'].some(r => role.includes(r));
-            btn.classList.toggle('d-none', !isManager);
+            const level = getUserLevel(currentUser);
+            // Level 1 (admin), Level 2 (ผู้บริหาร), Level 3 (ผู้จัดการข่าวสาร) → เห็นปุ่ม
+            btn.classList.toggle('d-none', level > 3);
         }
 
         // ดึงประกาศจาก GAS
