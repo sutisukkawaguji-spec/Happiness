@@ -1292,6 +1292,8 @@
                 </div>
             </div>
             <div id="notifList">
+                <div id="debugRoleInfo" class="text-center p-1 mb-1 bg-light border-bottom"
+                    style="font-size: 0.65rem; color: #999;"></div>
                 <div class="text-center py-4 text-muted small">ยังไม่มีข่าวสาร</div>
             </div>
         </div>
@@ -4309,6 +4311,7 @@
             } else {
                 panel.classList.add('show');
                 fetchAnnouncements(); // โหลดข้อมูลใหม่ทุกครั้งที่เปิด
+                updateAddAnnounceButton(); // ตรวจสิทธิ์ทุกครั้งที่เปิด Panel
             }
         }
 
@@ -4335,16 +4338,38 @@
             const btn = document.getElementById('addAnnounceBtnInPanel');
             const mgrTab = document.getElementById('nav-manager-btn');
 
-            if (!currentUser) return;
+            if (!currentUser) {
+                console.log("updateAddAnnounceButton: No currentUser yet");
+                return;
+            }
 
             const level = getUserLevel(currentUser);
             console.log("Current User Role:", currentUser.role, "Calculated Level:", level);
 
-            // Level 1 (admin), Level 2 (ผู้บริหาร), Level 3 (ผู้จัดการข่าวสาร) -> เห็นปุ่ม +
-            if (btn) btn.classList.toggle('d-none', level > 3);
+            // แสดงสถานะสิทธิ์ (Debug)
+            const debugInfo = document.getElementById('debugRoleInfo');
+            if (debugInfo) {
+                const levelNames = { 1: 'Admin', 2: 'Manager', 3: 'NewsManager', 4: 'User' };
+                debugInfo.innerText = `Role: ${currentUser.role || 'None'} (${levelNames[level] || 'User'})`;
+            }
 
-            // Level 1, 2 -> เห็นเมนูผู้บริหาร
-            if (mgrTab) mgrTab.style.display = (level <= 2) ? 'flex' : 'none';
+            // Level 1-2-3 (Admin, Manager, NewsManager) -> เห็นปุ่ม +
+            if (btn) {
+                if (level <= 3) {
+                    btn.classList.remove('d-none');
+                    btn.style.display = 'inline-flex'; // บังคับแสดงผล
+                    btn.style.alignItems = 'center';
+                    btn.style.justifyContent = 'center';
+                } else {
+                    btn.classList.add('d-none');
+                    btn.style.display = 'none';
+                }
+            }
+
+            // Level 1, 2 -> เห็นเมนูผู้บริหารด้านล่าง
+            if (mgrTab) {
+                mgrTab.style.display = (level <= 2) ? 'flex' : 'none';
+            }
         }
 
         // ดึงประกาศจาก GAS
