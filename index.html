@@ -1258,7 +1258,49 @@
         [data-theme="dark"] .notif-item {
             border-bottom-color: #3a3a55;
         }
+
+        /* Animation สั่นกระดิ่ง */
+        @keyframes bell-shake {
+            0% {
+                transform: rotate(0);
+            }
+
+            15% {
+                transform: rotate(20deg);
+            }
+
+            30% {
+                transform: rotate(-20deg);
+            }
+
+            45% {
+                transform: rotate(15deg);
+            }
+
+            60% {
+                transform: rotate(-15deg);
+            }
+
+            75% {
+                transform: rotate(10deg);
+            }
+
+            85% {
+                transform: rotate(-5deg);
+            }
+
+            100% {
+                transform: rotate(0);
+            }
+        }
+
+        .bell-shake {
+            display: inline-block;
+            animation: bell-shake 0.8s cubic-bezier(.36, .07, .19, .97) both;
+        }
     </style>
+    <audio id="notifSound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"
+        preload="auto"></audio>
 </head>
 
 <body>
@@ -1358,7 +1400,7 @@
                     <div class="d-flex justify-content-between align-items-center mb-1">
                         <h4 id="userName" class="fw-bold mb-0">...</h4>
                         <button class="notif-bell-btn" id="notifBellBtn" onclick="toggleNotifPanel()" title="แจ้งเตือน">
-                            🔔
+                            <span id="bellIcon" style="display:inline-block;">🔔</span>
                             <span class="notif-count-badge" id="notifBadge" style="display:none;">0</span>
                         </button>
                     </div>
@@ -4320,6 +4362,14 @@
             if (panel) panel.classList.remove('show');
         }
 
+        function openNotifPanel() {
+            const panel = document.getElementById('notifPanel');
+            if (panel) {
+                panel.classList.add('show');
+                fetchAnnouncements();
+            }
+        }
+
         // ปิดเมื่อคลิก outside (ไม่ใช้ SweetAlert — ปิดผ่าน closeNotifPanel เท่านั้น)
         document.addEventListener('click', function (e) {
             const panel = document.getElementById('notifPanel');
@@ -4378,23 +4428,58 @@
                 .then(r => r.json())
                 .then(data => {
                     const gasAnnouncements = (data && data.announcements) || [];
-                    // รวมกับ notifications จาก config
-                    const configNotifs = appNotifications.filter(n => n.source === 'config');
+
                     // แปลง GAS announcements เป็น format เดียวกัน
                     const gasNotifs = gasAnnouncements.map(a => ({
                         id: a.id,
                         title: (CATEGORY_ICONS[a.category] || '📢') + ' ' + a.title,
                         body: a.body,
-                        time: a.date ? `📅 ${a.date}` : '',
+                        time: a.displayDate ? `📅 ${a.displayDate}` : (a.date ? `📅 ${a.date}` : ''),
                         source: 'gas',
                         category: a.category
                     }));
+
+                    // รวมกับ notifications จาก config (ที่เป็นระบบ)
+                    const configNotifs = appNotifications.filter(n => n.source === 'config');
+
+                    // กรองเฉพาะอันใหม่เพื่อแจ้งเตือน (เช็คเฉพาะถ้าเคยมีข้อมูลอยู่แล้ว เพื่อไม่ให้ดังตอนโหลดหน้าแรก)
+                    const isInitialLoad = appNotifications.length === 0;
+                    const oldIds = new Set(appNotifications.map(n => n.id));
+                    let hasNew = false;
+
+                    gasNotifs.forEach(n => {
+                        if (!oldIds.has(n.id)) {
+                            if (!isInitialLoad) hasNew = true;
+                        }
+                    });
+
                     // รวมและเรียงล่าสุดก่อน
                     const combined = [...gasNotifs, ...configNotifs];
                     appNotifications = combined;
                     renderNotifList();
+
+                    // แจ้งเตือนสั่นและเสียงถ้ามีใหม่ทีหลัง
+                    if (hasNew) {
+                        triggerNotificationEffects();
+                    }
                 })
                 .catch(() => renderNotifList()); // ถ้าโหลดไม่ได้ แสดงที่มีอยู่
+        }
+
+        function triggerNotificationEffects() {
+            // สั่นกระดิ่ง
+            const bell = document.getElementById('bellIcon');
+            if (bell) {
+                bell.classList.remove('bell-shake');
+                void bell.offsetWidth; // force reflow
+                bell.classList.add('bell-shake');
+            }
+            // เล่นเสียง
+            const sound = document.getElementById('notifSound');
+            if (sound) {
+                sound.currentTime = 0;
+                sound.play().catch(e => console.log("Sound play failed:", e));
+            }
         }
 
         // render notification list
@@ -4509,9 +4594,8 @@
                             position: 'top', timer: 3000, showConfirmButton: false
                         });
                         // เปิด panel ใหม่พร้อมรีโหลดข้อมูล
-                        setTimeout(() => {
-                            toggleNotifPanel();
-                        }, 500);
+                        // เปิด panel ใหม่เพื่อแสดงผลล่าสุด
+                        setTimeout(() => openNotifPanel(), 500);
                     } else {
                         Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: data.message || '' });
                     }
@@ -4524,7 +4608,7 @@
                         title: '✅ บันทึกประกาศสำเร็จ!',
                         position: 'top', timer: 3000, showConfirmButton: false
                     });
-                    setTimeout(() => toggleNotifPanel(), 500);
+                    setTimeout(() => openNotifPanel(), 500);
                 });
         }
 
