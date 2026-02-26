@@ -1688,6 +1688,43 @@
         let allUsersMap = {};
         let globalAppUsers = [];
         let globalFeedData = [];
+
+        // =====================================================
+        // 🔒 ROLE PERMISSION SYSTEM (4 Levels)
+        // =====================================================
+        // Level 1: ผู้ดูแลระบบ (Admin)         - เข้าได้ทุกอย่าง
+        // Level 2: ผู้บริหาร (Executive)         - บริหารส่วน, ประกาศข่าว + ดู Dashboard
+        // Level 3: ผู้จัดการข่าวสาร (NewsEditor)  - ประกาศข่าวได้ (ไม่เห็น Dashboard)
+        // Level 4: ผู้ใช้งานทั่วไป (User)
+        const ROLE_MAP = {
+            // Level 1
+            'ผู้ดูแลระบบ': 1, 'admin': 1, 'superadmin': 1, 'systemadmin': 1,
+            // Level 2
+            'ผู้บริหาร': 2, 'ผู้อำนวยการ': 2, 'executive': 2, 'manager': 2,
+            'head': 2, 'supervisor': 2, 'director': 2,
+            // Level 3
+            'ผู้จัดการข่าวสาร': 3, 'newseditor': 3, 'editor': 3, 'pr': 3, 'news': 3,
+        };
+
+        function getUserLevel(user) {
+            if (!user) return 4;
+            const role = String(user.role || '').toLowerCase().trim();
+            // ตรวจสอบแบบ exact match ก่อน
+            for (const key in ROLE_MAP) {
+                if (role === key.toLowerCase()) return ROLE_MAP[key];
+            }
+            // ตรวจสอบแบบ contains
+            for (const key in ROLE_MAP) {
+                if (role.includes(key.toLowerCase())) return ROLE_MAP[key];
+            }
+            return 4; // default: ผู้ใช้งานทั่วไป
+        }
+
+        // Shorthand helpers
+        const canManageSystem = () => getUserLevel(currentUser) <= 1; // Level 1
+        const canViewDashboard = () => getUserLevel(currentUser) <= 2; // Level 1-2
+        const canPostNews = () => getUserLevel(currentUser) <= 3; // Level 1-2-3
+
         let currentFeedFilter = 'all';
         let globalUserStatsMap = {};
         let currentFeedLimit = 20;
@@ -3825,6 +3862,93 @@
         function loadMoreFeed() {
             currentFeedLimit += 20;
             fetchFeed(true);
+        }
+
+        // =====================================================
+        // 🗑️ ลบโพสต์ (เฉพาะเจ้าของ - คะแนนหักด้วย)
+        // =====================================================
+        function deletePost(postId) {
+            Swal.fire({
+                title: 'ลบโพสต์นี้?',
+                text: 'คะแนนที่ได้จากโพสต์นี้จะถูกหักออกด้วย',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#e74c3c',
+                cancelButtonColor: '#aaa',
+                confirmButtonText: '🗑️ ลบเลย',
+                cancelButtonText: 'ยกเลิก'
+            }).then(result => {
+                if (!result.isConfirmed) return;
+                Swal.fire({ title: 'กำลังลบ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                fetch(GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'delete_post', postId, userId: currentUser.userId })
+                })
+                    .then(r => r.json()).then(data => {
+                        if (data.status === 'success') {
+                            Swal.fire({ toast: true, icon: 'success', title: 'ลบโพสต์แล้ว (-' + (data.scoreDeducted || 0) + ' คะแนน)', position: 'top', timer: 3000, showConfirmButton: false });
+                            fetchFeed(); // รีโหลด feed
+                        } else {
+                            Swal.fire({ icon: 'error', title: 'ลบไม่สำเร็จ', text: data.message || '' });
+                        }
+                    }).catch(() => {
+                        // no-cors fallback
+                        Swal.fire({ toast: true, icon: 'success', title: 'ลบโพสต์แล้ว', position: 'top', timer: 3000, showConfirmButton: false });
+                        fetchFeed();
+                    });
+            });
+        }
+
+        // =====================================================
+        // ✏️ แก้ไขโพสต์ (เฉพาะเจ้าของ)
+        // =====================================================
+        function editPost(postId, encodedNote) {
+            const currentNote = decodeURIComponent(encodedNote);
+            Swal.fire({
+                title: '✏️ แก้ไขโพสต์',
+                input: 'textarea',
+                inputValue: currentNote,
+                inputPlaceholder: 'แก้ไขข้อความที่ต้องการ...',
+                inputAttributes: { rows: 4, style: 'font-family:Kanit,sans-serif;font-size:0.9rem;' },
+                showCancelButton: true,
+                confirmButtonText: '💾 บันทึก',
+                cancelButtonText: 'ยกเลิก',
+                confirmButtonColor: '#6c5ce7',
+                preConfirm: (newNote) => {
+                    if (!newNote || !newNote.trim()) {
+                        Swal.showValidationMessage('กรุณากรอกข้อความ');
+                        return false;
+                    }
+                    return newNote.trim();
+                }
+            }).then(result => {
+                if (!result.isConfirmed) return;
+                Swal.fire({ title: 'กำลังบันทึก...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                fetch(GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'edit_post', postId, newNote: result.value, userId: currentUser.userId })
+                })
+                    .then(r => r.json()).then(data => {
+                        if (data.status === 'success') {
+                            Swal.fire({ toast: true, icon: 'success', title: '✅ แก้ไขโพสต์แล้ว!', position: 'top', timer: 3000, showConfirmButton: false });
+                            fetchFeed();
+                        } else {
+                            Swal.fire({ icon: 'error', title: 'แก้ไขไม่สำเร็จ', text: data.message || '' });
+                        }
+                    }).catch(() => {
+                        Swal.fire({ toast: true, icon: 'success', title: '✅ แก้ไขโพสต์แล้ว!', position: 'top', timer: 3000, showConfirmButton: false });
+                        fetchFeed();
+                    });
+            });
+        }
+
+        // =====================================================
+        // 🔔 แสดงปุ่ม + ตาม Role Level
+        // =====================================================
+        function updateAddAnnounceButton() {
+            const btn = document.getElementById('addAnnounceBtnInPanel');
+            if (!btn || !currentUser) return;
+            btn.classList.toggle('d-none', !canPostNews()); // Level 1, 2, 3 เห็นปุ่ม
         }
 
         // ✅ ฟังก์ชัน Like (เพิ่มใหม่)
