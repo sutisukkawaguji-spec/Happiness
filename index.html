@@ -2115,20 +2115,7 @@
         main();
 
         // --- 🌍 Global Data ---
-        // โหลดข้อมูลเพื่อนมารอไว้ก่อน (แก้ให้ชัวร์ขึ้น)
-        function cacheUsers() {
-            return fetch(`${GAS_URL}?action=get_users`)
-                .then(r => r.json())
-                .then(data => {
-                    allUsersMap = {}; // Reset
-                    data.forEach(u => {
-                        // เก็บทั้ง key แบบ string ปกติ
-                        allUsersMap[String(u.lineId)] = u;
-                    });
-                    console.log("Cached Users:", Object.keys(allUsersMap).length);
-                    fetchFriendsList();
-                });
-        }
+
         // --- 🔓 Unlock Step Logic ---
         function unlockStep(step, val, btn) {
             if (step === 1) {
@@ -2564,6 +2551,7 @@
                             renderAnnouncement(data.config);
                             loadNotificationsFromConfig(data.config); // ✅ โหลด notifications
                             notifyFromConfig(data.config);            // ✅ แสดง native notification
+                            fetchAnnouncements();                     // 🔔 โหลดข่าวสดจาก GAS ทันที
                             if (data.config.version) {
                                 const localVer = localStorage.getItem('appVersion');
                                 if (localVer !== data.config.version) {
@@ -4428,12 +4416,15 @@
             }
         }
 
+        let serverErrorMessage = ''; // เก็บข้อความ Error จาก Server
+
         // ดึงประกาศจาก GAS
         function fetchAnnouncements() {
             fetch(GAS_URL + '?action=get_announcements&t=' + Date.now())
                 .then(r => r.json())
                 .then(data => {
                     console.log("Fetched Announcements Data:", data);
+                    serverErrorMessage = data.message || '';
                     const gasAnnouncements = (data && data.announcements) || [];
 
                     // แปลง GAS announcements เป็น format เดียวกัน
@@ -4470,7 +4461,11 @@
                         triggerNotificationEffects();
                     }
                 })
-                .catch(() => renderNotifList()); // ถ้าโหลดไม่ได้ แสดงที่มีอยู่
+                .catch((err) => {
+                    console.error("Fetch News Error:", err);
+                    serverErrorMessage = "เชื่อมต่อระบบข่าวสารไม่ได้ (Check GAS URL)";
+                    renderNotifList();
+                });
         }
 
         function triggerNotificationEffects() {
@@ -4494,7 +4489,14 @@
             const list = document.getElementById('notifList');
             if (!list) return;
             if (appNotifications.length === 0) {
-                list.innerHTML = '<div class="text-center py-4 text-muted small">ยังไม่มีข่าวสารหรือกิจกรรม</div>';
+                list.innerHTML = `
+                <div class="text-center py-5 px-3">
+                    <div class="mb-2" style="font-size: 2rem; opacity: 0.3;">📭</div>
+                    <div class="text-muted small mb-3">${serverErrorMessage || 'ยังไม่มีข่าวสารหรือกิจกรรมใหม่ในขณะนี้'}</div>
+                    <a href="${GAS_URL}?action=get_announcements" target="_blank" class="btn btn-sm btn-outline-secondary rounded-pill" style="font-size:0.65rem;">
+                        <i class="fas fa-link me-1"></i>ลองตรวจสอบลิงก์ชีตที่นี่
+                    </a>
+                </div>`;
                 updateBadge(0);
                 return;
             }
