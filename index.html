@@ -1676,7 +1676,8 @@
         </div>
         <div class="nav-item" id="nav-badges-btn" onclick="switchTab('badges', this)"><i
                 class="fas fa-medal"></i><span>เหรียญ</span></div>
-        <div class="nav-item" onclick="switchTab('manager', this)"><i class="fas fa-user-tie"></i><span>ผู้บริหาร</span>
+        <div class="nav-item" id="nav-manager-btn" onclick="switchTab('manager', this)"><i
+                class="fas fa-user-tie"></i><span>ผู้บริหาร</span>
         </div>
     </div>
 
@@ -1698,12 +1699,12 @@
         // Level 4: ผู้ใช้งานทั่วไป (User)
         const ROLE_MAP = {
             // Level 1
-            'ผู้ดูแลระบบ': 1, 'admin': 1, 'superadmin': 1, 'systemadmin': 1,
+            'ผู้ดูแลระบบ': 1, 'admin': 1, 'superadmin': 1, 'systemadmin': 1, 'administrator': 1,
             // Level 2
             'ผู้บริหาร': 2, 'ผู้อำนวยการ': 2, 'executive': 2, 'manager': 2,
-            'head': 2, 'supervisor': 2, 'director': 2,
+            'head': 2, 'supervisor': 2, 'director': 2, 'bos': 2,
             // Level 3
-            'ผู้จัดการข่าวสาร': 3, 'newseditor': 3, 'editor': 3, 'pr': 3, 'news': 3,
+            'ผู้จัดการข่าวสาร': 3, 'newseditor': 3, 'editor': 3, 'pr': 3, 'news': 3, 'journalist': 3,
         };
 
         function getUserLevel(user) {
@@ -2506,9 +2507,7 @@
                         }
 
                         // โหลดข้อมูล Dashboard ให้ Manager ทันที
-                        const roleCheck = String(currentUser.role || '').toLowerCase();
-                        const isManager = ['manager', 'admin', 'ผู้บริหาร', 'ผู้อำนวยการ', 'head', 'supervisor', 'executive'].some(r => roleCheck.includes(r));
-                        if (isManager) fetchManagerData();
+                        if (canViewDashboard()) fetchManagerData();
 
                         // --- 🚨 SYSTEM UPDATE PROMPT ---
                         if (data.config) {
@@ -2543,27 +2542,20 @@
 
                     document.getElementById('loading').style.display = 'none';
 
-                    // Show warning if not in LINE
-                    if (!liff.isInClient() && !localStorage.getItem('hideLineWarn')) {
-                        Swal.fire({
-                            title: 'ระบบ LINE Login ขัดข้อง',
-                            html: 'กรุณารีเฟรชหรือเปิดใน LINE แอพฯ เพื่อการทำงานที่สมบูรณ์ที่สุด',
-                            icon: 'warning',
-                            confirmButtonText: 'รับทราบ',
-                            footer: '<small class="text-muted">หากใช้งานบน PC แนะนำให้ใช้บราวเซอร์ Chrome</small>'
-                        }).then(() => {
-                            localStorage.setItem('hideLineWarn', 'true');
-                        });
-                    }
+
                 })
                 .catch(err => {
-                    console.error('Connection Failed:', err);
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'เชื่อมต่อระบบไม่สำเร็จ',
-                        text: 'กรุณาตรวจสอบ URL หรือการตั้งค่า Deploy',
-                        footer: err.message
-                    });
+                    console.warn('Connection Failed or Silent Error:', err);
+                    // ไม่แสดง Error ตัวเบ้อเร่อถ้า currentUser มีค่าอยู่แล้ว (อาจจะเป็นแค่ transient error)
+                    if (!currentUser) {
+                        Swal.fire({
+                            icon: 'info',
+                            title: 'ระบบกำลังเชื่อมต่อ...',
+                            text: 'กรุณารอครู่หนึ่ง หรือลองรีเฟรชหน้าจอ',
+                            timer: 3000,
+                            showConfirmButton: false
+                        });
+                    }
                     document.getElementById('loading').style.display = 'none';
                 });
         }
@@ -3837,7 +3829,18 @@
                                 <span id="count-${post.id}" class="ms-1" style="font-size:0.9rem;">${post.likes ? post.likes.length : 0}</span>
                             </div>
                         </div>
-                        ${vdoBtnHtml} <div class="ms-auto fs-4">${post.happy == 3 ? '😁' : (post.happy == 2 ? '😐' : '😞')}</div>
+                        ${vdoBtnHtml} <div class="ms-auto d-flex align-items-center gap-2">
+                            <span class="fs-4">${post.happy == 3 ? '😁' : (post.happy == 2 ? '😐' : '😞')}</span>
+                            ${isMyPost ? `
+                            <button class="btn btn-sm btn-outline-secondary rounded-circle" style="width:28px;height:28px;padding:0;font-size:0.75rem;" 
+                                onclick="editPost('${post.id}', '${encodeURIComponent(post.note || '')}')" title="แก้ไข">
+                                <i class="fas fa-pen"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger rounded-circle" style="width:28px;height:28px;padding:0;font-size:0.75rem;" 
+                                onclick="deletePost('${post.id}')" title="ลบ">
+                                <i class="fas fa-trash"></i>
+                            </button>` : ''}
+                        </div>
                         </div>
                 </div>`;
                     });
@@ -4327,13 +4330,21 @@
             }
         });
 
-        // แสดง/ซ่อนปุ่ม + ตาม role level (Level 1-2-3 เห็นปุ่ม)
+        // แสดง/ซ่อนปุ่ม + และเมนูผู้บริหารตาม role level
         function updateAddAnnounceButton() {
             const btn = document.getElementById('addAnnounceBtnInPanel');
-            if (!btn || !currentUser) return;
+            const mgrTab = document.getElementById('nav-manager-btn');
+
+            if (!currentUser) return;
+
             const level = getUserLevel(currentUser);
-            // Level 1 (admin), Level 2 (ผู้บริหาร), Level 3 (ผู้จัดการข่าวสาร) → เห็นปุ่ม
-            btn.classList.toggle('d-none', level > 3);
+            console.log("Current User Role:", currentUser.role, "Calculated Level:", level);
+
+            // Level 1 (admin), Level 2 (ผู้บริหาร), Level 3 (ผู้จัดการข่าวสาร) -> เห็นปุ่ม +
+            if (btn) btn.classList.toggle('d-none', level > 3);
+
+            // Level 1, 2 -> เห็นเมนูผู้บริหาร
+            if (mgrTab) mgrTab.style.display = (level <= 2) ? 'flex' : 'none';
         }
 
         // ดึงประกาศจาก GAS
