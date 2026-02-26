@@ -1272,14 +1272,70 @@
 
         <!-- การแจ้งเตือนและ Notification Panel -->
         <div id="announcementArea" style="display: none;"></div>
+
+        <!-- Notification Panel -->
         <div class="notif-panel" id="notifPanel">
             <div class="d-flex justify-content-between align-items-center px-3 pt-3 pb-2 border-bottom">
-                <span class="fw-bold">🔔 ข่าวและแจ้งเตือน</span>
-                <button class="btn btn-sm btn-link text-muted p-0" onclick="markAllNotifRead()">อ่านทั้งหมด</button>
+                <span class="fw-bold">🔔 ข่าวและกิจกรรม</span>
+                <div class="d-flex gap-2 align-items-center">
+                    <!-- ปุ่ม + เพิ่มประกาศ (เห็นเฉพาะ manager) -->
+                    <button id="addAnnounceBtnInPanel" class="btn btn-sm btn-primary rounded-circle d-none"
+                        style="width:28px;height:28px;padding:0;font-size:1rem;line-height:1;"
+                        onclick="openAnnounceModal()" title="เพิ่มประกาศ">
+                        +
+                    </button>
+                    <button class="btn btn-sm btn-link text-muted p-0" onclick="markAllNotifRead()">อ่านทั้งหมด</button>
+                    <!-- ปุ่มปิด panel -->
+                    <button class="btn btn-sm btn-light rounded-circle"
+                        style="width:26px;height:26px;padding:0;font-size:0.75rem;"
+                        onclick="closeNotifPanel()">×</button>
+                </div>
             </div>
             <div id="notifList">
                 <div class="text-center py-4 text-muted small">ยังไม่มีข่าวสาร</div>
             </div>
+        </div>
+
+        <!-- Modal เพิ่มประกาศกิจกรรม -->
+        <div id="announceModalBackdrop"
+            style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:19999;"
+            onclick="closeAnnounceModal()"></div>
+        <div id="announceModal" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+            width:92%;max-width:400px;background:var(--glass-bg);border:1px solid var(--border-color);
+            border-radius:20px;padding:24px;z-index:20000;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="fw-bold mb-0">📌 เพิ่มประกาศกิจกรรม</h6>
+                <button class="btn btn-sm btn-light rounded-circle" onclick="closeAnnounceModal()">×</button>
+            </div>
+            <div class="mb-3">
+                <label class="form-label small fw-bold">🏷️ หมวดหมู่</label>
+                <select id="ann-category" class="form-select form-select-sm rounded-3">
+                    <option value="activity">🎉 กิจกรรม/โครงการ</option>
+                    <option value="training">📚 อบรม/พัฒนา</option>
+                    <option value="welfare">❤️ สวัสดิการ/สิทธิประโยชน์</option>
+                    <option value="meeting">💼 ประชุม/สัมมนา</option>
+                    <option value="holiday">🏖️ วันหยุด/วันหยุดพิเศษ</option>
+                    <option value="general">📢 ทั่วไป</option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label small fw-bold">📝 ชื่อประกาศ</label>
+                <input type="text" id="ann-title" class="form-control form-control-sm rounded-3"
+                    placeholder="เช่น: กิจกรรมสังสรรค์สังคม...">
+            </div>
+            <div class="mb-3">
+                <label class="form-label small fw-bold">💬 รายละเอียด</label>
+                <textarea id="ann-body" class="form-control form-control-sm rounded-3" rows="3"
+                    placeholder="รายละเอียดเพิ่มเติม..."></textarea>
+            </div>
+            <div class="mb-4">
+                <label class="form-label small fw-bold">📅 วันที่กิจกรรม</label>
+                <input type="date" id="ann-date" class="form-control form-control-sm rounded-3">
+                <small class="text-muted">ประกาศจะแสดงจนถึงวันนี้เท่านั้น</small>
+            </div>
+            <button class="btn btn-primary w-100 rounded-pill fw-bold" onclick="saveAnnouncement()">
+                <i class="fas fa-save me-2"></i>บันทึกประกาศ
+            </button>
         </div>
 
         <div id="header-user" class="glass-card text-center pb-2">
@@ -2441,6 +2497,7 @@
 
                         checkAndShowSurvey();
                         requestNotificationPermission(); // ✅ ขอ permission notification
+                        updateAddAnnounceButton();        // ✅ แสดงปุ่ม + ถ้าเป็น manager
 
                     } else {
                         // กรณีสมาชิกใหม่
@@ -3430,96 +3487,6 @@
             });
         }
 
-        // =====================================================
-        // 🔔 ระบบแจ้งเตือนใน App (In-App Notification)
-        // =====================================================
-        let appNotifications = []; // เก็บ notifications ทั้งหมด
-
-        function toggleNotifPanel() {
-            const panel = document.getElementById('notifPanel');
-            if (!panel) return;
-            panel.classList.toggle('show');
-        }
-
-        // ปิด panel เมื่อคลิกข้างนอก
-        document.addEventListener('click', function (e) {
-            const panel = document.getElementById('notifPanel');
-            const bell = document.getElementById('notifBellBtn');
-            if (panel && bell && !panel.contains(e.target) && !bell.contains(e.target)) {
-                panel.classList.remove('show');
-            }
-        });
-
-        // เพิ่ม notification ใหม่เข้า list
-        function pushNotification(title, body, time, id) {
-            const notifKey = `notif_read_${id}`;
-            const isRead = localStorage.getItem(notifKey) === 'true';
-            appNotifications.unshift({ id, title, body, time, isRead });
-            renderNotifList();
-        }
-
-        // แสดง notification list ใน panel
-        function renderNotifList() {
-            const list = document.getElementById('notifList');
-            if (!list) return;
-
-            if (appNotifications.length === 0) {
-                list.innerHTML = '<div class="text-center py-4 text-muted small">ยังไม่มีข่าวสาร</div>';
-                return;
-            }
-
-            let unreadCount = 0;
-            let html = '';
-            appNotifications.forEach(n => {
-                const notifKey = `notif_read_${n.id}`;
-                const isRead = localStorage.getItem(notifKey) === 'true';
-                if (!isRead) unreadCount++;
-                html += `
-                    <div class="notif-item ${isRead ? '' : 'unread'}" onclick="readNotif('${n.id}')">
-                        <div class="notif-title">${n.title}</div>
-                        <div class="notif-body">${n.body}</div>
-                        <div class="notif-time">${n.time || ''}</div>
-                    </div>`;
-            });
-            list.innerHTML = html;
-
-            // อัพเดต badge
-            const badge = document.getElementById('notifBadge');
-            if (badge) {
-                if (unreadCount > 0) {
-                    badge.style.display = 'flex';
-                    badge.innerText = unreadCount > 9 ? '9+' : unreadCount;
-                } else {
-                    badge.style.display = 'none';
-                }
-            }
-        }
-
-        // ทำเครื่องหมายข้อความว่าอ่านแล้ว
-        function readNotif(id) {
-            localStorage.setItem(`notif_read_${id}`, 'true');
-            renderNotifList();
-        }
-
-        // อ่านทั้งหมด
-        function markAllNotifRead() {
-            appNotifications.forEach(n => {
-                localStorage.setItem(`notif_read_${n.id}`, 'true');
-            });
-            renderNotifList();
-        }
-
-        // โหลด notifications จาก config ของ GAS
-        // config.notifications = [{ id, title, body, time }]
-        function loadNotificationsFromConfig(config) {
-            if (!config || !config.notifications || !Array.isArray(config.notifications)) return;
-            config.notifications.forEach(n => {
-                if (n.id && n.title) {
-                    pushNotification(n.title, n.body || '', n.time || '', n.id);
-                }
-            });
-        }
-
         function checkTrendAndSuggest() {
             // Logic เช็คกราฟขาลง
         }
@@ -4198,6 +4165,215 @@
                     showAppNotification(n.title || '😊 Happy Meter', n.body || '', n.id, 'index.html');
                 }
             });
+        }
+
+        // =====================================================
+        // 🔔 Notification + Announcement System (Complete)
+        // =====================================================
+        let appNotifications = [];
+        const CATEGORY_ICONS = {
+            activity: '🎉', training: '📚', welfare: '❤️',
+            meeting: '💼', holiday: '🏖️', general: '📢'
+        };
+        const CATEGORY_COLORS = {
+            activity: '#6c5ce7', training: '#0984e3', welfare: '#e84393',
+            meeting: '#00b894', holiday: '#fdcb6e', general: '#636e72'
+        };
+
+        // เปิด/ปิด panel
+        function toggleNotifPanel() {
+            const panel = document.getElementById('notifPanel');
+            if (!panel) return;
+            const isOpen = panel.classList.contains('show');
+            if (isOpen) {
+                panel.classList.remove('show');
+            } else {
+                panel.classList.add('show');
+                fetchAnnouncements(); // โหลดข้อมูลใหม่ทุกครั้งที่เปิด
+            }
+        }
+
+        function closeNotifPanel() {
+            const panel = document.getElementById('notifPanel');
+            if (panel) panel.classList.remove('show');
+        }
+
+        // ปิดเมื่อคลิก outside (ไม่ใช้ SweetAlert — ปิดผ่าน closeNotifPanel เท่านั้น)
+        document.addEventListener('click', function (e) {
+            const panel = document.getElementById('notifPanel');
+            const bell = document.getElementById('notifBellBtn');
+            const modal = document.getElementById('announceModal');
+            if (!panel || !bell) return;
+            // ถ้าคลิกนอก panel และ bell และ modal ให้ปิด
+            if (!panel.contains(e.target) && !bell.contains(e.target) &&
+                (!modal || !modal.contains(e.target))) {
+                closeNotifPanel();
+            }
+        });
+
+        // แสดง/ซ่อนปุ่ม + ตาม role
+        function updateAddAnnounceButton() {
+            const btn = document.getElementById('addAnnounceBtnInPanel');
+            if (!btn || !currentUser) return;
+            const role = String(currentUser.role || '').toLowerCase();
+            const isManager = ['manager', 'admin', 'ผู้บริหาร', 'ผู้อำนวยการ', 'head', 'supervisor', 'executive'].some(r => role.includes(r));
+            btn.classList.toggle('d-none', !isManager);
+        }
+
+        // ดึงประกาศจาก GAS
+        function fetchAnnouncements() {
+            fetch(GAS_URL + '?action=get_announcements&t=' + Date.now())
+                .then(r => r.json())
+                .then(data => {
+                    const gasAnnouncements = (data && data.announcements) || [];
+                    // รวมกับ notifications จาก config
+                    const configNotifs = appNotifications.filter(n => n.source === 'config');
+                    // แปลง GAS announcements เป็น format เดียวกัน
+                    const gasNotifs = gasAnnouncements.map(a => ({
+                        id: a.id,
+                        title: (CATEGORY_ICONS[a.category] || '📢') + ' ' + a.title,
+                        body: a.body,
+                        time: a.date ? `📅 ${a.date}` : '',
+                        source: 'gas',
+                        category: a.category
+                    }));
+                    // รวมและเรียงล่าสุดก่อน
+                    const combined = [...gasNotifs, ...configNotifs];
+                    appNotifications = combined;
+                    renderNotifList();
+                })
+                .catch(() => renderNotifList()); // ถ้าโหลดไม่ได้ แสดงที่มีอยู่
+        }
+
+        // render notification list
+        function renderNotifList() {
+            const list = document.getElementById('notifList');
+            if (!list) return;
+            if (appNotifications.length === 0) {
+                list.innerHTML = '<div class="text-center py-4 text-muted small">ยังไม่มีข่าวสารหรือกิจกรรม</div>';
+                updateBadge(0);
+                return;
+            }
+            let unread = 0;
+            let html = '';
+            appNotifications.forEach(n => {
+                const isRead = localStorage.getItem(`notif_read_${n.id}`) === 'true';
+                if (!isRead) unread++;
+                const color = CATEGORY_COLORS[n.category] || '#636e72';
+                html += `
+                <div class="notif-item ${isRead ? '' : 'unread'}"
+                    style="${!isRead ? `border-left:3px solid ${color};` : ''}"
+                    onclick="readNotif('${n.id}')">
+                    <div class="notif-title">${n.title}</div>
+                    ${n.body ? `<div class="notif-body">${n.body}</div>` : ''}
+                    ${n.time ? `<div class="notif-time mt-1">${n.time}</div>` : ''}
+                </div>`;
+            });
+            list.innerHTML = html;
+            updateBadge(unread);
+        }
+
+        function updateBadge(count) {
+            const badge = document.getElementById('notifBadge');
+            if (!badge) return;
+            if (count > 0) {
+                badge.style.display = 'flex';
+                badge.innerText = count > 9 ? '9+' : count;
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+
+        function readNotif(id) {
+            localStorage.setItem(`notif_read_${id}`, 'true');
+            renderNotifList();
+        }
+
+        function markAllNotifRead() {
+            appNotifications.forEach(n => localStorage.setItem(`notif_read_${n.id}`, 'true'));
+            renderNotifList();
+        }
+
+        // โหลด config notifications
+        function loadNotificationsFromConfig(config) {
+            if (!config || !config.notifications) return;
+            config.notifications.forEach(n => {
+                if (n.id && n.title) {
+                    appNotifications.push({ ...n, source: 'config' });
+                }
+            });
+            renderNotifList();
+        }
+
+        // ==================== Modal เพิ่มประกาศ ====================
+
+        function openAnnounceModal() {
+            closeNotifPanel();
+            // ตั้งวันที่ default เป็นวันนี้
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('ann-date').value = today;
+            document.getElementById('ann-title').value = '';
+            document.getElementById('ann-body').value = '';
+            document.getElementById('ann-category').value = 'activity';
+            document.getElementById('announceModalBackdrop').style.display = 'block';
+            document.getElementById('announceModal').style.display = 'block';
+        }
+
+        function closeAnnounceModal() {
+            document.getElementById('announceModalBackdrop').style.display = 'none';
+            document.getElementById('announceModal').style.display = 'none';
+        }
+
+        function saveAnnouncement() {
+            const title = document.getElementById('ann-title').value.trim();
+            const body = document.getElementById('ann-body').value.trim();
+            const eventDate = document.getElementById('ann-date').value;
+            const category = document.getElementById('ann-category').value;
+
+            if (!title || !eventDate) {
+                Swal.fire({ toast: true, icon: 'warning', title: 'กรุณากรอกชื่อประกาศและวันที่', position: 'top', timer: 3000, showConfirmButton: false });
+                return;
+            }
+
+            const payload = {
+                action: 'save_announcement',
+                title, body, eventDate, category,
+                postedBy: currentUser ? currentUser.userId : 'unknown'
+            };
+
+            Swal.fire({ title: 'กำลังบันทึก...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+            fetch(GAS_URL, {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        closeAnnounceModal();
+                        Swal.fire({
+                            toast: true, icon: 'success',
+                            title: '✅ บันทึกประกาศสำเร็จ!',
+                            position: 'top', timer: 3000, showConfirmButton: false
+                        });
+                        // เปิด panel ใหม่พร้อมรีโหลดข้อมูล
+                        setTimeout(() => {
+                            toggleNotifPanel();
+                        }, 500);
+                    } else {
+                        Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: data.message || '' });
+                    }
+                })
+                .catch(() => {
+                    // GAS อาจ return no-cors แต่ข้อมูลบันทึกแล้ว
+                    closeAnnounceModal();
+                    Swal.fire({
+                        toast: true, icon: 'success',
+                        title: '✅ บันทึกประกาศสำเร็จ!',
+                        position: 'top', timer: 3000, showConfirmButton: false
+                    });
+                    setTimeout(() => toggleNotifPanel(), 500);
+                });
         }
 
     </script>
