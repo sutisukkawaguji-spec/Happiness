@@ -3227,18 +3227,24 @@
 
         function renderDashboard(appUsers) {
             // แสดงจำนวนบุคลากรจริง (appUsers)
-            let systemTotalPosts = 0;
-            let systemTotalTeamwork = 0;
             let totalHappy = 0, userWithDataCount = 0, issueCount = 0;
+            let dbTotalPosts = 0;
+            let dbTotalTagged = 0;
             globalUserStatsMap = {};
 
-            // 1. สร้าง Map พื้นฐานก่อน
             appUsers.forEach(u => {
                 if (!u) return;
                 const uid = u.lineId || u.id;
                 if (!uid) return;
 
                 const avg = parseFloat(u.happy) || 0;
+                const postsTotal = parseInt(u.totalCount || 0);
+                const taggedTotal = parseInt(u.taggedCount || 0);
+                const witnessTotal = parseInt(u.witnessCount || 0);
+
+                dbTotalPosts += postsTotal;
+                dbTotalTagged += taggedTotal;
+
                 globalUserStatsMap[uid] = {
                     id: uid,
                     name: u.name || 'ไม่ระบุชื่อ',
@@ -3248,9 +3254,10 @@
                     level: u.level || 1,
                     avgHappy: avg,
                     virtueStats: u.virtueStats || {},
-                    postsMade: 0,
-                    taggedIn: 0,
-                    verifiedOthers: 0,
+                    postsMade: postsTotal,
+                    taggedIn: taggedTotal,
+                    witnessCount: witnessTotal,
+                    verifiedOthers: witnessTotal, // Alias for consistency
                     topFriends: Array.isArray(u.topFriends) ? u.topFriends : []
                 };
 
@@ -3261,45 +3268,14 @@
                 }
             });
 
-            // 2. ✅ คำนวณจำนวนโพสต์จริงจาก globalFeedData เพื่อความแม่นยำรายคน
-            if (globalFeedData && globalFeedData.length > 0) {
-                globalFeedData.forEach(post => {
-                    const pid = String(post.user_line_id);
-                    // นับโพสต์ที่สร้าง
-                    if (pid && globalUserStatsMap[pid]) {
-                        globalUserStatsMap[pid].postsMade++;
-                        systemTotalPosts++;
-                    }
-
-                    // นับการถูกแท็กทีม
-                    if (post.taggedFriends) {
-                        systemTotalTeamwork++;
-                        String(post.taggedFriends).split(',').forEach(tId => {
-                            const cleanId = tId.trim();
-                            if (cleanId && globalUserStatsMap[cleanId]) {
-                                globalUserStatsMap[cleanId].taggedIn++;
-                            }
-                        });
-                    }
-                });
-            }
-
-            // ✅ KPI 1: กิจกรรมทั้งหมด (ใช้จากผลรวม totalCount)
-            let kpiPosts = document.getElementById('kpi-posts');
-            if (kpiPosts) kpiPosts.innerText = systemTotalPosts + ' ครั้ง';
-
-            // ✅ KPI 2: ดัชนีความสุข
+            // ✅ KPI 1: ดัชนีความสุข
             const maxHappy = userWithDataCount > 0 ? totalHappy / userWithDataCount : 0;
             const avgOrgHappyPct = maxHappy > 10 ? maxHappy.toFixed(0) : (maxHappy / 10 * 100).toFixed(0);
             let kpiHappy = document.getElementById('kpi-happy');
             if (kpiHappy) kpiHappy.innerText = avgOrgHappyPct + '%';
 
-            // ✅ KPI 3: ต้องดูแล (คน)
-            let kpiIssues = document.getElementById('kpi-issues');
-            if (kpiIssues) kpiIssues.innerText = issueCount + ' คน';
-
-            // ✅ KPI 4: กิจกรรมร่วม (ทีม) - กลับมาเป็น % ตามต้องการ
-            const teamWorkRate = systemTotalPosts > 0 ? ((systemTotalTeamwork / systemTotalPosts) * 100).toFixed(0) : 0;
+            // ✅ KPI 4: กิจกรรมร่วม (ทีม) - คำนวณจาก Total รวมในระบบ
+            const teamWorkRate = dbTotalPosts > 0 ? ((dbTotalTagged / dbTotalPosts) * 100).toFixed(0) : 0;
             let kpiTeamwork = document.getElementById('kpi-teamwork');
             if (kpiTeamwork) kpiTeamwork.innerText = teamWorkRate + '%';
 
@@ -3395,7 +3371,11 @@
                                     <div class="fw-bold" style="font-size:1.6rem; line-height:1; color: ${numericScore < 5 && numericScore > 0 ? '#e74c3c' : (numericScore < 7 && numericScore > 0 ? '#f39c12' : '#27ae60')}">${happyDisplay}</div>
                                     <small class="text-muted" style="font-size:0.7rem;">${icon} ความสุข</small>
                                     <div class="text-muted" style="font-size:0.75rem;"><i class="fas fa-star text-warning me-1"></i>${scoreXP.toLocaleString()} XP</div>
-                                    <div class="text-muted" style="font-size:0.65rem;"><i class="fas fa-pencil-alt me-1"></i>${f.postsMade} โพสต์ | <i class="fas fa-users me-1"></i> ${f.taggedIn} แท็ก</div>
+                                    <div class="text-muted" style="font-size:0.65rem;">
+                                        <span title="สร้างโพสต์"><i class="fas fa-pencil-alt me-1"></i>${f.postsMade}</span> | 
+                                        <span title="ถูกแท็กทีม"><i class="fas fa-users me-1"></i>${f.taggedIn}</span> | 
+                                        <span title="เป็นพยาน"><i class="fas fa-check-circle me-1"></i>${f.witnessCount || 0}</span>
+                                    </div>
                                 </div>
                             </div>
                             ${closenessHtml}
