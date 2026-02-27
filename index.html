@@ -1842,6 +1842,7 @@
         let renderedPostIds = new Set();
         let currentImageFiles = [];
         let selectedImageBase64 = null;
+        let isFetchingFeed = false; // 🔒 กันเรียกซ้อน
 
         // observe dark mode attribute changes on documentElement
         const observer = new MutationObserver((mutations) => {
@@ -1874,6 +1875,9 @@
 
         const LIFF_ID = TEST_ENV ? TEST_LIFF_ID : PROD_LIFF_ID;
         const GAS_URL = TEST_ENV ? TEST_GAS_URL : PROD_GAS_URL;
+
+        // ✅ บันทึก URL ไว้ให้หน้าอื่นใช้งาน (เช่น survey.html)
+        localStorage.setItem('GAS_URL', GAS_URL);
 
 
 
@@ -3719,6 +3723,9 @@
 
         // --- 🚀 Fetch Feed (Fixed & Complete) ---
         function fetchFeed(append = false) {
+            if (isFetchingFeed) return; // 🔒 ถ้ากำลังโหลดอยู่ ให้รอก่อน
+            isFetchingFeed = true; // 🔒 ล็อกทันทีที่เริ่มเรียก
+
             if (!append) {
                 currentFeedLimit = 20;
                 renderedPostIds.clear();
@@ -3729,7 +3736,11 @@
             const filterDate = document.getElementById('filterDate') ? document.getElementById('filterDate').value : '';
             const filterYear = document.getElementById('filterYear') ? document.getElementById('filterYear').value : '';
 
-            if (!container) return;
+            if (!container) {
+                isFetchingFeed = false;
+                return;
+            }
+
             if (!append) {
                 container.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-secondary"></div><br><small>กำลังโหลดเรื่องราว...</small></div>';
             } else {
@@ -3978,6 +3989,9 @@
                 .catch(err => {
                     console.error(err);
                     container.innerHTML = '<div class="text-danger text-center mt-5">Load Failed <br><small class="text-muted">Please refresh</small></div>';
+                })
+                .finally(() => {
+                    isFetchingFeed = false;
                 });
         }
 
