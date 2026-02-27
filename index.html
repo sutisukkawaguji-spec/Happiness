@@ -1397,12 +1397,7 @@
                 </div>
             </div>
             <div id="notifList">
-                <div id="debugRoleInfo" class="text-center p-1 mb-1 bg-light border-bottom"
-                    style="font-size: 0.65rem; color: #999;"></div>
-                <div class="text-center py-4 text-muted small">
-                    <div class="spinner-border spinner-border-sm text-primary mb-2" role="status"></div>
-                    <div>กำลังโหลดข่าวสาร...</div>
-                </div>
+                <!-- เนื้อหาจะถูกเติมโดย renderNotifList() -->
             </div>
         </div>
 
@@ -4603,13 +4598,14 @@
 
         function fetchAnnouncements() {
             var list = document.getElementById('notifList');
-            console.log('🔔 fetchAnnouncements started (current items:', appNotifications.length, ')');
+            if (!list) return;
+            console.log('🔔 fetchAnnouncements started...');
 
             // ใช้ fetch เป็นวิธีหลัก
             const url = GAS_URL + '?action=get_announcements&t=' + Date.now();
             fetch(url)
                 .then(r => {
-                    if (!r.ok) throw new Error('Network ' + r.status);
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
                     return r.json();
                 })
                 .then(data => {
@@ -4617,7 +4613,7 @@
                     processAnnounceData(data);
                 })
                 .catch(err => {
-                    console.warn('🔔 Fetch failing, trying JSONP...', err.message);
+                    console.warn('🔔 Fetch failed, trying JSONP...', err.message);
 
                     // JSONP Fallback
                     window.__gasCb = function (data) {
@@ -4632,10 +4628,9 @@
                     s.id = 'jsonp_gas';
                     s.src = GAS_URL + '?action=get_announcements&callback=__gasCb&t=' + Date.now();
                     s.onerror = () => {
-                        console.error('🔔 JSONP failed too');
-                        if (appNotifications.filter(n => n.source === 'gas').length === 0 && list) {
-                            list.innerHTML = `<div class="text-center py-4 text-muted small">เชื่อมต่อไม่ได้ (${err.message})<br><button onclick="fetchAnnouncements()" class="btn btn-sm btn-primary mt-2">กดโหลดอีกครั้ง</button></div>`;
-                        }
+                        console.error('🔔 JSONP also failed');
+                        serverErrorMessage = 'การเชื่อมต่อขัดข้อง: ' + err.message;
+                        renderNotifList();
                     };
                     document.head.appendChild(s);
                 });
@@ -4663,56 +4658,73 @@
             var list = document.getElementById('notifList');
             if (!list) return;
 
-            if (appNotifications.length === 0) {
-                list.innerHTML = `
-                    <div class="text-center py-5 px-3 animate__animated animate__fadeIn">
-                        <div class="mb-2" style="font-size:3rem; opacity:0.3;">📭</div>
-                        <div class="fw-bold text-dark mb-1">${serverErrorMessage ? 'พบปัญหาการเชื่อมต่อ' : 'ยังไม่มีข่าวสารใหม่'}</div>
-                        <div class="text-muted small mb-3">${serverErrorMessage || 'ขณะนี้ยังไม่มีข่าวประกาศหรือกิจกรรมที่บันทึกไว้ในระบบครับ'}</div>
-                        <div class="d-flex justify-content-center gap-2">
+            try {
+                // ส่วนของ Role Info (แสดงด้านบนสุดเสมอ)
+                var debugHtml = '<div id="debugRoleInfo" class="text-center p-1 mb-1 bg-light border-bottom" style="font-size: 0.65rem; color: #999;"></div>';
+
+                if (appNotifications.length === 0) {
+                    list.innerHTML = debugHtml + `
+                        <div class="text-center py-5 px-3 animate__animated animate__fadeIn">
+                            <div class="mb-2" style="font-size:3rem; opacity:0.3;">📭</div>
+                            <div class="fw-bold text-dark mb-1">${serverErrorMessage ? 'พบปัญหาการเชื่อมต่อ' : 'ยังไม่มีข่าวสารใหม่'}</div>
+                            <div class="text-muted small mb-3">${serverErrorMessage || 'ขณะนี้ยังไม่มีข่าวประกาศหรือกิจกรรมที่บันทึกไว้ในระบบครับ'}</div>
                             <button onclick="fetchAnnouncements()" class="btn btn-sm btn-primary rounded-pill px-3">ลองใหม่อีกครั้ง</button>
-                            <a href="${GAS_URL}?action=get_announcements" target="_blank" class="btn btn-sm btn-outline-secondary rounded-pill px-3">เช็คระบบ</a>
-                        </div>
-                    </div>`;
-                updateBadge(0);
-                return;
+                        </div>`;
+                    updateAddAnnounceButton();
+                    updateBadge(0);
+                    return;
+                }
+
+                var clearedAt = 0;
+                try { clearedAt = parseInt(localStorage.getItem('notif_cleared_at') || '0'); } catch (e) { }
+
+                var unread = 0;
+                var html = '';
+
+                appNotifications.forEach(function (n) {
+                    if (!n) return;
+                    var notifTime = 0;
+                    if (n.ts) {
+                        try {
+                            var cleanTs = String(n.ts).replace(/\s*\(.*\)\s*/, '').trim();
+                            var parsed = new Date(cleanTs);
+                            if (!isNaN(parsed.getTime())) notifTime = parsed.getTime();
+                        } catch (e) { }
+                    }
+                    if (notifTime === 0 && n.id) {
+                        var match = String(n.id).match(/(\d{10,13})$/);
+                        if (match) notifTime = parseInt(match[1]);
+                    }
+
+                    var isUnread = (notifTime > clearedAt);
+                    // ยกเว้นรายการพิเศษ
+                    if (n.id === 'test_render' || n.source === 'system') isUnread = false;
+
+                    if (isUnread) unread++;
+
+                    var cat = n.category || 'general';
+                    var color = (CATEGORY_COLORS && CATEGORY_COLORS[cat]) || '#636e72';
+                    var styleStr = isUnread ? ('border-left:4px solid ' + color + '; background:rgba(108,92,231,0.05);') : '';
+                    var unreadClass = isUnread ? 'unread' : '';
+
+                    html += '<div class="notif-item ' + unreadClass + '" style="' + styleStr + '" onclick="readNotif(\'' + n.id + '\')">'
+                        + '<div class="notif-title d-flex justify-content-between">'
+                        + '<span>' + (n.title || 'ไม่มีชื่อเรื่อง') + '</span>'
+                        + (isUnread ? '<span class="badge rounded-pill bg-primary" style="font-size:0.5rem">NEW</span>' : '')
+                        + '</div>'
+                        + (n.body ? '<div class="notif-body mt-1">' + n.body + '</div>' : '')
+                        + (n.time ? '<div class="notif-time mt-1" style="font-size:0.7rem; opacity:0.6;">' + n.time + '</div>' : '')
+                        + '</div>';
+                });
+
+                list.innerHTML = debugHtml + html;
+                updateAddAnnounceButton(); // เพื่อให้ Role Info ขึ้น
+                updateBadge(unread);
+
+            } catch (err) {
+                console.error('🚫 renderNotifList Crash:', err);
+                list.innerHTML = `<div class="p-3 text-danger small">Render Error: ${err.message}</div>`;
             }
-
-            var clearedAt = parseInt(localStorage.getItem('notif_cleared_at') || '0');
-            var unread = 0;
-            var html = '';
-
-            appNotifications.forEach(function (n) {
-                var notifTime = 0;
-                if (n.ts) {
-                    // ✅ ลบข้อความในวงเล็บออก (เช่น เวลาอินโดจีน) เพื่อให้ Date parse ได้ทุก Browser
-                    const cleanTs = String(n.ts).replace(/\s*\(.*\)\s*/, '').trim();
-                    var parsed = new Date(cleanTs);
-                    if (!isNaN(parsed.getTime())) notifTime = parsed.getTime();
-                }
-
-                // fallback กรณี id เป็น timestamp
-                if (notifTime === 0 && n.id) {
-                    var match = String(n.id).match(/(\d{10,13})$/);
-                    if (match) notifTime = parseInt(match[1]);
-                }
-
-                var isUnread = (notifTime > clearedAt);
-                if (isUnread) unread++;
-
-                var color = (CATEGORY_COLORS && CATEGORY_COLORS[n.category]) || '#636e72';
-                // ✅ ไม่ใช้ nested template literal - ใช้ string concat แทน
-                var styleStr = isUnread ? ('border-left:3px solid ' + color + ';') : '';
-                var unreadClass = isUnread ? 'unread' : '';
-                html += '<div class="notif-item ' + unreadClass + '" style="' + styleStr + '" onclick="readNotif(\'' + n.id + '\')">'
-                    + '<div class="notif-title">' + (n.title || '') + '</div>'
-                    + (n.body ? '<div class="notif-body">' + n.body + '</div>' : '')
-                    + (n.time ? '<div class="notif-time mt-1">' + n.time + '</div>' : '')
-                    + '</div>';
-            });
-
-            list.innerHTML = html;
-            updateBadge(unread);
         }
 
         function updateBadge(count) {
