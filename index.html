@@ -10,6 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" href="app-icon.png">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -1487,6 +1488,11 @@
             <button class="btn btn-primary w-100 rounded-pill fw-bold" onclick="saveAnnouncement()">
                 <i class="fas fa-save me-2"></i>บันทึกประกาศ
             </button>
+        </div>
+
+        <div class="text-center mb-2">
+            <img src="app-icon.png" alt="Happy Meter Logo"
+                style="width: 80px; height: 80px; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-top: 10px;">
         </div>
 
         <div id="header-user" class="glass-card text-center pb-2">
@@ -4418,8 +4424,8 @@
 
             const options = {
                 body: body,
-                icon: 'https://dummyimage.com/192x192/6c5ce7/ffffff&text=%F0%9F%98%8A',
-                badge: 'https://dummyimage.com/72x72/6c5ce7/ffffff&text=%F0%9F%98%8A',
+                icon: 'app-icon.png',
+                badge: 'app-icon.png',
                 tag: tag,
                 vibrate: [200, 100, 200],
                 data: { url }
