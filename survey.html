@@ -180,11 +180,16 @@
                     // ✅ บันทึกว่าทำแบบสอบเดือนนี้แล้ว (เพื่อไม่ให้แจ้งซ้ำ)
                     const now = new Date();
                     const monthKey = `${now.getFullYear()}-${now.getMonth() + 1}`;
+
+                    // 🔑 Key หลัก: ตรงกับ checkAndShowSurvey ใน index.html
                     const storageKey = `survey_${uid}`;
                     const existing = JSON.parse(localStorage.getItem(storageKey) || '{}');
                     existing.completedMonth = monthKey;
                     delete existing.snoozeUntil;
                     localStorage.setItem(storageKey, JSON.stringify(existing));
+
+                    // 🔑 Key เสริม (fallback): กัน session เก่าที่ใช้ key แบบเก่า
+                    localStorage.setItem(`survey_viewed_${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`, 'true');
 
                     Swal.fire({
                         icon: 'success',
