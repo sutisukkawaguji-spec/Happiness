@@ -1355,6 +1355,40 @@
             display: inline-block;
             animation: bell-shake 0.8s cubic-bezier(.36, .07, .19, .97) both;
         }
+
+        /* ✨ Notification Status Styles */
+        @keyframes notif-blink {
+            0% {
+                border-right: 4px solid var(--primary-color);
+            }
+
+            50% {
+                border-right: 4px solid transparent;
+            }
+
+            100% {
+                border-right: 4px solid var(--primary-color);
+            }
+        }
+
+        .notif-upcoming {
+            animation: notif-blink 2.5s infinite;
+            background: rgba(108, 92, 231, 0.03) !important;
+        }
+
+        .notif-past {
+            opacity: 0.5;
+            filter: grayscale(0.8);
+            background: #fdfdfd !important;
+        }
+
+        .notif-status-badge {
+            font-size: 0.6rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
     </style>
     <audio id="notifSound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"
         preload="auto"></audio>
@@ -4522,41 +4556,44 @@
         // ✅ ฟังก์ชันจัดการข้อมูล (ย้ายออกมาอยู่วงนอกเพื่อให้รันได้ทุกที่)
         function processAnnounceData(data) {
             try {
-                if (!data) { console.warn("🔔 No data to process"); return; }
+                if (!data) return;
                 console.log('🔔 Processing Data:', data);
 
-                // รองรับโครงสร้าง { announcements: [...] }, { data: [...] } และ [...]
                 var rawItems = data.announcements || data.data || (Array.isArray(data) ? data : []);
-
                 if (data.status === 'error') {
-                    serverErrorMessage = data.message || 'พบข้อผิดพลาดจากระบบหลังบ้าน';
+                    serverErrorMessage = data.message;
                     rawItems = [];
-                } else {
-                    serverErrorMessage = '';
                 }
 
+                const now = new Date();
+                const todayStr = now.toISOString().split('T')[0];
+                var hasNewUpcoming = false;
                 var gasNotifs = [];
+
                 rawItems.forEach(function (a) {
-                    try {
-                        gasNotifs.push({
-                            id: a.id || ('gas_' + Math.random().toString(36).substr(2, 9)),
-                            title: ((CATEGORY_ICONS && CATEGORY_ICONS[a.category]) || '📢') + ' ' + (a.title || 'ประกาศ'),
-                            body: a.body || '',
-                            time: a.displayDate || a.date || '',
-                            source: 'gas',
-                            category: a.category || 'general',
-                            ts: a.ts || ''
-                        });
-                    } catch (err) { console.warn("Skip item", err); }
+                    const itemDate = a.date || '';
+                    gasNotifs.push({
+                        id: a.id || ('gas_' + Math.random()),
+                        title: a.title || 'ประกาศ',
+                        body: a.body || '',
+                        date: itemDate, // ✅ เก็บไว้วัด Upcoming/Past
+                        displayDate: a.displayDate || itemDate,
+                        time: a.displayDate || itemDate,
+                        source: 'gas',
+                        category: a.category || 'general',
+                        ts: a.ts || ''
+                    });
+
+                    // ตรวจพิจารณาแจ้งเตือนถ้ามีกิจกรรมใหม่ที่ยังไม่ถึงวัน
+                    if (itemDate && itemDate >= todayStr) {
+                        const known = appNotifications.some(old => old.id === a.id);
+                        if (!known) hasNewUpcoming = true;
+                    }
                 });
 
-                console.log('🔔 Mapped gasNotifs:', gasNotifs.length);
-
-                // กองรวม: ข้อมูลใหม่ + ประกาศจาก Config (ลบตัว placeholder เดิมออก)
                 var otherNotifs = appNotifications.filter(n => n.source !== 'gas' && n.id !== 'test_render');
                 appNotifications = gasNotifs.concat(otherNotifs).concat(configNotifications);
 
-                // กรองเอาตัวซ้ำออก (Unique ID)
                 var uniqueIds = {};
                 appNotifications = appNotifications.filter(function (n) {
                     if (!n.id || uniqueIds[n.id]) return false;
@@ -4566,16 +4603,16 @@
 
                 renderNotifList();
 
-                if (gasNotifs.length > 0) {
-                    const lastId = localStorage.getItem('last_announce_id');
-                    if (lastId !== gasNotifs[0].id) {
-                        triggerNotificationEffects();
-                        localStorage.setItem('last_announce_id', gasNotifs[0].id);
-                    }
+                if (hasNewUpcoming) {
+                    triggerNotificationEffects();
+                    Swal.fire({
+                        toast: true, position: 'top-end', icon: 'info',
+                        title: '📢 มีกิจกรรมใหม่ที่กำลังจะถึง!',
+                        showConfirmButton: false, timer: 3500
+                    });
                 }
             } catch (e) {
                 console.error('🔔 processAnnounceData Error:', e);
-                serverErrorMessage = 'พบบัญหากับข้อมูลที่ได้รับ';
                 renderNotifList();
             }
         }
@@ -4643,31 +4680,39 @@
             if (!list) return;
 
             try {
-                // ส่วนของ Role Info (แสดงด้านบนสุดเสมอ)
                 var debugHtml = '<div id="debugRoleInfo" class="text-center p-1 mb-1 bg-light border-bottom" style="font-size: 0.65rem; color: #999;"></div>';
-
                 if (appNotifications.length === 0) {
-                    list.innerHTML = debugHtml + `
-                        <div class="text-center py-5 px-3 animate__animated animate__fadeIn">
-                            <div class="mb-2" style="font-size:3rem; opacity:0.3;">📭</div>
-                            <div class="fw-bold text-dark mb-1">${serverErrorMessage ? 'พบปัญหาการเชื่อมต่อ' : 'ยังไม่มีข่าวสารใหม่'}</div>
-                            <div class="text-muted small mb-3">${serverErrorMessage || 'ขณะนี้ยังไม่มีข่าวประกาศหรือกิจกรรมที่บันทึกไว้ในระบบครับ'}</div>
-                            <button onclick="fetchAnnouncements()" class="btn btn-sm btn-primary rounded-pill px-3">ลองใหม่อีกครั้ง</button>
-                        </div>`;
-                    updateAddAnnounceButton();
+                    list.innerHTML = debugHtml + '<div class="text-center py-5 text-muted small">ยังไม่มีรายการแจ้งเตือน</div>';
                     updateBadge(0);
                     return;
                 }
 
-                var clearedAt = 0;
-                try { clearedAt = parseInt(localStorage.getItem('notif_cleared_at') || '0'); } catch (e) { }
+                const todayStr = new Date().toISOString().split('T')[0];
+                const clearedAt = parseInt(localStorage.getItem('notif_cleared_at') || '0');
 
-                var unread = 0;
-                var html = '';
+                // แยกรายการ Upcoming (วันนี้เป็นต้นไป) กับ Past (ย้อนหลัง)
+                let upcoming = [];
+                let past = [];
 
-                appNotifications.forEach(function (n) {
-                    if (!n) return;
-                    var notifTime = 0;
+                appNotifications.forEach(n => {
+                    if (n.id === 'test_render') { upcoming.push(n); return; }
+                    var isPast = false;
+                    if (n.date && n.date < todayStr) isPast = true;
+                    if (isPast) past.push(n);
+                    else upcoming.push(n);
+                });
+
+                // จัดลำดับ: Upcoming เอาเร็วสุดขึ้นก่อน, Past เอาล่าสุดขึ้นก่อน (แล้วตัดเหลือ 3)
+                upcoming.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+                past.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+                past = past.slice(0, 3); // แสดงย้อนหลังแค่ 3 รายการ
+
+                let filteredList = [...upcoming, ...past];
+                let unreadCount = 0;
+                let html = '';
+
+                filteredList.forEach(n => {
+                    let notifTime = 0;
                     if (n.ts) {
                         try {
                             var cleanTs = String(n.ts).replace(/\s*\(.*\)\s*/, '').trim();
@@ -4680,30 +4725,38 @@
                         if (match) notifTime = parseInt(match[1]);
                     }
 
-                    var isUnread = (notifTime > clearedAt);
-                    // ยกเว้นรายการพิเศษ
-                    if (n.id === 'test_render' || n.source === 'system') isUnread = false;
+                    const isNew = (notifTime > clearedAt);
+                    const isUpcoming = (n.date && n.date >= todayStr);
+                    const isPast = (n.date && n.date < todayStr);
 
-                    if (isUnread) unread++;
+                    // 🔔 เงื่อนไขนับ Badge: เป็นของใหม่ OR เป็นกิจกรรมที่ยังไม่ถึงวัน
+                    if (n.id !== 'test_render' && (isNew || isUpcoming)) unreadCount++;
 
-                    var cat = n.category || 'general';
-                    var color = (CATEGORY_COLORS && CATEGORY_COLORS[cat]) || '#636e72';
-                    var styleStr = isUnread ? ('border-left:4px solid ' + color + '; background:rgba(108,92,231,0.05);') : '';
-                    var unreadClass = isUnread ? 'unread' : '';
+                    const cat = n.category || 'general';
+                    const color = (CATEGORY_COLORS && CATEGORY_COLORS[cat]) || '#636e72';
+                    const statusClass = isUpcoming ? 'notif-upcoming' : (isPast ? 'notif-past' : '');
+                    const styleStr = isNew ? `border-left:4px solid ${color};` : '';
 
-                    html += '<div class="notif-item ' + unreadClass + '" style="' + styleStr + '" onclick="readNotif(\'' + n.id + '\')">'
-                        + '<div class="notif-title d-flex justify-content-between">'
-                        + '<span>' + (n.title || 'ไม่มีชื่อเรื่อง') + '</span>'
-                        + (isUnread ? '<span class="badge rounded-pill bg-primary" style="font-size:0.5rem">NEW</span>' : '')
-                        + '</div>'
-                        + (n.body ? '<div class="notif-body mt-1">' + n.body + '</div>' : '')
-                        + (n.time ? '<div class="notif-time mt-1" style="font-size:0.7rem; opacity:0.6;">' + n.time + '</div>' : '')
-                        + '</div>';
+                    html += `
+                    <div class="notif-item ${statusClass}" style="${styleStr}" onclick="readNotif('${n.id}')">
+                        <div class="d-flex justify-content-between align-items-start mb-1">
+                            <span class="notif-title fw-bold" style="font-size:0.85rem;">${n.title || 'ไม่มีชื่อเรื่อง'}</span>
+                            ${isUpcoming ? '<span class="notif-status-badge bg-primary text-white">เร็วๆ นี้</span>' : ''}
+                            ${isNew && !isUpcoming ? '<span class="notif-status-badge bg-danger text-white">NEW</span>' : ''}
+                        </div>
+                        <div class="notif-body small text-muted mb-1">${n.body || ''}</div>
+                        <div class="d-flex justify-content-between align-items-center mt-2">
+                             <div class="small fw-bold" style="color:${color}; font-size:0.7rem;">
+                                ${CATEGORY_ICONS[cat] || '📢'} ${(n.displayDate || n.date || '')}
+                             </div>
+                             <div class="text-muted" style="font-size:0.65rem;">${n.time || ''}</div>
+                        </div>
+                    </div>`;
                 });
 
                 list.innerHTML = debugHtml + html;
-                updateAddAnnounceButton(); // เพื่อให้ Role Info ขึ้น
-                updateBadge(unread);
+                updateAddAnnounceButton();
+                updateBadge(unreadCount);
 
             } catch (err) {
                 console.error('🚫 renderNotifList Crash:', err);
