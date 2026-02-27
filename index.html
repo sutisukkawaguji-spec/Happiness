@@ -1808,6 +1808,15 @@
         var configNotifications = [];   // เก็บ notifications จาก config (system) แยกต่างหาก
         var serverErrorMessage = '';
 
+        var CATEGORY_ICONS = {
+            activity: '🎉', training: '📚', welfare: '❤️',
+            meeting: '💼', holiday: '🏖️', general: '📢'
+        };
+        var CATEGORY_COLORS = {
+            activity: '#6c5ce7', training: '#0984e3', welfare: '#e84393',
+            meeting: '#00b894', holiday: '#fdcb6e', general: '#636e72'
+        };
+
         // =====================================================
         // 🔒 ROLE PERMISSION SYSTEM (4 Levels)
         // =====================================================
@@ -2551,63 +2560,48 @@
                         // โหลดข้อมูล Dashboard ให้ Manager ทันที
                         if (canViewDashboard()) fetchManagerData();
 
-                        // --- 🚨 SYSTEM UPDATE PROMPT ---
-                        // 🔔 โหลดประกาศข่าวสารทันที (ทำให้กระดิ่งแสดง badge)
-                        fetchAnnouncements();
-                        updateAddAnnounceButton(); // ✅ ตรวจสิทธิ์สร้างประกาศและดูหน้าผู้บริหาร
-
-                        if (data.config) {
-                            renderAnnouncement(data.config);
-                            loadNotificationsFromConfig(data.config); // ✅ โหลด notifications
-                            notifyFromConfig(data.config);            // ✅ แสดง native notification
-
-                            // --- ✅ ระบบแจ้งอัปเดต (ตรวจจาก config หรือ version สำรอง) ---
-                            const APP_LOCAL_VERSION = '2.5.0'; // 🔧 เพิ่ม version นี้ทุกครั้งที่อัปเดตแอป
-                            const configVersion = (data.config && data.config.version) ? data.config.version : APP_LOCAL_VERSION;
+                        // --- 🚨 Sequential Dialogs (Step-by-Step) ---
+                        async function showLifecycleDialogs(config) {
+                            // 1. ตรวจสอบเวอร์ชัน
+                            const APP_LOCAL_VERSION = '2.5.1'; // อัปเกรดเวอร์ชันภายใน
+                            const configVersion = (config && config.version) ? config.version : APP_LOCAL_VERSION;
                             const localVer = localStorage.getItem('appVersion');
+
                             if (localVer !== configVersion) {
-                                const updateTitle = (data.config && data.config.title) ? data.config.title : '🆕 อัปเดตระบบใหม่!';
-                                const updateMsg = (data.config && data.config.message) ? data.config.message : `
+                                const updateTitle = (config && config.title) ? config.title : '🆕 อัปเดตระบบใหม่!';
+                                const updateMsg = (config && config.message) ? config.message : `
                                     <div class="text-start" style="font-size: 0.9rem; line-height: 1.7;">
                                         <span class="badge bg-success mb-2">Version ${configVersion}</span><br>
-                                        ✅ <b>แก้ไขแบบสอบถามประจำเดือน:</b> แสดงได้ถูกต้อง<br>
-                                        ✅ <b>กระดิ่งแจ้งเตือน:</b> แสดง badge ข่าวสารทันทีหลัง login<br>
-                                        ✅ <b>ระบบอัปเดต:</b> แสดงทุกครั้งเมื่อมีการเปลี่ยนแปลง
+                                        ✅ <b>ความเสถียร:</b> แก้ไขข้อผิดพลาด "Initialization" ในกระดิ่ง<br>
+                                        ✅ <b>ลำดับขั้นตอน:</b> ระบบจะแสดงการแจ้งเตือนทีละขั้น ไม่ซ้อนกัน<br>
+                                        ✅ <b>การดึงข้อมูล:</b> ปรับปรุงการโหลดข้อมูลประกาศให้แม่นยำขึ้น
                                     </div>`;
-                                Swal.fire({
+
+                                await Swal.fire({
                                     title: updateTitle,
                                     html: updateMsg,
                                     icon: 'info',
                                     confirmButtonText: '👍 รับทราบ!',
                                     confirmButtonColor: '#6c5ce7',
-                                    backdrop: `rgba(0,0,123,0.4)`
-                                }).then(() => {
-                                    localStorage.setItem('appVersion', configVersion);
+                                    backdrop: `rgba(0,0,123,0.4)`,
+                                    allowOutsideClick: false
                                 });
+                                localStorage.setItem('appVersion', configVersion);
                             }
-                        } else {
-                            // ✅ fallback: ถ้าไม่มี config ก็ยังเช็ค version สำรองได้
-                            const APP_LOCAL_VERSION = '2.5.0';
-                            const localVer = localStorage.getItem('appVersion');
-                            if (localVer !== APP_LOCAL_VERSION) {
-                                Swal.fire({
-                                    title: '🆕 อัปเดตระบบใหม่!',
-                                    html: `<div class="text-start" style="font-size: 0.9rem; line-height: 1.7;">
-                                        <span class="badge bg-success mb-2">Version ${APP_LOCAL_VERSION}</span><br>
-                                        ✅ <b>แก้ไขแบบสอบถามประจำเดือน:</b> แสดงได้ถูกต้อง<br>
-                                        ✅ <b>กระดิ่งแจ้งเตือน:</b> แสดง badge ข่าวสารทันทีหลัง login<br>
-                                        ✅ <b>ระบบอัปเดต:</b> แสดงทุกครั้งเมื่อมีการเปลี่ยนแปลง
-                                    </div>`,
-                                    icon: 'info',
-                                    confirmButtonText: '👍 รับทราบ!',
-                                    confirmButtonColor: '#6c5ce7'
-                                }).then(() => {
-                                    localStorage.setItem('appVersion', APP_LOCAL_VERSION);
-                                });
-                            }
+
+                            // 2. เมื่อกดปิดแจ้งเตือนเวอร์ชันแล้ว ค่อยเช็คแบบสอบถาม
+                            checkAndShowSurvey();
+                            requestNotificationPermission();
                         }
 
-                        checkAndShowSurvey();
+                        if (data.config) {
+                            renderAnnouncement(data.config);
+                            loadNotificationsFromConfig(data.config);
+                            notifyFromConfig(data.config);
+                        }
+
+                        showLifecycleDialogs(data.config);
+                        updateAddAnnounceButton();
                         requestNotificationPermission(); // ✅ ขอ permission notification
                         updateAddAnnounceButton();        // ✅ แสดงปุ่ม + ถ้าเป็น manager
 
@@ -4419,18 +4413,7 @@
             });
         }
 
-        // =====================================================
-        // 🔔 Notification + Announcement System (Complete)
-        // =====================================================
-
-        const CATEGORY_ICONS = {
-            activity: '🎉', training: '📚', welfare: '❤️',
-            meeting: '💼', holiday: '🏖️', general: '📢'
-        };
-        const CATEGORY_COLORS = {
-            activity: '#6c5ce7', training: '#0984e3', welfare: '#e84393',
-            meeting: '#00b894', holiday: '#fdcb6e', general: '#636e72'
-        };
+        // เปิด/ปิด panel
 
         // เปิด/ปิด panel
         function toggleNotifPanel() {
