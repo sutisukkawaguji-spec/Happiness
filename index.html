@@ -4417,12 +4417,14 @@
 
         // ดึงประกาศจาก GAS
         function fetchAnnouncements() {
-            // ✅ แสดง loading ทันทีเมื่อเริ่มดึง
             const list = document.getElementById('notifList');
-            if (list) {
-                const debugEl = document.getElementById('debugRoleInfo');
-                const debugHtml = debugEl ? debugEl.outerHTML : '';
-                list.innerHTML = debugHtml + `
+
+            // ✅ ถ้ามีข้อมูลอยู่แล้ว ให้แสดงแบบชัวคราวก่อน แล้ว refresh เบื้องหลัง
+            if (appNotifications.length > 0) {
+                renderNotifList(); // แสดงข้อมูลเดิมทันที
+            } else if (list) {
+                // บอกสถานะ loading เฉพาะตอนเปิดครั้งแรก
+                list.innerHTML = `
                 <div class="text-center py-4">
                     <div class="spinner-border spinner-border-sm text-primary mb-2" role="status"></div>
                     <div class="text-muted small">กำลังโหลดข่าวสาร...</div>
@@ -4430,38 +4432,55 @@
             }
 
             fetch(GAS_URL + '?action=get_announcements&t=' + Date.now())
-                .then(r => r.json())
-                .then(data => {
-                    console.log("🔔 [fetchAnnouncements] Raw data from GAS:", JSON.stringify(data));
+                .then(r => r.text())  // ✅ ใช้ text() แทน json() เพื่อหลีก parse error
+                .then(text => {
+                    console.log('🔔 [fetchAnnouncements] Response text (first 200):', text.substring(0, 200));
+                    let data;
+                    try {
+                        data = JSON.parse(text);
+                    } catch (parseErr) {
+                        console.error('🔴 [fetchAnnouncements] JSON parse error:', parseErr, '\nRaw text:', text);
+                        serverErrorMessage = 'JSON parse error';
+                        if (appNotifications.length === 0 && list) {
+                            list.innerHTML = `<div class="text-center py-4">
+                                <div style="font-size:1.5rem">⚠️</div>
+                                <div class="text-muted small mb-2">ปุย GAS ไม่ได้ JSON (parse error)</div>
+                                <button class="btn btn-sm btn-outline-primary rounded-pill" onclick="fetchAnnouncements()">ลองใหม่</button>
+                            </div>`;
+                        }
+                        return;
+                    }
+
+                    console.log('🔔 [fetchAnnouncements] Items:', (data.announcements || []).length);
                     serverErrorMessage = data.message || '';
                     const gasAnnouncements = (data && data.announcements) || [];
-                    console.log("🔔 [fetchAnnouncements] Items count:", gasAnnouncements.length);
-                    const gasNotifs = gasAnnouncements.map(a => ({
-                        id: a.id,
-                        title: (CATEGORY_ICONS[a.category] || '📢') + ' ' + a.title,
-                        body: a.body,
-                        time: a.displayDate ? `📅 ${a.displayDate}` : (a.date ? `📅 ${a.date}` : ''),
-                        source: 'gas',
-                        category: a.category,
-                        ts: a.ts || ''  // ✅ ต้องมี ts เพื่อให้ timestamp-based unread ทำงานได้
-                    }));
 
-                    // ✅ รวม gasNotifs + configNotifications (แยก array ไม่ทับกัน)
-                    const oldIds = new Set(appNotifications.map(n => n.id));
-                    const isInitialLoad = appNotifications.length === 0 && configNotifications.length === 0;
-                    let hasNew = false;
+                    try {
+                        const gasNotifs = gasAnnouncements.map(a => ({
+                            id: a.id,
+                            title: (CATEGORY_ICONS[a.category] || '📢') + ' ' + (a.title || ''),
+                            body: a.body || '',
+                            time: a.displayDate ? `📅 ${a.displayDate}` : (a.date ? `📅 ${a.date}` : ''),
+                            source: 'gas',
+                            category: a.category || 'general',
+                            ts: a.ts || ''
+                        }));
 
-                    gasNotifs.forEach(n => {
-                        if (!oldIds.has(n.id) && !isInitialLoad) hasNew = true;
-                    });
+                        const oldIds = new Set(appNotifications.map(n => n.id));
+                        const isInitialLoad = appNotifications.length === 0 && configNotifications.length === 0;
+                        let hasNew = false;
+                        gasNotifs.forEach(n => {
+                            if (!oldIds.has(n.id) && !isInitialLoad) hasNew = true;
+                        });
 
-                    // ตั้งค่า appNotifications ใหม่ = GAS + config ที่ save ไว้ใน configNotifications
-                    appNotifications = [...gasNotifs, ...configNotifications];
-                    renderNotifList();
+                        appNotifications = [...gasNotifs, ...configNotifications];
+                        renderNotifList();
 
-                    // แจ้งเตือนสั่นและเสียงถ้ามีใหม่ทีหลัง
-                    if (hasNew) {
-                        triggerNotificationEffects();
+                        if (hasNew) triggerNotificationEffects();
+
+                    } catch (mapErr) {
+                        console.error('🔴 [fetchAnnouncements] Map/render error:', mapErr);
+                        if (list) list.innerHTML = `<div class="text-center py-4 text-danger small">เกิดข้อผิดพลาด: ${mapErr.message}</div>`;
                     }
                 })
                 .catch((err) => {
