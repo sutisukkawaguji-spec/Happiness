@@ -3229,8 +3229,8 @@
             if (!appUsers || !Array.isArray(appUsers)) return;
 
             let totalHappy = 0, userWithDataCount = 0, issueCount = 0;
-            let dbTotalPosts = 0;
-            let dbTotalTagged = 0;
+            let totalActivitiesCount = 0;
+            let totalTeamworkCount = 0;
             globalUserStatsMap = {};
 
             // ✅ 1. ตั้งค่าพื้นฐานและดึงข้อมูลจาก Database
@@ -3240,12 +3240,13 @@
                 if (!uid) return;
 
                 const avg = parseFloat(u.happy) || 0;
-                const postsTotal = parseInt(u.totalCount) || 0;
-                const taggedTotal = parseInt(u.taggedCount) || 0;
-                const witnessTotal = parseInt(u.witnessCount) || 0;
+                // ดึงค่าตามชื่อฟิลด์ที่เป็นไปได้ หรือถ้าเป็น 0 ให้รองรับกรณีส่งมาเป็น String
+                const postsTotal = parseInt(u.totalCount || u.posts || 0);
+                const taggedTotal = parseInt(u.taggedCount || u.tagged || 0);
+                const witnessTotal = parseInt(u.witnessCount || u.witness || 0);
 
-                dbTotalPosts += postsTotal;
-                dbTotalTagged += taggedTotal;
+                totalActivitiesCount += postsTotal;
+                totalTeamworkCount += taggedTotal;
 
                 globalUserStatsMap[uid] = {
                     id: uid,
@@ -3259,7 +3260,6 @@
                     postsMade: postsTotal,
                     taggedIn: taggedTotal,
                     witnessCount: witnessTotal,
-                    verifiedOthers: witnessTotal,
                     topFriends: Array.isArray(u.topFriends) ? u.topFriends : []
                 };
 
@@ -3270,39 +3270,20 @@
                 }
             });
 
-            // ✅ 2. ตัวช่วยคำนวณสำรอง: ถ้ายอดรวมจาก DB เป็น 0 ให้ลองนับจาก Feed ล่าสุดที่โหลดมา (กันเหนียว)
-            if (globalFeedData && globalFeedData.length > 0) {
-                globalFeedData.forEach(post => {
-                    const pid = String(post.user_line_id);
-                    if (globalUserStatsMap[pid]) {
-                        // ถ้ายอดรวมใน DB เป็น 0 เราจะใช้วิธีนับจาก Feed แทน (หรือนับบวกเข้าไปถ้าต้องการ)
-                        // แต่ในที่นี้เราจะนับพยาน (Witness) จากข้อมูลที่โหลดมาเพิ่มด้วย
-                        if (post.verifies && Array.isArray(post.verifies)) {
-                            post.verifies.forEach(v => {
-                                const vid = String(v.lineId);
-                                if (globalUserStatsMap[vid] && globalUserStatsMap[vid].witnessCount === 0) {
-                                    // นับเพิ่มเฉพาะคนที่ใน DB ยังไม่มีข้อมูล
-                                }
-                            });
-                        }
-                    }
-                });
-            }
-
-            // ✅ 3. อัปเดต KPI Cards (ทำทันที)
+            // ✅ 2. อัปเดต KPI Cards
             try {
-                // Happy Index
+                // Happy Index (%)
                 const maxHappy = userWithDataCount > 0 ? totalHappy / userWithDataCount : 0;
                 const avgOrgHappyPct = maxHappy > 10 ? maxHappy.toFixed(0) : (maxHappy / 10 * 100).toFixed(0);
                 const kh = document.getElementById('kpi-happy');
                 if (kh) kh.innerText = avgOrgHappyPct + '%';
 
-                // กิจกรรมทั้งหมด -> เปลี่ยนเป็น "จำนวนคน" ตามใจสั่งมา
+                // กิจกรรมทั้งหมด (เปลี่ยนชื่อจาก "จำนวนคน" เป็น "ครั้ง" ตามสถิติจริง)
                 const kp = document.getElementById('kpi-posts');
-                if (kp) kp.innerText = appUsers.length + ' คน';
+                if (kp) kp.innerText = totalActivitiesCount + ' ครั้ง';
 
                 // กิจกรรมร่วม (ทีม) %
-                const teamWorkRate = dbTotalPosts > 0 ? ((dbTotalTagged / dbTotalPosts) * 100).toFixed(0) : 0;
+                const teamWorkRate = totalActivitiesCount > 0 ? ((totalTeamworkCount / totalActivitiesCount) * 100).toFixed(0) : 0;
                 const kt = document.getElementById('kpi-teamwork');
                 if (kt) kt.innerText = teamWorkRate + '%';
 
@@ -3465,9 +3446,35 @@
                                 </div>
                             </div>
                         </div>
+                        <div class="row g-2 mb-2">
+                             <div class="col-4">
+                                <div class="p-2 border rounded bg-white text-center">
+                                    <small class="text-muted d-block small">สร้าง</small>
+                                    <span class="fs-5 fw-bold text-dark">${user.postsMade || 0}</span>
+                                </div>
+                            </div>
+                             <div class="col-4">
+                                <div class="p-2 border rounded bg-white text-center">
+                                    <small class="text-muted d-block small">แท็กทีม</small>
+                                    <span class="fs-5 fw-bold text-dark">${user.taggedIn || 0}</span>
+                                </div>
+                            </div>
+                             <div class="col-4">
+                                <div class="p-2 border rounded bg-white text-center">
+                                    <small class="text-muted d-block small">พยาน</small>
+                                    <span class="fs-5 fw-bold text-dark">${user.witnessCount || 0}</span>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="border rounded p-3 bg-white mb-3">
                            <div class="fw-bold mb-2 small text-muted"><i class="fas fa-chart-line me-1"></i> สัดส่วนความดี (Radar)</div>
-                           <canvas id="staffRadarChart" style="max-height: 200px;"></canvas>
+                           <canvas id="staffRadarChart" style="max-height: 180px;"></canvas>
+                        </div>
+                        <div class="text-center">
+                            <span class="badge ${user.avgHappy < 5 ? 'bg-danger-subtle text-danger' : (user.avgHappy < 7 ? 'bg-warning-subtle text-warning' : 'bg-success-subtle text-success')} px-3 py-2 rounded-pill">
+                                สถานะความสุข${user.avgHappy < 5 ? 'วิกฤต' : (user.avgHappy < 7 ? 'ควรระวัง' : 'ปกติ')}
+                            </span>
                         </div>
                         ${helperHtml}
                     </div>
