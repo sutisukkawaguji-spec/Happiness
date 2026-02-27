@@ -1498,20 +1498,22 @@
         <div id="header-user" class="glass-card text-center pb-2">
             <div class="row align-items-center">
                 <div class="col-4 position-relative">
-                    <button id="darkModeToggle"
-                        class="btn btn-sm btn-light position-absolute top-0 start-0 z-3 m-1 rounded-circle shadow-sm"
-                        onclick="toggleDarkMode()">
-                        <i class="fas fa-moon"></i>
-                    </button>
-                    <button id="musicToggle"
-                        class="btn btn-sm btn-light position-absolute top-0 start-0 z-3 m-1 rounded-circle shadow-sm"
-                        style="margin-left: 45px !important;" onclick="toggleMusic()">
-                        <i class="fas fa-music"></i>
-                    </button>
-                    <div class="profile-container">
+                    <div class="profile-container mb-1">
                         <div id="userAura" class="aura-glow aura-active"></div>
                         <img id="userImg" src="https://dummyimage.com/90x90/cccccc/ffffff&text=User"
                             class="profile-img">
+                    </div>
+                    <div class="d-flex justify-content-center gap-2 mt-2">
+                        <button id="darkModeToggle" class="btn btn-sm btn-light rounded-circle shadow-sm"
+                            style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;"
+                            onclick="toggleDarkMode()">
+                            <i class="fas fa-moon" style="font-size: 0.8rem;"></i>
+                        </button>
+                        <button id="musicToggle" class="btn btn-sm btn-light rounded-circle shadow-sm"
+                            style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;"
+                            onclick="toggleMusic()">
+                            <i class="fas fa-music" style="font-size: 0.8rem;"></i>
+                        </button>
                     </div>
                 </div>
                 <div class="col-8 text-start">
@@ -2090,11 +2092,19 @@
             if (!url) return '';
             url = url.trim();
 
-            // 1. 🔴 YouTube (Convert to Embed Player)
+            // 1. 🔴 YouTube (Convert to Embed Player with API support)
             const ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:.*v=|.*\/))([\w-]{11})/);
             if (ytMatch && ytMatch[1]) {
+                const videoId = ytMatch[1];
                 return `<div class="ratio ratio-16x9 rounded-4 overflow-hidden shadow-sm border">
-                        <iframe src="https://www.youtube.com/embed/${ytMatch[1]}" allowfullscreen style="border:0;"></iframe>
+                        <iframe id="yt-${videoId}" src="https://www.youtube.com/embed/${videoId}?enablejsapi=1" allowfullscreen style="border:0;" class="yt-video"></iframe>
+                    </div>`;
+            }
+
+            // 1.1 🎥 Native Video (MP4, WebM, Ogg)
+            if (url.match(/\.(mp4|webm|ogg)($|\?)/i)) {
+                return `<div class="ratio ratio-16x9 rounded-4 overflow-hidden shadow-sm border bg-dark">
+                        <video src="${url}" controls class="native-video" style="width:100%; height:100%;"></video>
                     </div>`;
             }
 
@@ -2148,24 +2158,101 @@
         const badgeSound = new Audio('https://www.myinstants.com/media/sounds/level-up-sound-effect.mp3'); // Example achievement sound
         badgeSound.volume = 0.5;
 
-        async function toggleMusic() {
+        // ✅ ฟังก์ชันจัดการการเปิด/ปิดเพลงประกอบ
+        let isMusicManuallyPaused = false;
+        let isPowerPausedByVideo = false;
+
+        async function toggleMusic(forcePlay = null) {
             const music = document.getElementById('bgMusic');
             const btnIcon = document.querySelector('#musicToggle i');
-            if (music.paused) {
+            if (!music) return;
+
+            if (forcePlay === true || (forcePlay === null && music.paused)) {
                 try {
                     await music.play();
                     btnIcon.className = 'fas fa-pause text-success';
+                    isMusicManuallyPaused = false;
                 } catch (err) {
-                    Swal.fire({
-                        toast: true, position: 'top', icon: 'warning',
-                        title: 'กรุณาคลิกเพื่อเล่นเพลง', timer: 2000, showConfirmButton: false
-                    });
+                    console.warn("Playback failed:", err);
                 }
-            } else {
+            } else if (forcePlay === false || (forcePlay === null && !music.paused)) {
                 music.pause();
                 btnIcon.className = 'fas fa-play';
+                if (forcePlay === null) isMusicManuallyPaused = true;
             }
         }
+
+        // ✅ ตรวจจับการเล่นวิดีโอเพื่อหยุดเพลงชั่วคราว
+        function setupVideoMusicSync() {
+            // สำหรับ Video Tag ปกติ
+            document.addEventListener('play', function (e) {
+                if (e.target.tagName === 'VIDEO') {
+                    const music = document.getElementById('bgMusic');
+                    if (music && !music.paused) {
+                        isPowerPausedByVideo = true;
+                        toggleMusic(false);
+                    }
+                }
+            }, true);
+
+            document.addEventListener('pause', function (e) {
+                if (e.target.tagName === 'VIDEO') {
+                    if (isPowerPausedByVideo && !isMusicManuallyPaused) {
+                        toggleMusic(true);
+                        isPowerPausedByVideo = false;
+                    }
+                }
+            }, true);
+
+            document.addEventListener('ended', function (e) {
+                if (e.target.tagName === 'VIDEO') {
+                    if (isPowerPausedByVideo && !isMusicManuallyPaused) {
+                        toggleMusic(true);
+                        isPowerPausedByVideo = false;
+                    }
+                }
+            }, true);
+
+            // สำหรับ YouTube IFrame (ใช้ Messenger แจ้งกลับ)
+            window.addEventListener('message', function (event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.event === 'infoDelivery' && data.info && data.info.playerState !== undefined) {
+                        const state = data.info.playerState;
+                        const music = document.getElementById('bgMusic');
+                        if (state === 1) { // 1 = Playing
+                            if (music && !music.paused) {
+                                isPowerPausedByVideo = true;
+                                toggleMusic(false);
+                            }
+                        } else if (state === 2 || state === 0) { // 2 = Paused, 0 = Ended
+                            if (isPowerPausedByVideo && !isMusicManuallyPaused) {
+                                toggleMusic(true);
+                                isPowerPausedByVideo = false;
+                            }
+                        }
+                    }
+                } catch (e) { }
+            });
+        }
+        setupVideoMusicSync();
+
+        // ✅ ตัวช่วยเล่นเพลงอัตโนมัติเมื่อมีการสัมผัสหน้าจอครั้งแรก (Browser Workaround)
+        function initAutoplay() {
+            const playOnce = () => {
+                const music = document.getElementById('bgMusic');
+                if (music && music.paused) {
+                    music.play().then(() => {
+                        document.querySelector('#musicToggle i').className = 'fas fa-pause text-success';
+                    }).catch(() => { });
+                }
+                document.removeEventListener('click', playOnce);
+                document.removeEventListener('touchstart', playOnce);
+            };
+            document.addEventListener('click', playOnce);
+            document.addEventListener('touchstart', playOnce);
+        }
+        initAutoplay();
 
         // --- DARK MODE LOGIC ---
         function toggleDarkMode() {
