@@ -3229,24 +3229,20 @@
             if (!appUsers || !Array.isArray(appUsers)) return;
 
             let totalHappy = 0, userWithDataCount = 0, issueCount = 0;
-            let totalActivitiesCount = 0;
-            let totalTeamworkCount = 0;
+            let totalActivityTimes = 0;
+            let totalTeamworkTimes = 0;
             globalUserStatsMap = {};
 
-            // ✅ 1. ตั้งค่าพื้นฐานและดึงข้อมูลจาก Database
+            // ✅ 1. ตั้งค่าพื้นฐาน (Initialize Map จาก Database)
             appUsers.forEach(u => {
                 if (!u) return;
                 const uid = String(u.lineId || u.id || '');
                 if (!uid) return;
 
-                const avg = parseFloat(u.happy) || 0;
-                // ดึงค่าตามชื่อฟิลด์ที่เป็นไปได้ หรือถ้าเป็น 0 ให้รองรับกรณีส่งมาเป็น String
-                const postsTotal = parseInt(u.totalCount || u.posts || 0);
-                const taggedTotal = parseInt(u.taggedCount || u.tagged || 0);
-                const witnessTotal = parseInt(u.witnessCount || u.witness || 0);
-
-                totalActivitiesCount += postsTotal;
-                totalTeamworkCount += taggedTotal;
+                const dbPosts = parseInt(u.totalCount || u.posts || 0);
+                const dbTagged = parseInt(u.taggedCount || u.tagged || 0);
+                const dbWitness = parseInt(u.witnessCount || u.witness || 0);
+                const happyRaw = parseFloat(u.happyScore || u.happy) || 0;
 
                 globalUserStatsMap[uid] = {
                     id: uid,
@@ -3255,44 +3251,75 @@
                     role: u.role || 'Staff',
                     score: parseInt(u.score) || 0,
                     level: parseInt(u.level) || 1,
-                    avgHappy: avg,
+                    avgHappy: happyRaw,
                     virtueStats: u.virtueStats || {},
-                    postsMade: postsTotal,
-                    taggedIn: taggedTotal,
-                    witnessCount: witnessTotal,
+                    postsMade: dbPosts,
+                    taggedIn: dbTagged,
+                    witnessCount: dbWitness,
                     topFriends: Array.isArray(u.topFriends) ? u.topFriends : []
                 };
 
-                if (avg > 0) {
-                    totalHappy += avg;
+                if (happyRaw > 0) {
+                    totalHappy += happyRaw;
                     userWithDataCount++;
-                    if (avg < 5.0) issueCount++;
+                    if (happyRaw < 5.0) issueCount++;
                 }
             });
 
-            // ✅ 2. อัปเดต KPI Cards
+            // ✅ 2. 👑 ผสานข้อมูลจาก Live Feed (ถ้ามีข้อมูลที่ยังไม่ได้ Sync ลง DB)
+            if (globalFeedData && globalFeedData.length > 0) {
+                const liveStats = {};
+                globalFeedData.forEach(post => {
+                    const pid = String(post.user_line_id);
+                    if (!liveStats[pid]) liveStats[pid] = { posts: 0, tagged: 0, witness: 0 };
+                    liveStats[pid].posts++;
+
+                    if (post.taggedFriends) {
+                        const tags = String(post.taggedFriends).split(',').map(s => s.trim()).filter(s => s);
+                        tags.forEach(tId => {
+                            if (!liveStats[tId]) liveStats[tId] = { posts: 0, tagged: 0, witness: 0 };
+                            liveStats[tId].tagged++;
+                        });
+                    }
+                    if (post.verifies && Array.isArray(post.verifies)) {
+                        post.verifies.forEach(v => {
+                            const vid = String(v.lineId);
+                            if (!liveStats[vid]) liveStats[vid] = { posts: 0, tagged: 0, witness: 0 };
+                            liveStats[vid].witness++;
+                        });
+                    }
+                });
+
+                Object.keys(liveStats).forEach(uid => {
+                    if (globalUserStatsMap[uid]) {
+                        globalUserStatsMap[uid].postsMade = Math.max(globalUserStatsMap[uid].postsMade, liveStats[uid].posts);
+                        globalUserStatsMap[uid].taggedIn = Math.max(globalUserStatsMap[uid].taggedIn, liveStats[uid].tagged);
+                        globalUserStatsMap[uid].witnessCount = Math.max(globalUserStatsMap[uid].witnessCount, liveStats[uid].witness);
+                    }
+                });
+            }
+
+            Object.values(globalUserStatsMap).forEach(user => {
+                totalActivityTimes += user.postsMade;
+                totalTeamworkTimes += user.taggedIn;
+            });
+
             try {
-                // Happy Index (%)
                 const maxHappy = userWithDataCount > 0 ? totalHappy / userWithDataCount : 0;
                 const avgOrgHappyPct = maxHappy > 10 ? maxHappy.toFixed(0) : (maxHappy / 10 * 100).toFixed(0);
                 const kh = document.getElementById('kpi-happy');
                 if (kh) kh.innerText = avgOrgHappyPct + '%';
 
-                // กิจกรรมทั้งหมด (เปลี่ยนชื่อจาก "จำนวนคน" เป็น "ครั้ง" ตามสถิติจริง)
                 const kp = document.getElementById('kpi-posts');
-                if (kp) kp.innerText = totalActivitiesCount + ' ครั้ง';
+                if (kp) kp.innerText = totalActivityTimes + ' ครั้ง';
 
-                // กิจกรรมร่วม (ทีม) %
-                const teamWorkRate = totalActivitiesCount > 0 ? ((totalTeamworkCount / totalActivitiesCount) * 100).toFixed(0) : 0;
+                const teamWorkRate = totalActivityTimes > 0 ? ((totalTeamworkTimes / totalActivityTimes) * 100).toFixed(0) : 0;
                 const kt = document.getElementById('kpi-teamwork');
                 if (kt) kt.innerText = teamWorkRate + '%';
 
-                // ต้องดูแล (คน)
                 const ki = document.getElementById('kpi-issues');
                 if (ki) ki.innerText = issueCount + ' คน';
-            } catch (e) {
-                console.error("KPI Update Error:", e);
-            }
+            } catch (e) { console.error(e); }
 
             renderStaffTable(globalUserStatsMap);
         }
@@ -3836,62 +3863,7 @@
             // Logic เช็คกราฟขาลง
         }
 
-        function showStaffModal(userId) {
-            let user = globalUserStatsMap[userId];
-            if (!user) return;
-            let helperHtml = '';
 
-            if (user.avgHappy < 5.0) {
-                if (user.topFriends && user.topFriends.length > 0) {
-                    helperHtml = `<div class="mt-3 bg-danger bg-opacity-10 border border-danger p-2 rounded text-start">
-                        <small class="text-danger fw-bold"><i class="fas fa-robot"></i> System Rescue Action:</small><br>
-                        <small class="text-dark">มอบหมายคู่บัดดี้ดูแลใจ <b class="text-primary">${user.topFriends[0].name}</b></small>
-                    </div>`;
-                } else {
-                    helperHtml = `<div class="mt-3 bg-light p-2 rounded text-start"><small class="text-danger">โปรดมอบหมายผู้ดูแล</small></div>`;
-                }
-            } else {
-                helperHtml = `<div class="mt-3 bg-light p-2 rounded text-start"><small class="text-success">สถานะความสุขปกติ</small></div>`;
-            }
-
-            Swal.fire({
-                html: `
-                    <div style="text-align:center;">
-                        <img src="${user.img}" style="width:90px; height:90px; border-radius:50%; margin-bottom:10px; border:2px solid #ddd; object-fit:cover;">
-                        <br>
-                        <h5 class="fw-bold mb-1">${user.name}</h5>
-                        <div class="badge bg-secondary mb-3">${user.role}  • Lv.${user.level}</div>
-                        <div class="row g-2 text-center mb-2">
-                            <div class="col-6"><div class="border rounded p-2 bg-light">
-                                <small class="text-muted d-block fw-bold"><i class="fas fa-smile text-warning me-1"></i> ความสุข</small>
-                                <span class="fs-5 fw-bold ${user.avgHappy < 5 ? 'text-danger' : 'text-success'}">${user.avgHappy > 0 ? user.avgHappy.toFixed(1) : '-'}/10</span>
-                            </div></div>
-                            <div class="col-6"><div class="border rounded p-2 bg-light">
-                                <small class="text-muted d-block fw-bold"><i class="fas fa-star text-primary me-1"></i> สะสม</small>
-                                <span class="fs-5 fw-bold">${user.score}</span>
-                            </div></div>
-                        </div>
-                        <div class="row g-2 text-center mb-2">
-                            <div class="col-4"><div class="border rounded p-2 bg-light">
-                                <small class="text-muted d-block fw-bold">สร้าง</small>
-                                <span class="fs-6 fw-bold text-dark">${user.postsMade}</span>
-                            </div></div>
-                            <div class="col-4"><div class="border rounded p-2 bg-light">
-                                <small class="text-muted d-block fw-bold">แท็กทีม</small>
-                                <span class="fs-6 fw-bold text-dark">${user.taggedIn}</span>
-                            </div></div>
-                            <div class="col-4"><div class="border rounded p-2 bg-light">
-                                <small class="text-muted d-block fw-bold">พยาน</small>
-                                <span class="fs-6 fw-bold text-dark">${user.verifiedOthers}</span>
-                            </div></div>
-                        </div>
-                        ${helperHtml}
-                    </div>
-                `,
-                showConfirmButton: false,
-                showCloseButton: true
-            });
-        }
 
         // --- 📢 ANNOUNCEMENT FEATURE ---
         function renderAnnouncement(config) {
