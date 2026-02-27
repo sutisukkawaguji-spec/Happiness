@@ -1195,25 +1195,81 @@
             animation: popIn 0.3s ease;
         }
 
+        /* --- Notification Panel: Bottom Sheet เต็มหน้าจอ + Blur Backdrop --- */
+        .notif-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.45);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            z-index: 9998;
+            display: none;
+            animation: fadeIn 0.25s ease;
+        }
+
+        .notif-backdrop.show {
+            display: block;
+        }
+
         .notif-panel {
             position: fixed;
-            top: 60px;
-            right: 12px;
-            width: 300px;
-            max-height: 70vh;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            width: 100%;
+            max-height: 88vh;
             overflow-y: auto;
-            background: var(--glass-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 16px;
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+            background: #fff;
+            border-radius: 24px 24px 0 0;
+            box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.22);
             z-index: 9999;
             display: none;
-            animation: popIn 0.2s ease;
+            transform: translateY(100%);
+            transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+            padding-bottom: env(safe-area-inset-bottom, 12px);
+        }
+
+        [data-theme="dark"] .notif-panel {
+            background: #1e1e2e;
+            color: #eee;
         }
 
         .notif-panel.show {
             display: block;
+            transform: translateY(0);
         }
+
+        /* Handle bar ด้านบนของ panel */
+        .notif-handle {
+            width: 40px;
+            height: 5px;
+            background: #ddd;
+            border-radius: 99px;
+            margin: 10px auto 4px;
+        }
+
+        .notif-panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 16px 12px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+            position: sticky;
+            top: 0;
+            background: inherit;
+            z-index: 1;
+        }
+
+        .notif-panel-title {
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: #2d3436;
+        }
+
+        [data-theme="dark"] .notif-panel-title {
+            color: #eee;
+        }
+
 
         .notif-item {
             padding: 10px 14px;
@@ -1315,27 +1371,27 @@
         <!-- การแจ้งเตือนและ Notification Panel -->
         <div id="announcementArea" style="display: none;"></div>
 
-        <!-- Notification Panel -->
+        <!-- Notification Backdrop + Panel (Bottom Sheet) -->
+        <div class="notif-backdrop" id="notifBackdrop" onclick="closeNotifPanel()"></div>
         <div class="notif-panel" id="notifPanel">
-            <div class="d-flex justify-content-between align-items-center px-3 pt-3 pb-2 border-bottom">
-                <span class="fw-bold">🔔 ข่าวและกิจกรรม</span>
+            <div class="notif-handle"></div>
+            <div class="notif-panel-header">
+                <span class="notif-panel-title">🔔 ข่าวและกิจกรรม</span>
                 <div class="d-flex gap-2 align-items-center">
-                    <!-- ปุ่มรีโหลด -->
                     <button class="btn btn-sm btn-light rounded-circle"
-                        style="width:28px;height:28px;padding:0;font-size:0.8rem;" onclick="fetchAnnouncements()"
+                        style="width:32px;height:32px;padding:0;font-size:0.9rem;" onclick="fetchAnnouncements()"
                         title="รีโหลดข้อมูล">
                         🔄
                     </button>
-                    <!-- ปุ่ม + เพิ่มประกาศ (เห็นเฉพาะ manager) -->
                     <button id="addAnnounceBtnInPanel" class="btn btn-sm btn-primary rounded-circle d-none"
-                        style="width:28px;height:28px;padding:0;font-size:1rem;line-height:1;"
+                        style="width:32px;height:32px;padding:0;font-size:1.1rem;line-height:1;"
                         onclick="openAnnounceModal()" title="เพิ่มประกาศ">
                         +
                     </button>
-                    <button class="btn btn-sm btn-link text-muted p-0" onclick="markAllNotifRead()">อ่านทั้งหมด</button>
-                    <!-- ปุ่มปิด panel -->
+                    <button class="btn btn-sm btn-link text-muted p-0 small"
+                        onclick="markAllNotifRead()">อ่านทั้งหมด</button>
                     <button class="btn btn-sm btn-light rounded-circle"
-                        style="width:26px;height:26px;padding:0;font-size:0.75rem;"
+                        style="width:32px;height:32px;padding:0;font-size:1rem;font-weight:bold;"
                         onclick="closeNotifPanel()">×</button>
                 </div>
             </div>
@@ -3270,12 +3326,39 @@
 
 
         // --- NAVIGATION ---
-        // 🟡 แก้ไข switchTab เพื่อจัดการจุดแดง
+        // ✅ ตัวช่วยแปลง Role → Level (ต้องใช้ก่อน switchTab)
+        function getUserLevel(user) {
+            if (!user) return 99;
+            var role = (user.role || '').toLowerCase().trim();
+            if (role === 'admin' || role === 'ผู้ดูแลระบบ') return 1;
+            if (role === 'manager' || role === 'ผู้บริหาร') return 2;
+            if (role === 'newsmanager' || role === 'ผู้จัดการข่าว') return 3;
+            return 4; // Staff / พนักงาน / อื่นๆ
+        }
+
+        // 🟡 แก้ไข switchTab เพื่อจัดการจุดแดง + ตรวจสิทธิ์
         function switchTab(pageId, el) {
             // ตรวจสอบ Login ก่อน
             if (!currentUser) {
                 Swal.fire({ icon: 'warning', title: 'กรุณาเข้าสู่ระบบ', text: 'ยังไม่ได้ล็อคอิน', timer: 2000 });
                 return;
+            }
+
+            // ✅ ตรวจสิทธิ์: เฉพาะ Admin (1) และ Manager (2) เข้าหน้าผู้บริหารได้
+            if (pageId === 'manager') {
+                var level = getUserLevel(currentUser);
+                if (level > 2) {
+                    Swal.fire({
+                        toast: true,
+                        icon: 'error',
+                        title: '🚫 ไม่มีสิทธิ์เข้าถึง',
+                        text: 'เฉพาะผู้บริหารและ Admin เท่านั้น',
+                        position: 'top',
+                        timer: 3000,
+                        showConfirmButton: false
+                    });
+                    return; // หยุดไม่ให้เปลี่ยนแท็บ
+                }
             }
 
             document.querySelectorAll('.page-section').forEach(p => p.classList.remove('active'));
@@ -3304,6 +3387,7 @@
                 document.getElementById('nav-badges-btn').classList.remove('nav-glow');
             }
         }
+
 
         // --- UTILS & FEED ---
         function initUserRadar() {
@@ -4337,27 +4421,34 @@
 
         // เปิด/ปิด panel
         function toggleNotifPanel() {
-            const panel = document.getElementById('notifPanel');
+            var panel = document.getElementById('notifPanel');
+            var backdrop = document.getElementById('notifBackdrop');
             if (!panel) return;
-            const isOpen = panel.classList.contains('show');
+            var isOpen = panel.classList.contains('show');
             if (isOpen) {
                 panel.classList.remove('show');
+                if (backdrop) backdrop.classList.remove('show');
             } else {
                 panel.classList.add('show');
-                fetchAnnouncements(); // โหลดข้อมูลใหม่ทุกครั้งที่เปิด
-                updateAddAnnounceButton(); // ตรวจสิทธิ์ทุกครั้งที่เปิด Panel
+                if (backdrop) backdrop.classList.add('show');
+                fetchAnnouncements();
+                updateAddAnnounceButton();
             }
         }
 
         function closeNotifPanel() {
-            const panel = document.getElementById('notifPanel');
+            var panel = document.getElementById('notifPanel');
+            var backdrop = document.getElementById('notifBackdrop');
             if (panel) panel.classList.remove('show');
+            if (backdrop) backdrop.classList.remove('show');
         }
 
         function openNotifPanel() {
-            const panel = document.getElementById('notifPanel');
+            var panel = document.getElementById('notifPanel');
+            var backdrop = document.getElementById('notifBackdrop');
             if (panel) {
                 panel.classList.add('show');
+                if (backdrop) backdrop.classList.add('show');
                 fetchAnnouncements();
             }
         }
