@@ -161,7 +161,8 @@
             Swal.fire({ title: 'กำลังบันทึกข้อมูล...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
 
             // ✅ ใช้ GAS URL เดียวกับ index.html (ตัวหลัก)
-            const GAS_URL = 'https://script.google.com/macros/s/AKfycbxRvEyRoQaxOUWR_6pTslNmCrM7IiZTRYzDDUtPtDmrhGehUq6zQpfm9MKp_CYzVmrX/exec';
+            // ✅ ดึง URL จาก localStorage ที่บันทึกมาจาก index.html
+            const GAS_URL = localStorage.getItem('GAS_URL') || 'https://script.google.com/macros/s/AKfycbxRvEyRoQaxOUWR_6pTslNmCrM7IiZTRYzDDUtPtDmrhGehUq6zQpfm9MKp_CYzVmrX/exec';
             const urlParams = new URLSearchParams(window.location.search);
             const uid = urlParams.get('uid') || 'Anonymous';
 
