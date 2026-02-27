@@ -1195,68 +1195,69 @@
             animation: popIn 0.3s ease;
         }
 
-        /* --- Notification Panel: Bottom Sheet เต็มหน้าจอ + Blur Backdrop --- */
+        /* --- Notification Panel: Floating Modal ตรงกลาง + Blur Backdrop --- */
         .notif-backdrop {
             position: fixed;
             inset: 0;
-            background: rgba(0, 0, 0, 0.45);
-            backdrop-filter: blur(6px);
-            -webkit-backdrop-filter: blur(6px);
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
             z-index: 9998;
             display: none;
-            animation: fadeIn 0.25s ease;
+            opacity: 0;
+            transition: opacity 0.25s ease;
         }
 
         .notif-backdrop.show {
             display: block;
+            opacity: 1;
         }
 
         .notif-panel {
             position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            width: 100%;
-            max-height: 88vh;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -60%) scale(0.95);
+            width: 92%;
+            max-width: 420px;
+            max-height: 80vh;
             overflow-y: auto;
-            background: #fff;
-            border-radius: 24px 24px 0 0;
-            box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.22);
+            background: #ffffff;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.06);
             z-index: 9999;
             display: none;
-            transform: translateY(100%);
-            transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
-            padding-bottom: env(safe-area-inset-bottom, 12px);
+            opacity: 0;
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.25s ease;
         }
 
         [data-theme="dark"] .notif-panel {
             background: #1e1e2e;
             color: #eee;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
         }
 
         .notif-panel.show {
             display: block;
-            transform: translateY(0);
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
         }
 
-        /* Handle bar ด้านบนของ panel */
+        /* ซ่อน handle bar (ไม่จำเป็นสำหรับ floating modal) */
         .notif-handle {
-            width: 40px;
-            height: 5px;
-            background: #ddd;
-            border-radius: 99px;
-            margin: 10px auto 4px;
+            display: none;
         }
 
         .notif-panel-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 8px 16px 12px;
+            padding: 16px 16px 12px;
             border-bottom: 1px solid rgba(0, 0, 0, 0.08);
             position: sticky;
             top: 0;
             background: inherit;
+            border-radius: 20px 20px 0 0;
             z-index: 1;
         }
 
@@ -4410,6 +4411,8 @@
         // =====================================================
         let appNotifications = [];      // เก็บ notifications จาก GAS Sheet
         let configNotifications = [];   // เก็บ notifications จาก config (system) แยกต่างหาก
+        var serverErrorMessage = '';
+
         const CATEGORY_ICONS = {
             activity: '🎉', training: '📚', welfare: '❤️',
             meeting: '💼', holiday: '🏖️', general: '📢'
@@ -4505,36 +4508,41 @@
             }
         }
 
-        let serverErrorMessage = ''; // เก็บข้อความ Error จาก Server
 
-        // ดึงประกาศจาก GAS (✅ ใช้ XHR + timeout เพื่อรองรับ LINE WebView)
+        // =====================================================
+        // 🔔 fetchAnnouncements: ใช้ JSONP ผ่าน <script> tag
+        // ✅ วิธีนี้ข้าม CORS ได้ 100% แม้ใน LINE WebView
+        // =====================================================
         function fetchAnnouncements() {
-            const list = document.getElementById('notifList');
+            var list = document.getElementById('notifList');
 
-            // ✅ ถ้ามีข้อมูลอยู่แล้ว แสดงทันที แล้ว refresh เบื้องหลัง
+            // ✅ ถ้ามีข้อมูลเดิมให้แสดงก่อน ไม่ต้องให้รอ
             if (appNotifications.length > 0) {
                 renderNotifList();
             } else if (list) {
-                list.innerHTML = '<div class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary mb-2" role="status"></div><div class="text-muted small">กำลังโหลดข่าวสาร...</div></div>';
+                list.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary mb-2" role="status" style="width:2rem;height:2rem;"></div><div class="text-muted small mt-2">กำลังโหลดข่าวสาร...</div></div>';
             }
 
-            var url = GAS_URL + '?action=get_announcements&t=' + Date.now();
-            var xhr = new XMLHttpRequest();
-            xhr.open('GET', url, true);
-            xhr.timeout = 10000; // 10 วินาที
+            // ✅ JSONP: ลบ <script> เก่าทิ้งก่อนเสมอ
+            var oldScript = document.getElementById('gasJsonpScript');
+            if (oldScript) oldScript.remove();
 
-            xhr.onload = function () {
+            // ✅ timeout 10 วิ — ถ้า callback ไม่ถูกเรียก แสดง error
+            var gasTimeout = setTimeout(function () {
+                if (appNotifications.length === 0 && list) {
+                    list.innerHTML = '<div class="text-center py-4"><div style="font-size:1.5rem">⏱</div><div class="text-muted small mb-2">เชื่อมต่อ GAS ช้า ลองใหม่อีกครั้ง</div><button class="btn btn-sm btn-outline-primary rounded-pill" onclick="fetchAnnouncements()">ลองอีกครั้ง</button></div>';
+                }
+            }, 10000);
+
+            // ✅ JSONP callback global function
+            window.__gasAnnounceCb__ = function (data) {
+                clearTimeout(gasTimeout);
+                console.log('🔔 JSONP OK, items:', (data.announcements || []).length);
                 try {
-                    var text = xhr.responseText;
-                    console.log('🔔 XHR response (200 chars):', text.substring(0, 200));
-                    var data = JSON.parse(text);
-                    var gasAnnouncements = (data && data.announcements) || [];
-                    console.log('🔔 Announcements count:', gasAnnouncements.length);
-
-                    var gasNotifs = gasAnnouncements.map(function (a) {
+                    var gasNotifs = (data.announcements || []).map(function (a) {
                         return {
                             id: a.id,
-                            title: (CATEGORY_ICONS[a.category] || '📢') + ' ' + (a.title || ''),
+                            title: ((CATEGORY_ICONS && CATEGORY_ICONS[a.category]) || '📢') + ' ' + (a.title || ''),
                             body: a.body || '',
                             time: a.displayDate ? '📅 ' + a.displayDate : (a.date ? '📅 ' + a.date : ''),
                             source: 'gas',
@@ -4542,43 +4550,42 @@
                             ts: a.ts || ''
                         };
                     });
-
                     var oldIds = {};
                     appNotifications.forEach(function (n) { oldIds[n.id] = true; });
-                    var isInitialLoad = (appNotifications.length === 0 && configNotifications.length === 0);
+                    var isInitial = (appNotifications.length === 0 && configNotifications.length === 0);
                     var hasNew = false;
-                    gasNotifs.forEach(function (n) {
-                        if (!oldIds[n.id] && !isInitialLoad) hasNew = true;
-                    });
-
+                    gasNotifs.forEach(function (n) { if (!oldIds[n.id] && !isInitial) hasNew = true; });
                     appNotifications = gasNotifs.concat(configNotifications);
                     renderNotifList();
                     if (hasNew) triggerNotificationEffects();
-
                 } catch (e) {
-                    console.error('🔴 XHR parse/process error:', e);
+                    console.error('🔔 JSONP process error:', e);
                     if (appNotifications.length === 0 && list) {
-                        list.innerHTML = '<div class="text-center py-4"><div style="font-size:1.5rem">⚠️</div><div class="text-muted small mb-2">' + e.message + '</div><button class="btn btn-sm btn-outline-primary rounded-pill" onclick="fetchAnnouncements()">ลองใหม่</button></div>';
+                        list.innerHTML = '<div class="text-center py-3 text-danger small">เกิดข้อผิด: ' + e.message + '</div>';
                     }
                 }
             };
 
-            xhr.onerror = function () {
-                console.error('🔴 XHR network error');
-                if (appNotifications.length === 0 && list) {
-                    list.innerHTML = '<div class="text-center py-4"><div style="font-size:1.5rem">📡</div><div class="text-muted small mb-2">เชื่อมต่อไม่ได้</div><button class="btn btn-sm btn-outline-primary rounded-pill" onclick="fetchAnnouncements()">ลองอีกครั้ง</button></div>';
-                }
+            // ✅ inject <script> JSONP
+            var s = document.createElement('script');
+            s.id = 'gasJsonpScript';
+            s.onerror = function () {
+                clearTimeout(gasTimeout);
+                console.error('🔔 JSONP script load error — ลอง fetch แทน');
+                // fallback: ใช้ fetch ยุคแฟลบัค
+                fetch(GAS_URL + '?action=get_announcements&t=' + Date.now())
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) { window.__gasAnnounceCb__(data); })
+                    .catch(function (err) {
+                        if (appNotifications.length === 0 && list) {
+                            list.innerHTML = '<div class="text-center py-4"><div style="font-size:1.5rem">📡</div><div class="text-muted small mb-2">ไม่สามารถเชื่อมต่อได้</div><button class="btn btn-sm btn-outline-primary rounded-pill" onclick="fetchAnnouncements()">ลองอีกครั้ง</button></div>';
+                        }
+                    });
             };
-
-            xhr.ontimeout = function () {
-                console.error('🔴 XHR timeout');
-                if (appNotifications.length === 0 && list) {
-                    list.innerHTML = '<div class="text-center py-4"><div style="font-size:1.5rem">⏱</div><div class="text-muted small mb-2">เชื่อมต่อช้า (timeout)</div><button class="btn btn-sm btn-outline-primary rounded-pill" onclick="fetchAnnouncements()">ลองอีกครั้ง</button></div>';
-                }
-            };
-
-            xhr.send();
+            s.src = GAS_URL + '?action=get_announcements&callback=__gasAnnounceCb__&t=' + Date.now();
+            document.head.appendChild(s);
         }
+
 
         function triggerNotificationEffects() {
             // สั่นกระดิ่ง
