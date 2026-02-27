@@ -1792,7 +1792,16 @@
     </div>
 
     <script>
-        // --- GLOBAL VARIABLES (ประกาศก่อน Observer เพื่อป้องกัน TDZ Error) ---
+        // --- GLOBAL SETTINGS ---
+        const TEST_ENV = true; // 🔴 เปลี่ยนเป็น false เมื่อขึ้นระบบจริง
+        const TEST_GAS_URL = 'https://script.google.com/macros/s/AKfycbxRvEyRoQaxOUWR_6pTslNmCrM7IiZTRYzDDUtPtDmrhGehUq6zQpfm9MKp_CYzVmrX/exec';
+        const TEST_LIFF_ID = '2009069961-FRS5kHE4';
+        const PROD_GAS_URL = 'YOUR_PROD_GAS_URL_HERE';
+        const PROD_LIFF_ID = 'YOUR_PROD_LIFF_ID_HERE';
+
+        const GAS_URL = TEST_ENV ? TEST_GAS_URL : PROD_GAS_URL;
+        const LIFF_ID = TEST_ENV ? TEST_LIFF_ID : PROD_LIFF_ID;
+
         let currentUser = null;
         let selectedMood = 3;
         let chartData = [];
@@ -1864,18 +1873,6 @@
         observer.observe(document.documentElement, { attributes: true });
 
         // --- GLOBAL VARIABLES ---
-        const TEST_ENV = true; // 🔴 เปลี่ยนเป็น false เมื่อขึ้นระบบจริง
-        // ตั้งค่าสำหรับ Test Version (ข้อมูลปัจจุบัน)
-        const TEST_LIFF_ID = '2009069961-FRS5kHE4';
-        const TEST_GAS_URL = 'https://script.google.com/macros/s/AKfycbxRvEyRoQaxOUWR_6pTslNmCrM7IiZTRYzDDUtPtDmrhGehUq6zQpfm9MKp_CYzVmrX/exec';
-
-        // ตั้งค่าสำหรับ Production Version (เตรียมไว้สำหรับอนาคต)
-        const PROD_LIFF_ID = 'YOUR_PROD_LIFF_ID_HERE';
-        const PROD_GAS_URL = 'YOUR_PROD_GAS_URL_HERE';
-
-        const LIFF_ID = TEST_ENV ? TEST_LIFF_ID : PROD_LIFF_ID;
-        const GAS_URL = TEST_ENV ? TEST_GAS_URL : PROD_GAS_URL;
-
         // ✅ บันทึก URL ไว้ให้หน้าอื่นใช้งาน (เช่น survey.html)
         localStorage.setItem('GAS_URL', GAS_URL);
 
@@ -4552,13 +4549,23 @@
             }, 10000);
 
             // ✅ JSONP callback global function
+            // ✅ JSONP callback global function
             window.__gasAnnounceCb__ = function (data) {
                 clearTimeout(gasTimeout);
                 if (!data) return;
 
-                // รองรับทั้ง format { announcements: [...] } และ [...]
-                var rawItems = data.announcements || (Array.isArray(data) ? data : []);
-                console.log('🔔 JSONP OK, items:', rawItems.length);
+                // รองรับทั้ง format { announcements: [...] }, { data: [...] } และ [...]
+                var rawItems = data.announcements || data.data || (Array.isArray(data) ? data : []);
+
+                // ถ้า GAS ส่ง Error มา ให้ดึง Message มาโชว์
+                if (data.status === 'error') {
+                    serverErrorMessage = data.message || 'พบข้อผิดพลาดจากระบบหลังบ้าน';
+                    rawItems = [];
+                } else {
+                    serverErrorMessage = ''; // clear error
+                }
+
+                console.log('🔔 Announcements Received:', rawItems.length);
 
                 try {
                     var gasNotifs = rawItems.map(function (a) {
@@ -4633,10 +4640,16 @@
             if (!list) return;
 
             if (appNotifications.length === 0) {
-                list.innerHTML = '<div class="text-center py-5 px-3"><div class="mb-2" style="font-size:2rem;opacity:0.3">📭</div>' +
-                    '<div class="text-muted small mb-3">' + (serverErrorMessage || 'ยังไม่มีข่าวสารหรือกิจกรรมใหม่') + '</div>' +
-                    '<a href="' + GAS_URL + '?action=get_announcements" target="_blank" class="btn btn-sm btn-outline-secondary rounded-pill" style="font-size:0.65rem;">ตรวจสอบลิงก์</a>' +
-                    '</div>';
+                list.innerHTML = `
+                    <div class="text-center py-5 px-3 animate__animated animate__fadeIn">
+                        <div class="mb-2" style="font-size:3rem; opacity:0.3;">📭</div>
+                        <div class="fw-bold text-dark mb-1">${serverErrorMessage ? 'พบปัญหาการเชื่อมต่อ' : 'ยังไม่มีข่าวสารใหม่'}</div>
+                        <div class="text-muted small mb-3">${serverErrorMessage || 'ขณะนี้ยังไม่มีข่าวประกาศหรือกิจกรรมที่บันทึกไว้ในระบบครับ'}</div>
+                        <div class="d-flex justify-content-center gap-2">
+                            <button onclick="fetchAnnouncements()" class="btn btn-sm btn-primary rounded-pill px-3">ลองใหม่อีกครั้ง</button>
+                            <a href="${GAS_URL}?action=get_announcements" target="_blank" class="btn btn-sm btn-outline-secondary rounded-pill px-3">เช็คระบบ</a>
+                        </div>
+                    </div>`;
                 updateBadge(0);
                 return;
             }
@@ -4763,6 +4776,7 @@
 
             fetch(GAS_URL, {
                 method: 'POST',
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
                 body: JSON.stringify(payload)
             })
                 .then(r => r.json())
