@@ -2048,69 +2048,7 @@
         }
 
         // --- ANNOUNCEMENT & SURVEY LOGIC ---
-        function checkAndShowSurvey() {
-            setTimeout(() => {
-                // 1. เช็ค Survey ประจำเดือน
-                const currentMonth = new Date().toISOString().slice(0, 7); // เอาแค่ YYYY-MM
-                // ถ้าอยากให้แสดงตลอดตอนทดสอบ ให้คอมเมนต์ localStorage ด้านล่างแล้วบังคับค่าเป็น null 
-                const surveyed = localStorage.getItem('survey_viewed_' + currentMonth);
-                // const surveyed = false;
-
-                if (!surveyed) {
-                    Swal.fire({
-                        title: '📋 ประเมินความสุขประจำเดือน',
-                        text: 'รบกวนเวลาทำแบบประเมินสัก 1 นาที เพื่อช่วยให้องค์กรของเราดีขึ้นครับ',
-                        icon: 'question',
-                        showCancelButton: true,
-                        confirmButtonText: 'เริ่มประเมินทันที',
-                        cancelButtonText: 'ไว้ทีหลัง',
-                        confirmButtonColor: '#6c5ce7',
-                        cancelButtonColor: '#aaa',
-                        allowOutsideClick: false
-                    }).then((result) => {
-                        if (result.isConfirmed) {
-                            // เก็บประวัติว่าเดือนนี้เปิดแล้ว
-                            localStorage.setItem('survey_viewed_' + currentMonth, 'true');
-                            // วิ่งไปหน้า Survey พร้อมส่ง ID ผู้ใช้งานไปด้วย
-                            const uid = currentUser ? (currentUser.userId || currentUser.lineId || 'unknown') : 'unknown';
-                            window.location.href = "survey.html?uid=" + encodeURIComponent(uid);
-                        } else {
-                            // ถ้ากดกากบาท หรือกดไว้ทีหลัง ไปเช็คอัปเดตข่าวต่อเลย
-                            showNewsUpdate();
-                        }
-                    });
-                } else {
-                    // ถ้าทำ Survey ของเดือนนี้ไปแล้ว ให้เช็คข่าวปกติ
-                    showNewsUpdate();
-                }
-            }, 1000); // ดีเลย์ 1 วินาทีให้แอปโหลดหลังบ้านจนเสร็จก่อน
-        }
-
-        function showNewsUpdate() {
-            // จำลองการดูสำหรับทดสอบ ถ้าจะทดสอบบังคับดูให้เอาคอมเมนต์ข้างล่างออก 
-            const viewed = localStorage.getItem('announcement_v2_viewed');
-            // const viewed = false; 
-
-            if (!viewed) {
-                Swal.fire({
-                    title: '📢 อัปเดตใหม่ล่าสุด!',
-                    html: `
-                    <div class="text-start" style="font-size: 0.95rem; line-height: 1.6;">
-                        <span class="badge bg-primary mb-2">มีอะไรใหม่บ้าง?</span><br>
-                        ✅ <b>รองรับไฟล์รูปแปลกๆ:</b> อัปโหลดรูป .bin ของมือถือซัมซุงได้แล้ว<br>
-                        ✅ <b>ระบบภาพโฉมใหม่:</b> แสดงภาพสวยงามเต็มจอ ไม่มีขอบขาด หั่นรูป<br>
-                        ✅ <b>ระบบผู้บริหารชุดใหญ่:</b> พร้อมกราฟและการให้คะแนนเพื่อนร่วมแท็ก!<br>
-                        ✅ <b>แบบสำรวจความสุขรายเดือน:</b> ระบบจะเชิญชวนคุณทุกเดือนครับ
-                    </div>`,
-                    icon: 'info',
-                    confirmButtonText: 'รับทราบ!',
-                    confirmButtonColor: '#0984e3',
-                    allowOutsideClick: false
-                }).then(() => {
-                    localStorage.setItem('announcement_v2_viewed', 'true');
-                });
-            }
-        }
+        // (ฟังก์ชัน checkAndShowSurvey เวอร์ชันหลัก อยู่ด้านล่างใน checkUser section)
 
         main();
 
@@ -2547,25 +2485,57 @@
                         if (canViewDashboard()) fetchManagerData();
 
                         // --- 🚨 SYSTEM UPDATE PROMPT ---
+                        // 🔔 โหลดประกาศข่าวสารทันที (ทำให้กระดิ่งแสดง badge)
+                        fetchAnnouncements();
+
                         if (data.config) {
                             renderAnnouncement(data.config);
                             loadNotificationsFromConfig(data.config); // ✅ โหลด notifications
                             notifyFromConfig(data.config);            // ✅ แสดง native notification
-                            fetchAnnouncements();                     // 🔔 โหลดข่าวสดจาก GAS ทันที
-                            if (data.config.version) {
-                                const localVer = localStorage.getItem('appVersion');
-                                if (localVer !== data.config.version) {
-                                    Swal.fire({
-                                        title: data.config.title || 'อัปเดตระบบใหม่!',
-                                        html: data.config.message || 'มีการอัปเดตระบบ กรุณารับทราบ',
-                                        icon: 'info',
-                                        confirmButtonText: 'รับทราบ',
-                                        confirmButtonColor: '#6c5ce7',
-                                        backdrop: `rgba(0,0,123,0.4)`
-                                    }).then(() => {
-                                        localStorage.setItem('appVersion', data.config.version);
-                                    });
-                                }
+
+                            // --- ✅ ระบบแจ้งอัปเดต (ตรวจจาก config หรือ version สำรอง) ---
+                            const APP_LOCAL_VERSION = '2.5.0'; // 🔧 เพิ่ม version นี้ทุกครั้งที่อัปเดตแอป
+                            const configVersion = (data.config && data.config.version) ? data.config.version : APP_LOCAL_VERSION;
+                            const localVer = localStorage.getItem('appVersion');
+                            if (localVer !== configVersion) {
+                                const updateTitle = (data.config && data.config.title) ? data.config.title : '🆕 อัปเดตระบบใหม่!';
+                                const updateMsg = (data.config && data.config.message) ? data.config.message : `
+                                    <div class="text-start" style="font-size: 0.9rem; line-height: 1.7;">
+                                        <span class="badge bg-success mb-2">Version ${configVersion}</span><br>
+                                        ✅ <b>แก้ไขแบบสอบถามประจำเดือน:</b> แสดงได้ถูกต้อง<br>
+                                        ✅ <b>กระดิ่งแจ้งเตือน:</b> แสดง badge ข่าวสารทันทีหลัง login<br>
+                                        ✅ <b>ระบบอัปเดต:</b> แสดงทุกครั้งเมื่อมีการเปลี่ยนแปลง
+                                    </div>`;
+                                Swal.fire({
+                                    title: updateTitle,
+                                    html: updateMsg,
+                                    icon: 'info',
+                                    confirmButtonText: '👍 รับทราบ!',
+                                    confirmButtonColor: '#6c5ce7',
+                                    backdrop: `rgba(0,0,123,0.4)`
+                                }).then(() => {
+                                    localStorage.setItem('appVersion', configVersion);
+                                });
+                            }
+                        } else {
+                            // ✅ fallback: ถ้าไม่มี config ก็ยังเช็ค version สำรองได้
+                            const APP_LOCAL_VERSION = '2.5.0';
+                            const localVer = localStorage.getItem('appVersion');
+                            if (localVer !== APP_LOCAL_VERSION) {
+                                Swal.fire({
+                                    title: '🆕 อัปเดตระบบใหม่!',
+                                    html: `<div class="text-start" style="font-size: 0.9rem; line-height: 1.7;">
+                                        <span class="badge bg-success mb-2">Version ${APP_LOCAL_VERSION}</span><br>
+                                        ✅ <b>แก้ไขแบบสอบถามประจำเดือน:</b> แสดงได้ถูกต้อง<br>
+                                        ✅ <b>กระดิ่งแจ้งเตือน:</b> แสดง badge ข่าวสารทันทีหลัง login<br>
+                                        ✅ <b>ระบบอัปเดต:</b> แสดงทุกครั้งเมื่อมีการเปลี่ยนแปลง
+                                    </div>`,
+                                    icon: 'info',
+                                    confirmButtonText: '👍 รับทราบ!',
+                                    confirmButtonColor: '#6c5ce7'
+                                }).then(() => {
+                                    localStorage.setItem('appVersion', APP_LOCAL_VERSION);
+                                });
                             }
                         }
 
