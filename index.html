@@ -2161,6 +2161,7 @@
         // ✅ ฟังก์ชันจัดการการเปิด/ปิดเพลงประกอบ
         let isMusicManuallyPaused = false;
         let isPowerPausedByVideo = false;
+        let playingVideosCount = 0;
 
         async function toggleMusic(forcePlay = null) {
             const music = document.getElementById('bgMusic');
@@ -2170,24 +2171,26 @@
             if (forcePlay === true || (forcePlay === null && music.paused)) {
                 try {
                     await music.play();
-                    btnIcon.className = 'fas fa-pause text-success';
+                    if (btnIcon) btnIcon.className = 'fas fa-pause text-success';
                     isMusicManuallyPaused = false;
                 } catch (err) {
                     console.warn("Playback failed:", err);
                 }
             } else if (forcePlay === false || (forcePlay === null && !music.paused)) {
                 music.pause();
-                btnIcon.className = 'fas fa-play';
+                if (btnIcon) btnIcon.className = 'fas fa-play';
                 if (forcePlay === null) isMusicManuallyPaused = true;
             }
         }
 
         // ✅ ตรวจจับการเล่นวิดีโอเพื่อหยุดเพลงชั่วคราว
         function setupVideoMusicSync() {
+            const music = document.getElementById('bgMusic');
+
             // สำหรับ Video Tag ปกติ
             document.addEventListener('play', function (e) {
-                if (e.target.tagName === 'VIDEO') {
-                    const music = document.getElementById('bgMusic');
+                if (e.target.tagName === 'VIDEO' && e.target.id !== 'bgMusic') {
+                    playingVideosCount++;
                     if (music && !music.paused) {
                         isPowerPausedByVideo = true;
                         toggleMusic(false);
@@ -2195,47 +2198,61 @@
                 }
             }, true);
 
-            document.addEventListener('pause', function (e) {
-                if (e.target.tagName === 'VIDEO') {
-                    if (isPowerPausedByVideo && !isMusicManuallyPaused) {
+            const handleVideoStop = (e) => {
+                if (e.target.tagName === 'VIDEO' && e.target.id !== 'bgMusic') {
+                    playingVideosCount = Math.max(0, playingVideosCount - 1);
+                    if (playingVideosCount === 0 && isPowerPausedByVideo && !isMusicManuallyPaused) {
                         toggleMusic(true);
                         isPowerPausedByVideo = false;
                     }
                 }
-            }, true);
+            };
 
-            document.addEventListener('ended', function (e) {
-                if (e.target.tagName === 'VIDEO') {
-                    if (isPowerPausedByVideo && !isMusicManuallyPaused) {
-                        toggleMusic(true);
-                        isPowerPausedByVideo = false;
-                    }
-                }
-            }, true);
+            document.addEventListener('pause', handleVideoStop, true);
+            document.addEventListener('ended', handleVideoStop, true);
 
-            // สำหรับ YouTube IFrame (ใช้ Messenger แจ้งกลับ)
+            // สำหรับ YouTube IFrame (รองรับข้อมูลหลายรูปแบบ)
             window.addEventListener('message', function (event) {
                 try {
-                    const data = JSON.parse(event.data);
+                    let data = (typeof event.data === 'string') ? JSON.parse(event.data) : event.data;
+                    let state = -1;
+
+                    // รูปแบบ 1: infoDelivery (YouTube Embed)
                     if (data.event === 'infoDelivery' && data.info && data.info.playerState !== undefined) {
-                        const state = data.info.playerState;
-                        const music = document.getElementById('bgMusic');
-                        if (state === 1) { // 1 = Playing
-                            if (music && !music.paused) {
-                                isPowerPausedByVideo = true;
-                                toggleMusic(false);
-                            }
-                        } else if (state === 2 || state === 0) { // 2 = Paused, 0 = Ended
+                        state = data.info.playerState;
+                    }
+                    // รูปแบบ 2: onStateChange (YouTube Widget API)
+                    else if (data.event === 'onStateChange') {
+                        state = data.info;
+                    }
+
+                    if (state === 1) { // 1 = Playing
+                        if (music && !music.paused) {
+                            isPowerPausedByVideo = true;
+                            toggleMusic(false);
+                        }
+                    } else if (state === 2 || state === 0 || state === -1) { // 2 = Paused, 0 = Ended, -1 = Unstarted/Stopped
+                        // แนะนำให้รอเล็กน้อยเผื่อมีการเปลี่ยนสถานะไวๆ
+                        setTimeout(() => {
                             if (isPowerPausedByVideo && !isMusicManuallyPaused) {
                                 toggleMusic(true);
                                 isPowerPausedByVideo = false;
                             }
-                        }
+                        }, 300);
                     }
                 } catch (e) { }
             });
         }
         setupVideoMusicSync();
+
+        // ✅ เพิ่มเติม: สั่งให้เพลงเล่นต่อแน่ๆ เมื่อมีการเปลี่ยนหน้าหรือปิด Modal (Safety Resume)
+        function safetyResumeMusic() {
+            if (isPowerPausedByVideo && !isMusicManuallyPaused) {
+                toggleMusic(true);
+                isPowerPausedByVideo = false;
+                playingVideosCount = 0;
+            }
+        }
 
         // ✅ ตัวช่วยเล่นเพลงอัตโนมัติเมื่อมีการสัมผัสหน้าจอครั้งแรก (Browser Workaround)
         function initAutoplay() {
@@ -3510,6 +3527,7 @@
                 }
             }
 
+            safetyResumeMusic(); // ✅ เมื่อเปลี่ยนหน้า ให้เช็คเผื่อมีวิดีโอค้างอยู่
             document.querySelectorAll('.page-section').forEach(p => p.classList.remove('active'));
             document.getElementById('page-' + pageId).classList.add('active');
 
