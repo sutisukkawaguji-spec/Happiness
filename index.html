@@ -3305,18 +3305,34 @@
             });
 
             try {
+                // KPI 1: ดัชนีความสุขเฉลี่ย (%)
                 const maxHappy = userWithDataCount > 0 ? totalHappy / userWithDataCount : 0;
                 const avgOrgHappyPct = maxHappy > 10 ? maxHappy.toFixed(0) : (maxHappy / 10 * 100).toFixed(0);
                 const kh = document.getElementById('kpi-happy');
                 if (kh) kh.innerText = avgOrgHappyPct + '%';
 
+                // KPI 2: กิจกรรมทั้งหมด (ยอดรวมโพสต์สะสม)
                 const kp = document.getElementById('kpi-posts');
                 if (kp) kp.innerText = totalActivityTimes + ' ครั้ง';
 
-                const teamWorkRate = totalActivityTimes > 0 ? ((totalTeamworkTimes / totalActivityTimes) * 100).toFixed(0) : 0;
+                // ✅ KPI 3: กิจกรรมร่วมใจ (%) - ปรับใหม่ให้นับเป็น "สัดส่วนโพสต์ที่เป็นทีม ต่อโพสต์ทั้งหมด"
+                // เดิมใช้วิธี (ผลรวมการถูกแท็ก / ผลรวมโพสต์) ซึ่งถ้า 1 โพสต์แท็กเพื่อน 5 คน ตัวเลขจะพุ่งไป 500%
+                let teamPostCount = 0;
+                let feedLength = 0;
+                if (globalFeedData && Array.isArray(globalFeedData)) {
+                    feedLength = globalFeedData.length;
+                    globalFeedData.forEach(post => {
+                        const tags = post.taggedFriends ? String(post.taggedFriends).split(',').filter(s => s.trim().length > 5) : [];
+                        if (tags.length > 0) teamPostCount++;
+                    });
+                }
+
+                // ใช้ค่าจาก Feed เป็นตัวแทน (Representative Sample) เพื่อให้ได้ % ที่สมเหตุสมผล (0-100%)
+                const teamWorkRate = feedLength > 0 ? ((teamPostCount / feedLength) * 100).toFixed(0) : 0;
                 const kt = document.getElementById('kpi-teamwork');
                 if (kt) kt.innerText = teamWorkRate + '%';
 
+                // KPI 4: ต้องดูแล (คน)
                 const ki = document.getElementById('kpi-issues');
                 if (ki) ki.innerText = issueCount + ' คน';
             } catch (e) { console.error(e); }
