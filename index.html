@@ -4448,8 +4448,20 @@
             } else {
                 panel.classList.add('show');
                 if (backdrop) backdrop.classList.add('show');
-                updateAddAnnounceButton(); // ตรวจสิทธิ์ก่อนเรนเดอร์ปุ่มบวก
+                updateAddAnnounceButton();
                 fetchAnnouncements();
+
+                // ✅ เพิ่มรายการทดสอบสั้นๆ เพื่อพิสูจน์ว่าระบบ Render ทำงานได้
+                if (appNotifications.length === 0) {
+                    appNotifications = [{
+                        id: 'test_render',
+                        title: '🔍 กำลังเตรียมรายการ...',
+                        body: 'หากรายการจริงไม่ขึ้นใน 5 วินาที โปรดกดปุ่มรีโหลดวงกลมด้านบนครับ',
+                        time: 'System Message',
+                        source: 'system'
+                    }];
+                    renderNotifList();
+                }
             }
         }
 
@@ -4527,14 +4539,10 @@
         // 🔔 fetchAnnouncements: ใช้ JSONP ผ่าน <script> tag
         // ✅ วิธีนี้ข้าม CORS ได้ 100% แม้ใน LINE WebView
         // =====================================================
-        // ✅ ฟังก์ชันจัดการข้อมูล (ย้ายออกมาอยู่วงนอกเพื่อให้รันได้ทุกที่)
+        // ✅ ฟังก์ชันจัดการข้อมูล
         function processAnnounceData(data) {
             try {
-                if (!data) return;
-                if (typeof data === 'string') {
-                    try { data = JSON.parse(data); } catch (e) { console.error("JSON Parse Error", e); return; }
-                }
-
+                if (!data) { console.error("🔔 No data received"); return; }
                 console.log('🔔 Received Announce Data:', data);
 
                 // รองรับโครงสร้าง { announcements: [...] }, { data: [...] } และ [...]
@@ -4546,6 +4554,8 @@
                 } else {
                     serverErrorMessage = '';
                 }
+
+                console.log('🔔 Received Items Count:', rawItems.length);
 
                 var gasNotifs = [];
                 rawItems.forEach(function (a) {
@@ -4564,7 +4574,18 @@
 
                 console.log('🔔 Mapped gasNotifs:', gasNotifs.length);
 
-                appNotifications = gasNotifs.concat(configNotifications);
+                // รวมกับรายการอื่นๆ โดยไม่ทับรายการทดสอบหรือรายการระบบ
+                var otherNotifs = appNotifications.filter(n => n.source !== 'gas' && n.id !== 'test_render');
+                appNotifications = gasNotifs.concat(otherNotifs);
+
+                // กรองเอาตัวซ้ำออก
+                var uniqueIds = {};
+                appNotifications = appNotifications.filter(function (n) {
+                    if (uniqueIds[n.id]) return false;
+                    uniqueIds[n.id] = true;
+                    return true;
+                });
+
                 renderNotifList();
 
                 if (gasNotifs.length > 0) {
@@ -4574,32 +4595,43 @@
                         localStorage.setItem('last_announce_id', gasNotifs[0].id);
                     }
                 }
-            } catch (e) { console.error('🔔 processAnnounceData Error:', e); }
+            } catch (e) {
+                console.error('🔔 processAnnounceData Error:', e);
+                serverErrorMessage = 'เกิดข้อผิดพลาดในการประมวลผลข้อมูล';
+                renderNotifList();
+            }
         }
 
         function fetchAnnouncements() {
             var list = document.getElementById('notifList');
-            if (appNotifications.length > 0) {
-                renderNotifList();
-            } else if (list) {
-                list.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary mb-2" role="status" style="width:2rem;height:2rem;"></div><div class="text-muted small mt-2">กำลังโหลดข่าวสาร...</div></div>';
+            if (appNotifications.length === 0 && list) {
+                list.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary mb-2" role="status"></div><div class="text-muted small">กำลังโหลดข่าวสาร...</div></div>';
             }
 
             const fetchUrl = GAS_URL + '?action=get_announcements&t=' + Date.now();
+            console.log('🔔 Fetching from:', fetchUrl);
+
             fetch(fetchUrl)
-                .then(function (r) { return r.json(); })
+                .then(function (r) {
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    return r.json();
+                })
                 .then(function (data) { processAnnounceData(data); })
                 .catch(function (err) {
                     console.warn('🔔 Fetch failed, trying JSONP fallback...', err);
-                    window.__gasAnnounceCb__ = function (data) { processAnnounceData(data); };
+                    window.__gasAnnounceCb__ = function (data) {
+                        console.log('🔔 JSONP Callback executed');
+                        processAnnounceData(data);
+                    };
                     var oldScript = document.getElementById('gasJsonpScript');
                     if (oldScript) oldScript.remove();
                     var s = document.createElement('script');
                     s.id = 'gasJsonpScript';
                     s.src = GAS_URL + '?action=get_announcements&callback=__gasAnnounceCb__&t=' + Date.now();
                     s.onerror = function () {
-                        if (appNotifications.length === 0 && list) {
-                            list.innerHTML = `<div class="text-center py-4"><div style="font-size:2rem">📡</div><div class="text-muted small mb-3">ไม่สามารถเชื่อมต่อได้</div><button class="btn btn-sm btn-primary rounded-pill px-3" onclick="fetchAnnouncements()">ลองใหม่อีกครั้ง</button></div>`;
+                        console.error('🔔 All fetch attempts failed');
+                        if (appNotifications.filter(n => n.source === 'gas').length === 0 && list) {
+                            list.innerHTML = `<div class="text-center py-4"><div style="font-size:2rem">📡</div><div class="text-muted small mb-3">ไม่สามารถเชื่อมต่อได้ (${err.message})</div><button class="btn btn-sm btn-primary rounded-pill px-3" onclick="fetchAnnouncements()">ลองใหม่อีกครั้ง</button></div>`;
                         }
                     };
                     document.head.appendChild(s);
