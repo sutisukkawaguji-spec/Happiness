@@ -4408,7 +4408,8 @@
                         body: a.body,
                         time: a.displayDate ? `📅 ${a.displayDate}` : (a.date ? `📅 ${a.date}` : ''),
                         source: 'gas',
-                        category: a.category
+                        category: a.category,
+                        ts: a.ts || ''  // ✅ ต้องมี ts เพื่อให้ timestamp-based unread ทำงานได้
                     }));
 
                     // ✅ รวม gasNotifs + configNotifications (แยก array ไม่ทับกัน)
@@ -4452,31 +4453,50 @@
             }
         }
 
-        // render notification list
+        // ✅ render notification list (ใช้ timestamp-based unread)
         function renderNotifList() {
             const list = document.getElementById('notifList');
             if (!list) return;
+
             if (appNotifications.length === 0) {
                 list.innerHTML = `
                 <div class="text-center py-5 px-3">
                     <div class="mb-2" style="font-size: 2rem; opacity: 0.3;">📭</div>
                     <div class="text-muted small mb-3">${serverErrorMessage || 'ยังไม่มีข่าวสารหรือกิจกรรมใหม่ในขณะนี้'}</div>
                     <a href="${GAS_URL}?action=get_announcements" target="_blank" class="btn btn-sm btn-outline-secondary rounded-pill" style="font-size:0.65rem;">
-                        <i class="fas fa-link me-1"></i>ลองตรวจสอบลิงก์ชีตที่นี่
+                        <i class="fas fa-link me-1"></i>ลองตรวจสอบลิงก์
                     </a>
                 </div>`;
                 updateBadge(0);
                 return;
             }
+
+            // ✅ ใช้ timestamp เดียว: ประกาศที่สร้าง หลัง notif_cleared_at = ยังไม่อ่าน
+            const clearedAt = parseInt(localStorage.getItem('notif_cleared_at') || '0');
+
             let unread = 0;
             let html = '';
             appNotifications.forEach(n => {
-                const isRead = localStorage.getItem(`notif_read_${n.id}`) === 'true';
-                if (!isRead) unread++;
+                // แปลง ts ของประกาศเป็น timestamp (milliseconds)
+                let notifTime = 0;
+                if (n.ts) {
+                    const parsed = new Date(n.ts);
+                    if (!isNaN(parsed.getTime())) notifTime = parsed.getTime();
+                }
+                // ถ้าไม่มี ts ให้ดึงเลข timestamp จาก id (เช่น ann_1772138145545)
+                if (notifTime === 0 && n.id) {
+                    const match = String(n.id).match(/_?(\d{10,13})$/);
+                    if (match) notifTime = parseInt(match[1]);
+                }
+
+                // ถือว่า "ยังไม่อ่าน" ถ้าประกาศสร้างหลัง clearedAt
+                const isUnread = notifTime > clearedAt;
+                if (isUnread) unread++;
+
                 const color = CATEGORY_COLORS[n.category] || '#636e72';
                 html += `
-                <div class="notif-item ${isRead ? '' : 'unread'}"
-                    style="${!isRead ? `border-left:3px solid ${color};` : ''}"
+                <div class="notif-item ${isUnread ? 'unread' : ''}"
+                    style="${isUnread ? `border-left:3px solid ${color};` : ''}"
                     onclick="readNotif('${n.id}')">
                     <div class="notif-title">${n.title}</div>
                     ${n.body ? `<div class="notif-body">${n.body}</div>` : ''}
@@ -4498,13 +4518,26 @@
             }
         }
 
+        // กดอ่านรายการเดียว: ตั้ง clearedAt เป็น max(clearedAt, ts ของรายการนี้)
         function readNotif(id) {
+            const item = appNotifications.find(n => n.id === id);
+            if (item && item.ts) {
+                const parsed = new Date(item.ts);
+                if (!isNaN(parsed.getTime())) {
+                    const current = parseInt(localStorage.getItem('notif_cleared_at') || '0');
+                    if (parsed.getTime() > current) {
+                        localStorage.setItem('notif_cleared_at', parsed.getTime().toString());
+                    }
+                }
+            }
+            // fallback: ถ้าไม่มี ts ให้ mark ด้วย id แบบเก่า
             localStorage.setItem(`notif_read_${id}`, 'true');
             renderNotifList();
         }
 
+        // กด "อ่านทั้งหมด": ตั้ง clearedAt = เวลาตอนนี้ → ทุกรายการที่มีอยู่ถือว่าอ่านแล้ว
         function markAllNotifRead() {
-            appNotifications.forEach(n => localStorage.setItem(`notif_read_${n.id}`, 'true'));
+            localStorage.setItem('notif_cleared_at', Date.now().toString());
             renderNotifList();
         }
 
