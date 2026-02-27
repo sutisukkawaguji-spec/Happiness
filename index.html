@@ -3232,18 +3232,13 @@
             let totalHappy = 0, userWithDataCount = 0, issueCount = 0;
             globalUserStatsMap = {};
 
+            // 1. สร้าง Map พื้นฐานก่อน
             appUsers.forEach(u => {
                 if (!u) return;
                 const uid = u.lineId || u.id;
                 if (!uid) return;
 
                 const avg = parseFloat(u.happy) || 0;
-                const postsCount = u.totalCount || 0;
-                const taggedCount = u.taggedCount || 0; // คาดว่า GAS จะส่งมาให้ หรือเรานับจาก feed (ถ้ามี)
-
-                systemTotalPosts += postsCount;
-                systemTotalTeamwork += taggedCount;
-
                 globalUserStatsMap[uid] = {
                     id: uid,
                     name: u.name || 'ไม่ระบุชื่อ',
@@ -3253,8 +3248,8 @@
                     level: u.level || 1,
                     avgHappy: avg,
                     virtueStats: u.virtueStats || {},
-                    postsMade: postsCount,
-                    taggedIn: taggedCount,
+                    postsMade: 0,
+                    taggedIn: 0,
                     verifiedOthers: 0,
                     topFriends: Array.isArray(u.topFriends) ? u.topFriends : []
                 };
@@ -3265,6 +3260,29 @@
                     if (avg < 5.0) issueCount++;
                 }
             });
+
+            // 2. ✅ คำนวณจำนวนโพสต์จริงจาก globalFeedData เพื่อความแม่นยำรายคน
+            if (globalFeedData && globalFeedData.length > 0) {
+                globalFeedData.forEach(post => {
+                    const pid = String(post.user_line_id);
+                    // นับโพสต์ที่สร้าง
+                    if (pid && globalUserStatsMap[pid]) {
+                        globalUserStatsMap[pid].postsMade++;
+                        systemTotalPosts++;
+                    }
+
+                    // นับการถูกแท็กทีม
+                    if (post.taggedFriends) {
+                        systemTotalTeamwork++;
+                        String(post.taggedFriends).split(',').forEach(tId => {
+                            const cleanId = tId.trim();
+                            if (cleanId && globalUserStatsMap[cleanId]) {
+                                globalUserStatsMap[cleanId].taggedIn++;
+                            }
+                        });
+                    }
+                });
+            }
 
             // ✅ KPI 1: กิจกรรมทั้งหมด (ใช้จากผลรวม totalCount)
             let kpiPosts = document.getElementById('kpi-posts');
@@ -3280,22 +3298,10 @@
             let kpiIssues = document.getElementById('kpi-issues');
             if (kpiIssues) kpiIssues.innerText = issueCount + ' คน';
 
-            // ✅ KPI 4: กิจกรรมร่วม (ทีม)
-            // ถ้า GAS ไม่ได้ส่ง taggedCount มาให้รายคน เราจะใช้การสแกน feed เท่าที่มี
-            if (systemTotalTeamwork === 0 && globalFeedData && globalFeedData.length > 0) {
-                globalFeedData.forEach(post => {
-                    if (post.taggedFriends) {
-                        systemTotalTeamwork++;
-                        String(post.taggedFriends).split(',').forEach(tId => {
-                            const cleanId = tId.trim();
-                            if (cleanId && globalUserStatsMap[cleanId]) globalUserStatsMap[cleanId].taggedIn++;
-                        });
-                    }
-                });
-            }
-
+            // ✅ KPI 4: กิจกรรมร่วม (ทีม) - กลับมาเป็น % ตามต้องการ
+            const teamWorkRate = systemTotalPosts > 0 ? ((systemTotalTeamwork / systemTotalPosts) * 100).toFixed(0) : 0;
             let kpiTeamwork = document.getElementById('kpi-teamwork');
-            if (kpiTeamwork) kpiTeamwork.innerText = systemTotalTeamwork + ' ครั้ง';
+            if (kpiTeamwork) kpiTeamwork.innerText = teamWorkRate + '%';
 
             renderStaffTable(globalUserStatsMap);
         }
