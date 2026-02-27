@@ -4415,90 +4415,77 @@
 
         let serverErrorMessage = ''; // เก็บข้อความ Error จาก Server
 
-        // ดึงประกาศจาก GAS
+        // ดึงประกาศจาก GAS (✅ ใช้ XHR + timeout เพื่อรองรับ LINE WebView)
         function fetchAnnouncements() {
             const list = document.getElementById('notifList');
 
-            // ✅ ถ้ามีข้อมูลอยู่แล้ว ให้แสดงแบบชัวคราวก่อน แล้ว refresh เบื้องหลัง
+            // ✅ ถ้ามีข้อมูลอยู่แล้ว แสดงทันที แล้ว refresh เบื้องหลัง
             if (appNotifications.length > 0) {
-                renderNotifList(); // แสดงข้อมูลเดิมทันที
+                renderNotifList();
             } else if (list) {
-                // บอกสถานะ loading เฉพาะตอนเปิดครั้งแรก
-                list.innerHTML = `
-                <div class="text-center py-4">
-                    <div class="spinner-border spinner-border-sm text-primary mb-2" role="status"></div>
-                    <div class="text-muted small">กำลังโหลดข่าวสาร...</div>
-                </div>`;
+                list.innerHTML = '<div class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary mb-2" role="status"></div><div class="text-muted small">กำลังโหลดข่าวสาร...</div></div>';
             }
 
-            fetch(GAS_URL + '?action=get_announcements&t=' + Date.now())
-                .then(r => r.text())  // ✅ ใช้ text() แทน json() เพื่อหลีก parse error
-                .then(text => {
-                    console.log('🔔 [fetchAnnouncements] Response text (first 200):', text.substring(0, 200));
-                    let data;
-                    try {
-                        data = JSON.parse(text);
-                    } catch (parseErr) {
-                        console.error('🔴 [fetchAnnouncements] JSON parse error:', parseErr, '\nRaw text:', text);
-                        serverErrorMessage = 'JSON parse error';
-                        if (appNotifications.length === 0 && list) {
-                            list.innerHTML = `<div class="text-center py-4">
-                                <div style="font-size:1.5rem">⚠️</div>
-                                <div class="text-muted small mb-2">ปุย GAS ไม่ได้ JSON (parse error)</div>
-                                <button class="btn btn-sm btn-outline-primary rounded-pill" onclick="fetchAnnouncements()">ลองใหม่</button>
-                            </div>`;
-                        }
-                        return;
-                    }
+            var url = GAS_URL + '?action=get_announcements&t=' + Date.now();
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', url, true);
+            xhr.timeout = 10000; // 10 วินาที
 
-                    console.log('🔔 [fetchAnnouncements] Items:', (data.announcements || []).length);
-                    serverErrorMessage = data.message || '';
-                    const gasAnnouncements = (data && data.announcements) || [];
+            xhr.onload = function () {
+                try {
+                    var text = xhr.responseText;
+                    console.log('🔔 XHR response (200 chars):', text.substring(0, 200));
+                    var data = JSON.parse(text);
+                    var gasAnnouncements = (data && data.announcements) || [];
+                    console.log('🔔 Announcements count:', gasAnnouncements.length);
 
-                    try {
-                        const gasNotifs = gasAnnouncements.map(a => ({
+                    var gasNotifs = gasAnnouncements.map(function (a) {
+                        return {
                             id: a.id,
                             title: (CATEGORY_ICONS[a.category] || '📢') + ' ' + (a.title || ''),
                             body: a.body || '',
-                            time: a.displayDate ? `📅 ${a.displayDate}` : (a.date ? `📅 ${a.date}` : ''),
+                            time: a.displayDate ? '📅 ' + a.displayDate : (a.date ? '📅 ' + a.date : ''),
                             source: 'gas',
                             category: a.category || 'general',
                             ts: a.ts || ''
-                        }));
+                        };
+                    });
 
-                        const oldIds = new Set(appNotifications.map(n => n.id));
-                        const isInitialLoad = appNotifications.length === 0 && configNotifications.length === 0;
-                        let hasNew = false;
-                        gasNotifs.forEach(n => {
-                            if (!oldIds.has(n.id) && !isInitialLoad) hasNew = true;
-                        });
+                    var oldIds = {};
+                    appNotifications.forEach(function (n) { oldIds[n.id] = true; });
+                    var isInitialLoad = (appNotifications.length === 0 && configNotifications.length === 0);
+                    var hasNew = false;
+                    gasNotifs.forEach(function (n) {
+                        if (!oldIds[n.id] && !isInitialLoad) hasNew = true;
+                    });
 
-                        appNotifications = [...gasNotifs, ...configNotifications];
-                        renderNotifList();
+                    appNotifications = gasNotifs.concat(configNotifications);
+                    renderNotifList();
+                    if (hasNew) triggerNotificationEffects();
 
-                        if (hasNew) triggerNotificationEffects();
-
-                    } catch (mapErr) {
-                        console.error('🔴 [fetchAnnouncements] Map/render error:', mapErr);
-                        if (list) list.innerHTML = `<div class="text-center py-4 text-danger small">เกิดข้อผิดพลาด: ${mapErr.message}</div>`;
+                } catch (e) {
+                    console.error('🔴 XHR parse/process error:', e);
+                    if (appNotifications.length === 0 && list) {
+                        list.innerHTML = '<div class="text-center py-4"><div style="font-size:1.5rem">⚠️</div><div class="text-muted small mb-2">' + e.message + '</div><button class="btn btn-sm btn-outline-primary rounded-pill" onclick="fetchAnnouncements()">ลองใหม่</button></div>';
                     }
-                })
-                .catch((err) => {
-                    console.error("🔴 [fetchAnnouncements] Fetch Error:", err);
-                    serverErrorMessage = 'เชื่อมต่อไม่สำเร็จ: ' + (err.message || err);
-                    const list = document.getElementById('notifList');
-                    if (list) {
-                        list.innerHTML = `
-                        <div class="text-center py-4 px-3">
-                            <div style="font-size:2rem;opacity:0.4">⚠️</div>
-                            <div class="text-muted small mb-2">${serverErrorMessage}</div>
-                            <button class="btn btn-sm btn-outline-primary rounded-pill" onclick="fetchAnnouncements()">
-                                <i class="fas fa-redo me-1"></i>ลองอีกครั้ง
-                            </button>
-                        </div>`;
-                    }
-                    updateBadge(0);
-                });
+                }
+            };
+
+            xhr.onerror = function () {
+                console.error('🔴 XHR network error');
+                if (appNotifications.length === 0 && list) {
+                    list.innerHTML = '<div class="text-center py-4"><div style="font-size:1.5rem">📡</div><div class="text-muted small mb-2">เชื่อมต่อไม่ได้</div><button class="btn btn-sm btn-outline-primary rounded-pill" onclick="fetchAnnouncements()">ลองอีกครั้ง</button></div>';
+                }
+            };
+
+            xhr.ontimeout = function () {
+                console.error('🔴 XHR timeout');
+                if (appNotifications.length === 0 && list) {
+                    list.innerHTML = '<div class="text-center py-4"><div style="font-size:1.5rem">⏱</div><div class="text-muted small mb-2">เชื่อมต่อช้า (timeout)</div><button class="btn btn-sm btn-outline-primary rounded-pill" onclick="fetchAnnouncements()">ลองอีกครั้ง</button></div>';
+                }
+            };
+
+            xhr.send();
         }
 
         function triggerNotificationEffects() {
@@ -4517,56 +4504,49 @@
             }
         }
 
-        // ✅ render notification list (ใช้ timestamp-based unread)
+        // ✅ render notification list (ไม่ใช้ nested template literal)
         function renderNotifList() {
-            const list = document.getElementById('notifList');
+            var list = document.getElementById('notifList');
             if (!list) return;
 
             if (appNotifications.length === 0) {
-                list.innerHTML = `
-                <div class="text-center py-5 px-3">
-                    <div class="mb-2" style="font-size: 2rem; opacity: 0.3;">📭</div>
-                    <div class="text-muted small mb-3">${serverErrorMessage || 'ยังไม่มีข่าวสารหรือกิจกรรมใหม่ในขณะนี้'}</div>
-                    <a href="${GAS_URL}?action=get_announcements" target="_blank" class="btn btn-sm btn-outline-secondary rounded-pill" style="font-size:0.65rem;">
-                        <i class="fas fa-link me-1"></i>ลองตรวจสอบลิงก์
-                    </a>
-                </div>`;
+                list.innerHTML = '<div class="text-center py-5 px-3"><div class="mb-2" style="font-size:2rem;opacity:0.3">📭</div>' +
+                    '<div class="text-muted small mb-3">' + (serverErrorMessage || 'ยังไม่มีข่าวสารหรือกิจกรรมใหม่') + '</div>' +
+                    '<a href="' + GAS_URL + '?action=get_announcements" target="_blank" class="btn btn-sm btn-outline-secondary rounded-pill" style="font-size:0.65rem;">ตรวจสอบลิงก์</a>' +
+                    '</div>';
                 updateBadge(0);
                 return;
             }
 
-            // ✅ ใช้ timestamp เดียว: ประกาศที่สร้าง หลัง notif_cleared_at = ยังไม่อ่าน
-            const clearedAt = parseInt(localStorage.getItem('notif_cleared_at') || '0');
+            var clearedAt = parseInt(localStorage.getItem('notif_cleared_at') || '0');
+            var unread = 0;
+            var html = '';
 
-            let unread = 0;
-            let html = '';
-            appNotifications.forEach(n => {
-                // แปลง ts ของประกาศเป็น timestamp (milliseconds)
-                let notifTime = 0;
+            appNotifications.forEach(function (n) {
+                var notifTime = 0;
                 if (n.ts) {
-                    const parsed = new Date(n.ts);
+                    var parsed = new Date(n.ts);
                     if (!isNaN(parsed.getTime())) notifTime = parsed.getTime();
                 }
-                // ถ้าไม่มี ts ให้ดึงเลข timestamp จาก id (เช่น ann_1772138145545)
                 if (notifTime === 0 && n.id) {
-                    const match = String(n.id).match(/_?(\d{10,13})$/);
+                    var match = String(n.id).match(/(\d{10,13})$/);
                     if (match) notifTime = parseInt(match[1]);
                 }
 
-                // ถือว่า "ยังไม่อ่าน" ถ้าประกาศสร้างหลัง clearedAt
-                const isUnread = notifTime > clearedAt;
+                var isUnread = (notifTime > clearedAt);
                 if (isUnread) unread++;
 
-                const color = CATEGORY_COLORS[n.category] || '#636e72';
-                html += `
-                <div class="notif-item ${isUnread ? 'unread' : ''}"
-                    style="${isUnread ? `border-left:3px solid ${color};` : ''}"
-                    onclick="readNotif('${n.id}')">
-                    <div class="notif-title">${n.title}</div>
-                    ${n.body ? `<div class="notif-body">${n.body}</div>` : ''}
-                    ${n.time ? `<div class="notif-time mt-1">${n.time}</div>` : ''}
-                </div>`;
+                var color = (CATEGORY_COLORS && CATEGORY_COLORS[n.category]) || '#636e72';
+                // ✅ ไม่ใช้ nested template literal - ใช้ string concat แทน
+                var styleStr = isUnread ? ('border-left:3px solid ' + color + ';') : '';
+                var unreadClass = isUnread ? 'unread' : '';
+                html += '<div class="notif-item ' + unreadClass + '" style="' + styleStr + '" onclick="readNotif(\'' + n.id + '\')">'
+                    + '<div class="notif-title">' + (n.title || '') + '</div>'
+                    + (n.body ? '<div class="notif-body">' + n.body + '</div>' : '')
+                    + (n.time ? '<div class="notif-time mt-1">' + n.time + '</div>' : '')
+                    + '</div>';
             });
+
             list.innerHTML = html;
             updateBadge(unread);
         }
