@@ -3227,21 +3227,23 @@
 
         function renderDashboard(appUsers) {
             // แสดงจำนวนบุคลากรจริง (appUsers)
-            let kpiPosts = document.getElementById('kpi-posts');
-            if (kpiPosts) kpiPosts.innerText = appUsers.length + ' คน';
-
-            let totalPosts = globalFeedData ? globalFeedData.length : 0;
-
+            let systemTotalPosts = 0;
+            let systemTotalTeamwork = 0;
             let totalHappy = 0, userWithDataCount = 0, issueCount = 0;
             globalUserStatsMap = {};
 
             appUsers.forEach(u => {
                 if (!u) return;
-                // รองรับทั้ง lineId และ id ที่อาจส่งมาต่างกัน
                 const uid = u.lineId || u.id;
                 if (!uid) return;
 
                 const avg = parseFloat(u.happy) || 0;
+                const postsCount = u.totalCount || 0;
+                const taggedCount = u.taggedCount || 0; // คาดว่า GAS จะส่งมาให้ หรือเรานับจาก feed (ถ้ามี)
+
+                systemTotalPosts += postsCount;
+                systemTotalTeamwork += taggedCount;
+
                 globalUserStatsMap[uid] = {
                     id: uid,
                     name: u.name || 'ไม่ระบุชื่อ',
@@ -3251,7 +3253,9 @@
                     level: u.level || 1,
                     avgHappy: avg,
                     virtueStats: u.virtueStats || {},
-                    postsMade: 0, taggedIn: 0, verifiedOthers: 0,
+                    postsMade: postsCount,
+                    taggedIn: taggedCount,
+                    verifiedOthers: 0,
                     topFriends: Array.isArray(u.topFriends) ? u.topFriends : []
                 };
 
@@ -3262,39 +3266,36 @@
                 }
             });
 
-            // คำนวณ Happy Index (คะแนน avgHappy อยู่ช่วง 0-10 แต่ฐานข้อมูลบางครั้งอาจเป็น 0-100)
+            // ✅ KPI 1: กิจกรรมทั้งหมด (ใช้จากผลรวม totalCount)
+            let kpiPosts = document.getElementById('kpi-posts');
+            if (kpiPosts) kpiPosts.innerText = systemTotalPosts + ' ครั้ง';
+
+            // ✅ KPI 2: ดัชนีความสุข
             const maxHappy = userWithDataCount > 0 ? totalHappy / userWithDataCount : 0;
-            // ถ้าค่าเฉลี่ยมากกว่า 10 แสดงว่าเป็นสเกล 0-100 อยู่แล้ว
             const avgOrgHappyPct = maxHappy > 10 ? maxHappy.toFixed(0) : (maxHappy / 10 * 100).toFixed(0);
             let kpiHappy = document.getElementById('kpi-happy');
             if (kpiHappy) kpiHappy.innerText = avgOrgHappyPct + '%';
 
+            // ✅ KPI 3: ต้องดูแล (คน)
             let kpiIssues = document.getElementById('kpi-issues');
             if (kpiIssues) kpiIssues.innerText = issueCount + ' คน';
 
-            let teamWorkPosts = 0;
-            if (globalFeedData && globalFeedData.length > 0) {
+            // ✅ KPI 4: กิจกรรมร่วม (ทีม)
+            // ถ้า GAS ไม่ได้ส่ง taggedCount มาให้รายคน เราจะใช้การสแกน feed เท่าที่มี
+            if (systemTotalTeamwork === 0 && globalFeedData && globalFeedData.length > 0) {
                 globalFeedData.forEach(post => {
-                    const pid = post.user_line_id;
-                    if (pid && globalUserStatsMap[pid]) globalUserStatsMap[pid].postsMade++;
                     if (post.taggedFriends) {
-                        teamWorkPosts++;
+                        systemTotalTeamwork++;
                         String(post.taggedFriends).split(',').forEach(tId => {
                             const cleanId = tId.trim();
                             if (cleanId && globalUserStatsMap[cleanId]) globalUserStatsMap[cleanId].taggedIn++;
                         });
                     }
-                    if (post.verifies && Array.isArray(post.verifies)) {
-                        post.verifies.forEach(v => {
-                            if (v && v.lineId && globalUserStatsMap[v.lineId]) globalUserStatsMap[v.lineId].verifiedOthers++;
-                        });
-                    }
                 });
             }
 
-            const teamWorkRate = totalPosts > 0 ? ((teamWorkPosts / totalPosts) * 100).toFixed(0) : 0;
             let kpiTeamwork = document.getElementById('kpi-teamwork');
-            if (kpiTeamwork) kpiTeamwork.innerText = teamWorkRate + '%';
+            if (kpiTeamwork) kpiTeamwork.innerText = systemTotalTeamwork + ' ครั้ง';
 
             renderStaffTable(globalUserStatsMap);
         }
@@ -3388,6 +3389,7 @@
                                     <div class="fw-bold" style="font-size:1.6rem; line-height:1; color: ${numericScore < 5 && numericScore > 0 ? '#e74c3c' : (numericScore < 7 && numericScore > 0 ? '#f39c12' : '#27ae60')}">${happyDisplay}</div>
                                     <small class="text-muted" style="font-size:0.7rem;">${icon} ความสุข</small>
                                     <div class="text-muted" style="font-size:0.75rem;"><i class="fas fa-star text-warning me-1"></i>${scoreXP.toLocaleString()} XP</div>
+                                    <div class="text-muted" style="font-size:0.65rem;"><i class="fas fa-pencil-alt me-1"></i>${f.postsMade} โพสต์ | <i class="fas fa-users me-1"></i> ${f.taggedIn} แท็ก</div>
                                 </div>
                             </div>
                             ${closenessHtml}
