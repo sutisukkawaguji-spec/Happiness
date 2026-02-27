@@ -3110,7 +3110,6 @@
                     `;
                 }
 
-                // สร้าง Element แถวพนักงาน
                 const div = document.createElement('div');
                 div.className = `p-3 staff-row border-bottom ${statusClass}`;
 
@@ -3119,6 +3118,10 @@
                 if (f.topFriends && f.topFriends.length > 0) {
                     closenessHtml = `<div class="mt-1 small text-muted"><i class="fas fa-link me-1"></i>สนิทกับ: ${f.topFriends[0].name || '-'}</div>`;
                 }
+
+                // ✅ แสดงคะแนนสะสม (Score XP) ใต้ชื่อ
+                const scoreXP = f.score || 0;
+                const happyDisplay = numericScore > 0 ? happyScore : '-';
 
                 // เมื่อกดที่แถว ให้ดูรายละเอียด
                 div.onclick = () => showStaffModal(f.id);
@@ -3137,8 +3140,9 @@
                                     <span class="badge bg-light text-dark border mt-1">${f.role || 'บุคลากร'}</span>
                                 </div>
                                 <div class="text-end">
-                                     <div class="fw-bold display-6" style="font-size:1.4rem; line-height:1;">${happyScore}</div>
-                                     <small>${icon}</small>
+                                    <div class="fw-bold" style="font-size:1.6rem; line-height:1; color: ${numericScore < 5 && numericScore > 0 ? '#e74c3c' : (numericScore < 7 && numericScore > 0 ? '#f39c12' : '#27ae60')}">${happyDisplay}</div>
+                                    <small class="text-muted" style="font-size:0.7rem;">${icon} ความสุข</small>
+                                    <div class="text-muted" style="font-size:0.75rem;"><i class="fas fa-star text-warning me-1"></i>${scoreXP.toLocaleString()} XP</div>
                                 </div>
                             </div>
                             ${closenessHtml}
@@ -4297,7 +4301,8 @@
         // =====================================================
         // 🔔 Notification + Announcement System (Complete)
         // =====================================================
-        let appNotifications = [];
+        let appNotifications = [];      // เก็บ notifications จาก GAS Sheet
+        let configNotifications = [];   // เก็บ notifications จาก config (system) แยกต่างหาก
         const CATEGORY_ICONS = {
             activity: '🎉', training: '📚', welfare: '❤️',
             meeting: '💼', holiday: '🏖️', general: '📢'
@@ -4397,7 +4402,6 @@
                     serverErrorMessage = data.message || '';
                     const gasAnnouncements = (data && data.announcements) || [];
 
-                    // แปลง GAS announcements เป็น format เดียวกัน
                     const gasNotifs = gasAnnouncements.map(a => ({
                         id: a.id,
                         title: (CATEGORY_ICONS[a.category] || '📢') + ' ' + a.title,
@@ -4407,23 +4411,17 @@
                         category: a.category
                     }));
 
-                    // รวมกับ notifications จาก config (ที่เป็นระบบ)
-                    const configNotifs = appNotifications.filter(n => n.source === 'config');
-
-                    // กรองเฉพาะอันใหม่เพื่อแจ้งเตือน (เช็คเฉพาะถ้าเคยมีข้อมูลอยู่แล้ว เพื่อไม่ให้ดังตอนโหลดหน้าแรก)
-                    const isInitialLoad = appNotifications.length === 0;
+                    // ✅ รวม gasNotifs + configNotifications (แยก array ไม่ทับกัน)
                     const oldIds = new Set(appNotifications.map(n => n.id));
+                    const isInitialLoad = appNotifications.length === 0 && configNotifications.length === 0;
                     let hasNew = false;
 
                     gasNotifs.forEach(n => {
-                        if (!oldIds.has(n.id)) {
-                            if (!isInitialLoad) hasNew = true;
-                        }
+                        if (!oldIds.has(n.id) && !isInitialLoad) hasNew = true;
                     });
 
-                    // รวมและเรียงล่าสุดก่อน
-                    const combined = [...gasNotifs, ...configNotifs];
-                    appNotifications = combined;
+                    // ตั้งค่า appNotifications ใหม่ = GAS + config ที่ save ไว้ใน configNotifications
+                    appNotifications = [...gasNotifs, ...configNotifications];
                     renderNotifList();
 
                     // แจ้งเตือนสั่นและเสียงถ้ามีใหม่ทีหลัง
@@ -4510,14 +4508,18 @@
             renderNotifList();
         }
 
-        // โหลด config notifications
+        // โหลด config notifications (✅ แก้แล้ว: เก็บใน configNotifications แยกต่างหาก ไม่หายเมื่อ fetchAnnouncements)
         function loadNotificationsFromConfig(config) {
             if (!config || !config.notifications) return;
+            configNotifications = []; // ล้าง config notifications เพื่อไม่ซ้ำ
             config.notifications.forEach(n => {
                 if (n.id && n.title) {
-                    appNotifications.push({ ...n, source: 'config' });
+                    configNotifications.push({ ...n, source: 'config' });
                 }
             });
+            // อัปเดต appNotifications และแสดงผลทันที
+            const gasNotifs = appNotifications.filter(n => n.source === 'gas');
+            appNotifications = [...gasNotifs, ...configNotifications];
             renderNotifList();
         }
 
