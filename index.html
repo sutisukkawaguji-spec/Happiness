@@ -3205,7 +3205,12 @@
                     if (data.users && data.users.length > 0) {
                         try {
                             globalAppUsers = data.users;
-                            renderDashboard(data.users);
+                            // 🔄 ถ้ายังไม่มีข้อมูล Feed ให้ดึงมาเพื่อประกอบการนับตัวเลข Dashboard
+                            if (!globalFeedData || globalFeedData.length === 0) {
+                                fetchFeed(true).then(() => renderDashboard(data.users));
+                            } else {
+                                renderDashboard(data.users);
+                            }
                         } catch (e) {
                             console.error('Error rendering dashboard:', e);
                             if (sList) sList.innerHTML = `<div class="text-danger text-center py-3">แสดงผลไม่สำเร็จ: ${e.message}</div>`;
@@ -3236,13 +3241,15 @@
             // ✅ 1. ตั้งค่าพื้นฐาน (Initialize Map จาก Database)
             appUsers.forEach(u => {
                 if (!u) return;
-                const uid = String(u.lineId || u.id || '');
+                // รอบคอบเรื่อง ID: บางจุดใช้ lineId, id หรือ userId
+                const uid = String(u.lineId || u.id || u.userId || '');
                 if (!uid) return;
 
-                const dbPosts = parseInt(u.totalCount || u.posts || 0);
-                const dbTagged = parseInt(u.taggedCount || u.tagged || 0);
-                const dbWitness = parseInt(u.witnessCount || u.witness || 0);
-                const happyRaw = parseFloat(u.happyScore || u.happy) || 0;
+                // รองรับชื่อฟิลด์ที่หลากหลายตามที่ GAS อาจจะส่งมา
+                const dbPosts = parseInt(u.totalCount || u.posts || u.total || u.postCount || 0);
+                const dbTagged = parseInt(u.taggedCount || u.tagged || u.teamWork || 0);
+                const dbWitness = parseInt(u.witnessCount || u.witness || u.verified || 0);
+                const happyRaw = parseFloat(u.happyScore || u.happy || u.avg_happy || u.avgHappy || 0);
 
                 globalUserStatsMap[uid] = {
                     id: uid,
@@ -3266,16 +3273,16 @@
                 }
             });
 
-            // ✅ 2. 👑 ผสานข้อมูลจาก Live Feed (ถ้ามีข้อมูลที่ยังไม่ได้ Sync ลง DB)
+            // ✅ 2. 👑 ผสานข้อมูลจาก Live Feed (ถ้ามีข้อมูลในหน่วยความจำ)
             if (globalFeedData && globalFeedData.length > 0) {
                 const liveStats = {};
                 globalFeedData.forEach(post => {
-                    const pid = String(post.user_line_id);
+                    const pid = String(post.user_line_id || post.userId);
                     if (!liveStats[pid]) liveStats[pid] = { posts: 0, tagged: 0, witness: 0 };
                     liveStats[pid].posts++;
 
                     if (post.taggedFriends) {
-                        const tags = String(post.taggedFriends).split(',').map(s => s.trim()).filter(s => s);
+                        const tags = String(post.taggedFriends).split(',').map(s => s.trim()).filter(s => s.length > 5);
                         tags.forEach(tId => {
                             if (!liveStats[tId]) liveStats[tId] = { posts: 0, tagged: 0, witness: 0 };
                             liveStats[tId].tagged++;
@@ -3283,7 +3290,7 @@
                     }
                     if (post.verifies && Array.isArray(post.verifies)) {
                         post.verifies.forEach(v => {
-                            const vid = String(v.lineId);
+                            const vid = String(v.lineId || v.userId);
                             if (!liveStats[vid]) liveStats[vid] = { posts: 0, tagged: 0, witness: 0 };
                             liveStats[vid].witness++;
                         });
@@ -3563,16 +3570,6 @@
         }
 
 
-        // --- NAVIGATION ---
-        // ✅ ตัวช่วยแปลง Role → Level (ต้องใช้ก่อน switchTab)
-        function getUserLevel(user) {
-            if (!user) return 99;
-            var role = (user.role || '').toLowerCase().trim();
-            if (role === 'admin' || role === 'ผู้ดูแลระบบ') return 1;
-            if (role === 'manager' || role === 'ผู้บริหาร') return 2;
-            if (role === 'newsmanager' || role === 'ผู้จัดการข่าว') return 3;
-            return 4; // Staff / พนักงาน / อื่นๆ
-        }
 
         // 🟡 แก้ไข switchTab เพื่อจัดการจุดแดง + ตรวจสิทธิ์
         function switchTab(pageId, el) {
