@@ -2077,8 +2077,13 @@
             const processedFiles = [];
 
             rawFiles.forEach(file => {
-                // รองรับไฟล์ .bin สำหรับรูปภาพซัมซุงที่เสีย
-                if (file.name.endsWith('.bin') || !file.type || file.type === 'application/octet-stream') {
+                // ✅ รองรับ Samsung / iOS HEIC และ .bin ไฟล์ที่ MIME type ไม่ถูก
+                const isBin = file.name.endsWith('.bin');
+                const isHeic = file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif');
+                const isUnknownMime = !file.type || file.type === 'application/octet-stream';
+                const isSamsungRaw = file.type === 'image/jpeg' && file.size > 5 * 1024 * 1024; // JPEG ใหญ่กว่า 5MB (Samsung RAW)
+
+                if (isBin || isHeic || isUnknownMime) {
                     try {
                         const newName = "fixed_" + Date.now() + ".jpg";
                         const newFile = new File([file], newName, { type: "image/jpeg" });
@@ -4607,9 +4612,8 @@
                             title: '✅ บันทึกประกาศสำเร็จ!',
                             position: 'top', timer: 3000, showConfirmButton: false
                         });
-                        // เปิด panel ใหม่พร้อมรีโหลดข้อมูล
-                        // เปิด panel ใหม่เพื่อแสดงผลล่าสุด
-                        setTimeout(() => openNotifPanel(), 500);
+                        // ✅ รอให้ GAS เขียนข้อมูลเสร็จก่อนค่อยเปิด panel (อย่างน้อย 1.5 วินาที)
+                        setTimeout(() => openNotifPanel(), 1500);
                     } else {
                         Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: data.message || '' });
                     }
@@ -4622,7 +4626,8 @@
                         title: '✅ บันทึกประกาศสำเร็จ!',
                         position: 'top', timer: 3000, showConfirmButton: false
                     });
-                    setTimeout(() => openNotifPanel(), 500);
+                    // ✅ รอให้ GAS เขียนข้อมูลเสร็จก่อนค่อยเปิด panel
+                    setTimeout(() => openNotifPanel(), 2000);
                 });
         }
 
