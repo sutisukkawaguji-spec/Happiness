@@ -3,7 +3,7 @@
 // ============================================================
 const CACHE_NAME = 'happy-meter-v7';  // ✅ เพิ่มเลขทุกครั้งที่แก้ไขโค้ด เพื่อบังคับล้าง cache
 
-const ICON_URL = 'https://dummyimage.com/192x192/6c5ce7/ffffff&text=%F0%9F%98%8A';
+const ICON_URL = 'app-icon.png';
 
 // ========================
 // Install: Cache ไฟล์หลัก
@@ -127,4 +127,3 @@ self.addEventListener('message', event => {
         });
     }
 });
-
