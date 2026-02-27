@@ -1786,7 +1786,7 @@
         </div>
         <div class="nav-item" id="nav-badges-btn" onclick="switchTab('badges', this)"><i
                 class="fas fa-medal"></i><span>เหรียญ</span></div>
-        <div class="nav-item" id="nav-manager-btn" onclick="switchTab('manager', this)"><i
+        <div class="nav-item" id="nav-manager-btn" onclick="switchTab('manager', this)" style="display: none;"><i
                 class="fas fa-user-tie"></i><span>ผู้บริหาร</span>
         </div>
     </div>
@@ -2537,6 +2537,7 @@
                             dominantVirtue: data.user.dominantVirtue || 'none'
                         };
                         renderProfile();
+                        updateAddAnnounceButton(); // ✅ ซ่อน/แสดง เมนูตามสิทธิ์ทันที
 
                         // ✅ 2. โหลดรูปเพื่อนให้เสร็จก่อน -> แล้วค่อยโหลด Feed + รายชื่อเพื่อน
                         cacheUsers().then(() => {
@@ -2557,6 +2558,7 @@
                         // --- 🚨 SYSTEM UPDATE PROMPT ---
                         // 🔔 โหลดประกาศข่าวสารทันที (ทำให้กระดิ่งแสดง badge)
                         fetchAnnouncements();
+                        updateAddAnnounceButton(); // ✅ ตรวจสิทธิ์สร้างประกาศและดูหน้าผู้บริหาร
 
                         if (data.config) {
                             renderAnnouncement(data.config);
@@ -3386,6 +3388,7 @@
 
             document.getElementById('header-user').style.display = (pageId === 'manager') ? 'none' : 'block';
             if (pageId === 'manager') fetchManagerData();
+            updateAddAnnounceButton(); // ✅ ตรวจสิทธิ์ทุกครั้งที่เปลี่ยนแท็บ
             // if(pageId === 'stories') fetchFeed(); // เอาออก เพราะเรียกข้างบนแล้ว
             if (pageId === 'badges' && document.getElementById('nav-badges-btn').classList.contains('nav-glow')) {
                 // ถ้ากดเข้ามาดูเหรียญ ให้เอาแสงวิบวับออก
@@ -4448,8 +4451,8 @@
             } else {
                 panel.classList.add('show');
                 if (backdrop) backdrop.classList.add('show');
+                updateAddAnnounceButton(); // ตรวจสิทธิ์ก่อนเรนเดอร์ปุ่มบวก
                 fetchAnnouncements();
-                updateAddAnnounceButton();
             }
         }
 
@@ -4551,11 +4554,16 @@
             // ✅ JSONP callback global function
             window.__gasAnnounceCb__ = function (data) {
                 clearTimeout(gasTimeout);
-                console.log('🔔 JSONP OK, items:', (data.announcements || []).length);
+                if (!data) return;
+
+                // รองรับทั้ง format { announcements: [...] } และ [...]
+                var rawItems = data.announcements || (Array.isArray(data) ? data : []);
+                console.log('🔔 JSONP OK, items:', rawItems.length);
+
                 try {
-                    var gasNotifs = (data.announcements || []).map(function (a) {
+                    var gasNotifs = rawItems.map(function (a) {
                         return {
-                            id: a.id,
+                            id: a.id || ('gas_' + Date.now() + Math.random()),
                             title: ((CATEGORY_ICONS && CATEGORY_ICONS[a.category]) || '📢') + ' ' + (a.title || ''),
                             body: a.body || '',
                             time: a.displayDate ? '📅 ' + a.displayDate : (a.date ? '📅 ' + a.date : ''),
@@ -4564,11 +4572,13 @@
                             ts: a.ts || ''
                         };
                     });
+
                     var oldIds = {};
-                    appNotifications.forEach(function (n) { oldIds[n.id] = true; });
+                    appNotifications.forEach(function (n) { if (n.id) oldIds[n.id] = true; });
                     var isInitial = (appNotifications.length === 0 && configNotifications.length === 0);
                     var hasNew = false;
                     gasNotifs.forEach(function (n) { if (!oldIds[n.id] && !isInitial) hasNew = true; });
+
                     appNotifications = gasNotifs.concat(configNotifications);
                     renderNotifList();
                     if (hasNew) triggerNotificationEffects();
