@@ -2165,7 +2165,9 @@
         // --- ANNOUNCEMENT & SURVEY LOGIC ---
         // (ฟังก์ชัน checkAndShowSurvey เวอร์ชันหลัก อยู่ด้านล่างใน checkUser section)
 
-        main();
+        main().then(() => {
+            setupBackgroundSync();
+        });
 
         // --- 🌍 Global Data ---
 
@@ -2721,31 +2723,18 @@
                             <div style="font-size:3rem;">😊</div>
                             <p class="mt-2 mb-1 fw-bold">ร่วมประเมินความสุขประจำเดือนกันเถอะ!</p>
                             <p class="text-muted small">ใช้เวลาแค่ 1 นาที ช่วยให้ผู้บริหารเข้าใจความต้องการของทีม</p>
-                            <span class="badge bg-warning text-dark">ยังไม่ได้ทำเดือน ${monthDisplay}</span>
+                            <span class="badge bg-warning text-dark">จำเป็นต้องทำเพื่อเข้าใช้งานเดือน ${monthDisplay}</span>
                         </div>
                     `,
-                    allowOutsideClick: false,   // ✅ ปิดไม่ได้ถ้ากด outside
-                    allowEscapeKey: false,       // ✅ กด ESC ไม่ปิด
-                    showCancelButton: true,
-                    showDenyButton: true,
+                    allowOutsideClick: false,   // ✅ บังคับทำ ปิดไม่ได้
+                    allowEscapeKey: false,       // ✅ บังคับทำ กด ESC ไม่ได้
+                    showCancelButton: false,     // ❌ เอาปุ่มปิดออก
+                    showDenyButton: false,       // ❌ เอาปุ่มทำทีหลังออก
                     confirmButtonColor: '#6c5ce7',
-                    confirmButtonText: '📝 ทำเลย!',
-                    denyButtonText: '⏰ ทำภายหลัง (1 ชม.)',
-                    cancelButtonText: '✕ ปิด (แจ้งใหม่ 3 ชม.)',
-                    denyButtonColor: '#fdcb6e',
-                    cancelButtonColor: '#b2bec3'
+                    confirmButtonText: '📝 เริ่มทำแบบสอบถามเลย!',
                 }).then(result => {
                     if (result.isConfirmed) {
                         window.location.href = `survey.html?uid=${encodeURIComponent(currentUser.userId)}`;
-                    } else if (result.isDenied) {
-                        // snooze 1 ชั่วโมง
-                        surveyData.snoozeUntil = new Date(now.getTime() + 60 * 60 * 1000).toISOString();
-                        localStorage.setItem(storageKey, JSON.stringify(surveyData));
-                        Swal.fire({ toast: true, position: 'top', icon: 'info', title: '⏰ จะแจ้งใหม่ใน 1 ชั่วโมง', timer: 2000, showConfirmButton: false });
-                    } else if (result.isDismissed) {
-                        // กด "ปิด" → snooze 3 ชั่วโมง (ไม่ใช่ปิดตลอดไป)
-                        surveyData.snoozeUntil = new Date(now.getTime() + 3 * 60 * 60 * 1000).toISOString();
-                        localStorage.setItem(storageKey, JSON.stringify(surveyData));
                     }
                 });
             }, 2500);
@@ -3761,9 +3750,9 @@
         }
 
         // --- 🚀 Fetch Feed (Fixed & Complete) ---
-        function fetchFeed(append = false) {
+        function fetchFeed(append = false, silent = false) {
             if (isFetchingFeed) return; // 🔒 ถ้ากำลังโหลดอยู่ ให้รอก่อน
-            isFetchingFeed = true; // 🔒 ล็อกทันทีที่เริ่มเรียก
+            if (!silent) isFetchingFeed = true; // 🔒 ล็อกทันทีที่เริ่มเรียก (ถ้าไม่ใข่ silent)
 
             if (!append) {
                 currentFeedLimit = 10;
@@ -3780,9 +3769,9 @@
                 return;
             }
 
-            if (!append) {
+            if (!append && !silent) {
                 container.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-secondary"></div><br><small>กำลังโหลดเรื่องราว...</small></div>';
-            } else {
+            } else if (append && !silent) {
                 const loadBtnWrap = document.getElementById('loadMoreBtnWrapper');
                 if (loadBtnWrap) loadBtnWrap.innerHTML = '<button class="btn btn-outline-primary rounded-pill px-4 disabled"><i class="fas fa-spinner fa-spin me-1"></i> กำลังโหลด...</button>';
             }
@@ -3823,8 +3812,12 @@
                     const newStories = feed.length - lastSeen;
                     const badgeBox = document.getElementById('nav-stories-btn');
                     if (badgeBox.querySelector('.nav-notify-badge')) badgeBox.querySelector('.nav-notify-badge').remove();
-                    if (newStories > 0 && !document.getElementById('page-stories').classList.contains('active')) {
-                        badgeBox.innerHTML += `<div class="nav-notify-badge">ใหม่</div>`;
+
+                    if (newStories > 0) {
+                        if (!document.getElementById('page-stories').classList.contains('active')) {
+                            badgeBox.innerHTML += `<div class="nav-notify-badge">${newStories}</div>`;
+                            if (silent) triggerNotificationEffects(); // แจ้งเตือนกระดิ่งด้วยถ้าเป็น silent sync
+                        }
                     } else if (document.getElementById('page-stories').classList.contains('active')) {
                         localStorage.setItem('lastSeenStoryCount', feed.length);
                     }
@@ -4566,10 +4559,10 @@
         // ✅ วิธีนี้ข้าม CORS ได้ 100% แม้ใน LINE WebView
         // =====================================================
         // ✅ ฟังก์ชันจัดการข้อมูล (ย้ายออกมาอยู่วงนอกเพื่อให้รันได้ทุกที่)
-        function processAnnounceData(data) {
+        function processAnnounceData(data, silent = false) {
             try {
                 if (!data) return;
-                console.log('🔔 Processing Data:', data);
+                console.log('🔔 Processing Data (silent=' + silent + '):', data);
 
                 var rawItems = data.announcements || data.data || (Array.isArray(data) ? data : []);
                 if (data.status === 'error') {
@@ -4577,9 +4570,13 @@
                     rawItems = [];
                 }
 
+                // เก็บ ID เก่าไว้เช็คความใหม่
+                const oldIds = appNotifications.map(n => n.id);
+
                 const now = new Date();
                 const todayStr = now.toISOString().split('T')[0];
                 var hasNewUpcoming = false;
+                var newlyDetected = false;
                 var gasNotifs = [];
 
                 rawItems.forEach(function (a) {
@@ -4601,6 +4598,11 @@
                         const known = appNotifications.some(old => old.id === a.id);
                         if (!known) hasNewUpcoming = true;
                     }
+
+                    // เช็คว่ามีรายการใหม่จริงๆ (ID ใหม่)
+                    if (!oldIds.includes(a.id)) {
+                        newlyDetected = true;
+                    }
                 });
 
                 var otherNotifs = appNotifications.filter(n => n.source !== 'gas' && n.id !== 'test_render');
@@ -4613,9 +4615,17 @@
                     return true;
                 });
 
-                renderNotifList();
+                if (silent) {
+                    // ถ้าเป็นโหมดเงียบ จะเรนเดอร์และสั่นกระดิ่งเฉพาะเมื่อมีรายการใหม่
+                    if (newlyDetected) {
+                        renderNotifList();
+                        triggerNotificationEffects();
+                    }
+                } else {
+                    renderNotifList();
+                }
 
-                if (hasNewUpcoming) {
+                if (hasNewUpcoming && !silent) {
                     triggerNotificationEffects();
                     Swal.fire({
                         toast: true, position: 'top-end', icon: 'info',
@@ -4625,14 +4635,14 @@
                 }
             } catch (e) {
                 console.error('🔔 processAnnounceData Error:', e);
-                renderNotifList();
+                if (!silent) renderNotifList();
             }
         }
 
-        function fetchAnnouncements() {
+        function fetchAnnouncements(silent = false) {
             var list = document.getElementById('notifList');
             if (!list) return;
-            console.log('🔔 fetchAnnouncements started...');
+            console.log('🔔 fetchAnnouncements started (silent=' + silent + ')...');
 
             // ใช้ fetch เป็นวิธีหลัก
             const url = GAS_URL + '?action=get_announcements&t=' + Date.now();
@@ -4643,7 +4653,7 @@
                 })
                 .then(data => {
                     console.log('🔔 Fetch success');
-                    processAnnounceData(data);
+                    processAnnounceData(data, silent);
                 })
                 .catch(err => {
                     console.warn('🔔 Fetch failed, trying JSONP...', err.message);
@@ -4651,7 +4661,7 @@
                     // JSONP Fallback
                     window.__gasCb = function (data) {
                         console.log('🔔 JSONP Callback success');
-                        processAnnounceData(data);
+                        processAnnounceData(data, silent);
                     };
 
                     const old = document.getElementById('jsonp_gas');
@@ -4663,7 +4673,7 @@
                     s.onerror = () => {
                         console.error('🔔 JSONP also failed');
                         serverErrorMessage = 'การเชื่อมต่อขัดข้อง: ' + err.message;
-                        renderNotifList();
+                        if (!silent) renderNotifList();
                     };
                     document.head.appendChild(s);
                 });
@@ -4787,11 +4797,21 @@
             }
         }
 
+        function setupBackgroundSync() {
+            console.log("⚙️ Starting Background Sync (2 min interval)");
+            setInterval(() => {
+                if (currentUser) {
+                    fetchAnnouncements(true); // เช็คประกาศเงียบๆ
+                    fetchFeed(false, true);  // เช็คเรื่องราวใหม่เงียบๆ
+                }
+            }, 120000); // ทุก 2 นาที เพื่อประหยัด Quota GAS
+        }
+
         // กดอ่านรายการเดียว: ตั้ง clearedAt เป็น max(clearedAt, ts ของรายการนี้)
         function readNotif(id) {
             const item = appNotifications.find(n => n.id === id);
             if (item && item.ts) {
-                const parsed = new Date(item.ts);
+                const parsed = new Date(String(item.ts).replace(/\s*\(.*\)\s*/, '').trim());
                 if (!isNaN(parsed.getTime())) {
                     const current = parseInt(localStorage.getItem('notif_cleared_at') || '0');
                     if (parsed.getTime() > current) {
