@@ -3229,21 +3229,17 @@
             if (!appUsers || !Array.isArray(appUsers)) return;
 
             let totalHappy = 0, userWithDataCount = 0, issueCount = 0;
-            let totalActivityTimes = 0;
-            let totalTeamworkTimes = 0;
+            let totalPostsCount = 0;
+            let totalTeamworkCount = 0;
             globalUserStatsMap = {};
 
-            // ✅ 1. ตั้งค่าพื้นฐาน (Initialize Map จาก Database)
+            // ✅ 1. ตั้งค่าพื้นฐาน (Initialize Map)
             appUsers.forEach(u => {
                 if (!u) return;
                 const uid = String(u.lineId || u.id || '');
                 if (!uid) return;
 
-                const avg = parseFloat(u.happyScore || u.happy) || 0;
-                const dbPosts = parseInt(u.totalCount || u.posts || 0);
-                const dbTagged = parseInt(u.taggedCount || u.tagged || 0);
-                const dbWitness = parseInt(u.witnessCount || u.witness || 0);
-
+                const avg = parseFloat(u.happy) || 0;
                 globalUserStatsMap[uid] = {
                     id: uid,
                     name: u.name || 'ไม่ระบุชื่อ',
@@ -3253,9 +3249,9 @@
                     level: parseInt(u.level) || 1,
                     avgHappy: avg,
                     virtueStats: u.virtueStats || {},
-                    postsMade: dbPosts,
-                    taggedIn: dbTagged,
-                    witnessCount: dbWitness,
+                    postsMade: parseInt(u.totalCount || u.posts || 0),
+                    taggedIn: parseInt(u.taggedCount || u.tagged || 0),
+                    witnessCount: parseInt(u.witnessCount || u.witness || 0),
                     topFriends: Array.isArray(u.topFriends) ? u.topFriends : []
                 };
 
@@ -3266,26 +3262,55 @@
                 }
             });
 
-            // ✅ 2. คำนวณยอดรวมกิจกรรม (KPI) จากสถิติสะสมของทุกคน
-            Object.values(globalUserStatsMap).forEach(user => {
-                totalActivityTimes += user.postsMade;
-                totalTeamworkTimes += user.taggedIn;
-            });
+            // ✅ 2. 👑 คำนวณสถิติจริงจาก globalFeedData (นับสดเพื่อความแม่นยำสูงสุด)
+            if (globalFeedData && globalFeedData.length > 0) {
+                globalFeedData.forEach(post => {
+                    const pid = String(post.user_line_id);
+                    // นับโพสต์ที่สร้างเอง
+                    if (globalUserStatsMap[pid]) {
+                        globalUserStatsMap[pid].postsMade++;
+                        totalPostsCount++;
+                    }
+
+                    // นับการถูกแท็กทีม
+                    if (post.taggedFriends) {
+                        const tags = String(post.taggedFriends).split(',').map(s => s.trim()).filter(s => s);
+                        if (tags.length > 0) {
+                            totalTeamworkCount++; // นับเป็น 1 กิจกรรมร่วมใจ
+                            tags.forEach(tId => {
+                                if (globalUserStatsMap[tId]) {
+                                    globalUserStatsMap[tId].taggedIn++;
+                                }
+                            });
+                        }
+                    }
+
+                    // นับการเป็นพยาน (Witness)
+                    if (post.verifies && Array.isArray(post.verifies)) {
+                        post.verifies.forEach(v => {
+                            const vid = String(v.lineId);
+                            if (globalUserStatsMap[vid]) {
+                                globalUserStatsMap[vid].witnessCount++;
+                            }
+                        });
+                    }
+                });
+            }
 
             // ✅ 3. อัปเดต KPI Cards
             try {
-                // KPI 1: ดัชนีความสุขเฉลี่ย (%)
+                // KPI 1: ดัชนีความสุข (%)
                 const maxHappy = userWithDataCount > 0 ? totalHappy / userWithDataCount : 0;
                 const avgOrgHappyPct = maxHappy > 10 ? maxHappy.toFixed(0) : (maxHappy / 10 * 100).toFixed(0);
                 const kh = document.getElementById('kpi-happy');
                 if (kh) kh.innerText = avgOrgHappyPct + '%';
 
-                // KPI 2: กิจกรรมทั้งหมด (แสดงเป็นจำนวนครั้งสะสมของทั้งองค์กร)
+                // KPI 2: กิจกรรมทั้งหมด (เปลี่ยนเป็นจำนวนคนตามคุณต้องการ)
                 const kp = document.getElementById('kpi-posts');
-                if (kp) kp.innerText = totalActivityTimes + ' ครั้ง';
+                if (kp) kp.innerText = appUsers.length + ' คน';
 
                 // KPI 3: กิจกรรมร่วม (ทีม) %
-                const teamWorkRate = totalActivityTimes > 0 ? ((totalTeamworkTimes / totalActivityTimes) * 100).toFixed(0) : 0;
+                const teamWorkRate = totalPostsCount > 0 ? ((totalTeamworkCount / totalPostsCount) * 100).toFixed(0) : 0;
                 const kt = document.getElementById('kpi-teamwork');
                 if (kt) kt.innerText = teamWorkRate + '%';
 
