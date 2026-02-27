@@ -1804,6 +1804,10 @@
         let globalAppUsers = [];
         let globalFeedData = [];
 
+        var appNotifications = [];      // เก็บ notifications จาก GAS Sheet
+        var configNotifications = [];   // เก็บ notifications จาก config (system) แยกต่างหาก
+        var serverErrorMessage = '';
+
         // =====================================================
         // 🔒 ROLE PERMISSION SYSTEM (4 Levels)
         // =====================================================
@@ -4418,9 +4422,6 @@
         // =====================================================
         // 🔔 Notification + Announcement System (Complete)
         // =====================================================
-        let appNotifications = [];      // เก็บ notifications จาก GAS Sheet
-        let configNotifications = [];   // เก็บ notifications จาก config (system) แยกต่างหาก
-        var serverErrorMessage = '';
 
         const CATEGORY_ICONS = {
             activity: '🎉', training: '📚', welfare: '❤️',
