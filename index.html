@@ -1342,7 +1342,10 @@
             <div id="notifList">
                 <div id="debugRoleInfo" class="text-center p-1 mb-1 bg-light border-bottom"
                     style="font-size: 0.65rem; color: #999;"></div>
-                <div class="text-center py-4 text-muted small">ยังไม่มีข่าวสาร</div>
+                <div class="text-center py-4 text-muted small">
+                    <div class="spinner-border spinner-border-sm text-primary mb-2" role="status"></div>
+                    <div>กำลังโหลดข่าวสาร...</div>
+                </div>
             </div>
         </div>
 
@@ -2582,58 +2585,72 @@
         // 📝 ระบบแบบสอบถามประจำเดือน (พร้อมปุ่ม ทำภายหลัง)
         // =====================================================
         function checkAndShowSurvey() {
-            if (!currentUser) return;
+            if (!currentUser || !currentUser.userId) return;
 
             const storageKey = `survey_${currentUser.userId}`;
             const surveyData = JSON.parse(localStorage.getItem(storageKey) || '{}');
 
             const now = new Date();
             const currentMonthKey = `${now.getFullYear()}-${now.getMonth() + 1}`;
+            const monthNames = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+            const monthDisplay = `${monthNames[now.getMonth()]} ${now.getFullYear() + 543}`;
 
-            // ถ้าทำแบบสอบเดือนนี้แล้ว ไม่ต้องแสดงอีก
+            // ✅ ถ้าทำแบบสอบเดือนนี้แล้ว ไม่ต้องแสดงอีก
             if (surveyData.completedMonth === currentMonthKey) return;
 
-            // ตรวจสอบว่าถูกเลื่อนเวลาแปป (snooze) อยู่หรือไม่
-            if (surveyData.snoozeUntil && new Date(surveyData.snoozeUntil) > now) return;
+            // ✅ ถ้า snooze เป็นเดือนก่อน → ล้างทิ้งแล้วแสดงใหม่เสมอ
+            if (surveyData.snoozeUntil) {
+                const snoozeDate = new Date(surveyData.snoozeUntil);
+                const snoozeMonthKey = `${snoozeDate.getFullYear()}-${snoozeDate.getMonth() + 1}`;
+                if (snoozeMonthKey !== currentMonthKey) {
+                    // snooze ข้ามเดือนแล้ว → ล้างตลอดกาล
+                    delete surveyData.snoozeUntil;
+                    localStorage.setItem(storageKey, JSON.stringify(surveyData));
+                } else if (snoozeDate > now) {
+                    // ยัง snooze อยู่ในเดือนนี้ → ข้ามไป
+                    return;
+                }
+            }
 
-            // แสดง popup แจ้งเตือน
+            // ✅ แสดง popup แจ้งเตือน (delay 2.5 วินาทีหลัง login)
             setTimeout(() => {
                 Swal.fire({
-                    title: '📝 แบบสอบถามประจำเดือน',
+                    title: `📝 แบบสอบถามประจำเดือน ${monthDisplay}`,
                     html: `
                         <div class="text-center">
                             <div style="font-size:3rem;">😊</div>
                             <p class="mt-2 mb-1 fw-bold">ร่วมประเมินความสุขประจำเดือนกันเถอะ!</p>
                             <p class="text-muted small">ใช้เวลาแค่ 1 นาที ช่วยให้ผู้บริหารเข้าใจความต้องการของทีม</p>
+                            <span class="badge bg-warning text-dark">ยังไม่ได้ทำเดือน ${monthDisplay}</span>
                         </div>
                     `,
+                    allowOutsideClick: false,   // ✅ ปิดไม่ได้ถ้ากด outside
+                    allowEscapeKey: false,       // ✅ กด ESC ไม่ปิด
                     showCancelButton: true,
                     showDenyButton: true,
                     confirmButtonColor: '#6c5ce7',
-                    confirmButtonText: '📝 ทำแบบสอบเดี๋ยวนี้!',
-                    denyButtonText: '⏰ ทำภายหลัง (1 ชั่วโมง)',
-                    cancelButtonText: '❌ ปิดไร้แจ้ง',
+                    confirmButtonText: '📝 ทำเลย!',
+                    denyButtonText: '⏰ ทำภายหลัง (1 ชม.)',
+                    cancelButtonText: '✕ ปิด (แจ้งใหม่ 3 ชม.)',
                     denyButtonColor: '#fdcb6e',
                     cancelButtonColor: '#b2bec3'
                 }).then(result => {
                     if (result.isConfirmed) {
-                        // ไปหน้าแบบสอบถาม
                         window.location.href = `survey.html?uid=${encodeURIComponent(currentUser.userId)}`;
                     } else if (result.isDenied) {
-                        // snooze 1 ชั่วโมง แล้วแจ้งใหม่
-                        const snoozeTime = new Date(now.getTime() + 60 * 60 * 1000); // +1 hr
-                        surveyData.snoozeUntil = snoozeTime.toISOString();
+                        // snooze 1 ชั่วโมง
+                        surveyData.snoozeUntil = new Date(now.getTime() + 60 * 60 * 1000).toISOString();
                         localStorage.setItem(storageKey, JSON.stringify(surveyData));
-                        Swal.fire({
-                            toast: true, position: 'top', icon: 'info',
-                            title: 'จะแจ้งเตือนอีกครั้งใน 1 ชั่วโมง ⏰',
-                            timer: 3000, showConfirmButton: false
-                        });
+                        Swal.fire({ toast: true, position: 'top', icon: 'info', title: '⏰ จะแจ้งใหม่ใน 1 ชั่วโมง', timer: 2000, showConfirmButton: false });
+                    } else if (result.isDismissed) {
+                        // กด "ปิด" → snooze 3 ชั่วโมง (ไม่ใช่ปิดตลอดไป)
+                        surveyData.snoozeUntil = new Date(now.getTime() + 3 * 60 * 60 * 1000).toISOString();
+                        localStorage.setItem(storageKey, JSON.stringify(surveyData));
                     }
-                    // ถ้ากด ปิดไร้แจ้ง ไม่ทำอะไร แสดงใหม่ทุก session
                 });
-            }, 2000); // รอ 2 วินาทีหลังจาก login
+            }, 2500);
         }
+
 
         // เมื่อแบบสอบเสร็จแล้ว ให้ survey.html เรียก markSurveyDone
         function markSurveyDone(userId) {
@@ -4400,13 +4417,25 @@
 
         // ดึงประกาศจาก GAS
         function fetchAnnouncements() {
+            // ✅ แสดง loading ทันทีเมื่อเริ่มดึง
+            const list = document.getElementById('notifList');
+            if (list) {
+                const debugEl = document.getElementById('debugRoleInfo');
+                const debugHtml = debugEl ? debugEl.outerHTML : '';
+                list.innerHTML = debugHtml + `
+                <div class="text-center py-4">
+                    <div class="spinner-border spinner-border-sm text-primary mb-2" role="status"></div>
+                    <div class="text-muted small">กำลังโหลดข่าวสาร...</div>
+                </div>`;
+            }
+
             fetch(GAS_URL + '?action=get_announcements&t=' + Date.now())
                 .then(r => r.json())
                 .then(data => {
-                    console.log("Fetched Announcements Data:", data);
+                    console.log("🔔 [fetchAnnouncements] Raw data from GAS:", JSON.stringify(data));
                     serverErrorMessage = data.message || '';
                     const gasAnnouncements = (data && data.announcements) || [];
-
+                    console.log("🔔 [fetchAnnouncements] Items count:", gasAnnouncements.length);
                     const gasNotifs = gasAnnouncements.map(a => ({
                         id: a.id,
                         title: (CATEGORY_ICONS[a.category] || '📢') + ' ' + a.title,
@@ -4436,9 +4465,20 @@
                     }
                 })
                 .catch((err) => {
-                    console.error("Fetch News Error:", err);
-                    serverErrorMessage = "เชื่อมต่อระบบข่าวสารไม่ได้ (Check GAS URL)";
-                    renderNotifList();
+                    console.error("🔴 [fetchAnnouncements] Fetch Error:", err);
+                    serverErrorMessage = 'เชื่อมต่อไม่สำเร็จ: ' + (err.message || err);
+                    const list = document.getElementById('notifList');
+                    if (list) {
+                        list.innerHTML = `
+                        <div class="text-center py-4 px-3">
+                            <div style="font-size:2rem;opacity:0.4">⚠️</div>
+                            <div class="text-muted small mb-2">${serverErrorMessage}</div>
+                            <button class="btn btn-sm btn-outline-primary rounded-pill" onclick="fetchAnnouncements()">
+                                <i class="fas fa-redo me-1"></i>ลองอีกครั้ง
+                            </button>
+                        </div>`;
+                    }
+                    updateBadge(0);
                 });
         }
 
