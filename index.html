@@ -2,13 +2,6 @@
 <html lang="th">
 
 <head>
-    <!-- ✅ เรียกก่อน CSS โลด เพื่อไม่ให้หน้ากระพริบสี (Dark Mode Flash Fix) -->
-    <script>
-        (function () {
-            var t = localStorage.getItem('theme') || 'light';
-            document.documentElement.setAttribute('data-theme', t);
-        })();
-    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Happy Meter | Executive Intelligence</title>
@@ -229,71 +222,11 @@
             background-image: var(--bg-gradient);
             color: var(--text-color);
             transition: background 0.3s, color 0.3s;
+
             font-family: 'Kanit', sans-serif;
             min-height: 100vh;
-            min-height: 100dvh;
-            /* Dynamic viewport height for mobile */
-            width: 100%;
-            max-width: 100%;
-            padding-bottom: 80px;
+            padding-bottom: 100px;
             overflow-x: hidden;
-            margin: 0;
-        }
-
-        /* ทำให้ main wrapper เต็มจอ */
-        .main-wrapper {
-            width: 100%;
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 0 0 80px 0;
-        }
-
-        /* เพิ่ม CSS สำหรับ Badge แท็บนาวิเกชัน */
-        .nav-notify-badge {
-            position: absolute;
-            top: 2px;
-            right: 2px;
-            background: #e74c3c;
-            color: #fff;
-            border-radius: 50%;
-            width: 18px;
-            height: 18px;
-            font-size: 0.65rem;
-            font-weight: bold;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            animation: bounce-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-            border: 2px solid #fff;
-            box-shadow: 0 2px 6px rgba(231, 76, 60, 0.5);
-            z-index: 10;
-            line-height: 1;
-        }
-
-        @keyframes bounce-in {
-            from {
-                transform: scale(0);
-                opacity: 0;
-            }
-
-            to {
-                transform: scale(1);
-                opacity: 1;
-            }
-        }
-
-        /* ปรับ .nav-item ให้มี position:relative เพื่อ badge absolute ทำงานได้ */
-        .nav-item {
-            position: relative;
-            transition: color 0.25s, background 0.25s, transform 0.15s;
-        }
-
-        .nav-item.active {
-            transform: scale(1.05);
-        }
-
-        .nav-item:active {
-            transform: scale(0.92);
         }
 
         .glass-card {
@@ -1082,112 +1015,33 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(255, 255, 255, 0.97);
+            background: rgba(255, 255, 255, 0.9);
             z-index: 2000;
             display: flex;
             justify-content: center;
             align-items: center;
             flex-direction: column;
-            transition: opacity 0.4s ease;
-        }
-
-        [data-theme="dark"] #loading {
-            background: rgba(20, 20, 30, 0.97);
-            color: #f0f0f0;
         }
 
         .page-section {
             display: none;
-            animation: fadeSlideIn 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            animation: fadeIn 0.3s;
         }
 
         .page-section.active {
             display: block;
         }
 
-        @keyframes fadeSlideIn {
+        @keyframes fadeIn {
             from {
                 opacity: 0;
-                transform: translateY(12px);
+                transform: translateY(10px);
             }
 
             to {
                 opacity: 1;
                 transform: translateY(0);
             }
-        }
-
-        /* Skeleton Loading Animation */
-        .skeleton {
-            background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
-            background-size: 200% 100%;
-            animation: skeleton-shine 1.5s infinite;
-            border-radius: 8px;
-        }
-
-        [data-theme="dark"] .skeleton {
-            background: linear-gradient(90deg, #2a2a40 25%, #33334d 50%, #2a2a40 75%);
-            background-size: 200% 100%;
-        }
-
-        @keyframes skeleton-shine {
-            0% {
-                background-position: 200% 0;
-            }
-
-            100% {
-                background-position: -200% 0;
-            }
-        }
-
-        .skeleton-card {
-            background: #fff;
-            border-radius: 20px;
-            padding: 15px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
-        }
-
-        [data-theme="dark"] .skeleton-card {
-            background: var(--glass-bg);
-        }
-
-        /* Smooth nav active transition */
-        .nav-item {
-            transition: color 0.25s, background 0.25s, transform 0.15s;
-        }
-
-        .nav-item.active {
-            transform: scale(1.05);
-        }
-
-        .nav-item:active {
-            transform: scale(0.92);
-        }
-
-        /* Feed card hover lift */
-        .feed-card {
-            transition: box-shadow 0.25s, transform 0.25s;
-        }
-
-        .feed-card:hover {
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
-            transform: translateY(-2px);
-        }
-
-        /* Smooth button press */
-        .btn {
-            transition: all 0.18s ease !important;
-        }
-
-        .btn:active {
-            transform: scale(0.95);
-        }
-
-        /* Smooth loading hide */
-        #loading.hiding {
-            opacity: 0;
-            pointer-events: none;
         }
 
         .badge-mystery-upgrade {
@@ -1364,7 +1218,7 @@
             position: fixed;
             top: 50%;
             left: 50%;
-            transform: translate(-50%, -65%) scale(0.9);
+            transform: translate(-50%, -60%) scale(0.95);
             width: 92%;
             max-width: 420px;
             max-height: 80vh;
@@ -1373,10 +1227,9 @@
             border-radius: 20px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.06);
             z-index: 9999;
+            display: none;
             opacity: 0;
-            visibility: hidden;
-            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.25s ease, visibility 0.25s;
-            /* ไม่ใช้ display:none เพื่อให้ transition ทำงานได้ */
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.25s ease;
         }
 
         [data-theme="dark"] .notif-panel {
@@ -1386,8 +1239,8 @@
         }
 
         .notif-panel.show {
+            display: block;
             opacity: 1;
-            visibility: visible;
             transform: translate(-50%, -50%) scale(1);
         }
 
@@ -1830,9 +1683,7 @@
         <div class="filter-box px-2 mb-2" style="overflow-x: auto; white-space: nowrap;">
             <button class="filter-btn active" onclick="setFeedFilter('all', this)">ทั้งหมด</button>
             <button class="filter-btn" onclick="setFeedFilter('related', this)">ของฉัน</button>
-            <button class="filter-btn" id="btn-filter-request" onclick="setFeedFilter('request', this)">⚡ รอ Verify
-                <span id="pending-badge" class="badge bg-danger rounded-pill ms-1"
-                    style="display:none;font-size:0.65rem;"></span></button>
+            <button class="filter-btn" onclick="setFeedFilter('request', this)">⚡ รอมีส่วนร่วม</button>
         </div>
 
         <div class="px-2 mb-3 d-flex gap-2 text-nowrap" style="overflow-x: auto;">
@@ -1994,55 +1845,16 @@
         </div>
     </div>
 
-    <!--
-    ============================================================
-    📦 JavaScript Modules — โหลดตามลำดับที่กำหนด
-    ============================================================
-    1. config.js  — Global settings, constants, safe localStorage
-    2. auth.js    — LIFF login, checkUser, registerUser
-    3. feed.js    — fetchFeed, render, filter, reactions
-    4. app.js     — UI, tabs, forms, charts, notifications (TODO)
-    ============================================================
-    NOTE: ถ้า deploy บน Google Apps Script (ไม่มี static server)
-    ให้ copy โค้ดจากแต่ละไฟล์กลับมาใส่ใน <script> เดิม 1 ก้อน
-    ============================================================
-    -->
-    <script src="js/config.js"></script>
-    <script src="js/auth.js"></script>
-    <script src="js/feed.js"></script>
-
-    <!-- ✅ Inline script: ส่วนที่ยังไม่ได้แยกออก (UI, Charts, Forms, Notifications) -->
     <script>
         // --- GLOBAL SETTINGS ---
         const TEST_ENV = true; // 🔴 เปลี่ยนเป็น false เมื่อขึ้นระบบจริง
         const TEST_GAS_URL = 'https://script.google.com/macros/s/AKfycbxRvEyRoQaxOUWR_6pTslNmCrM7IiZTRYzDDUtPtDmrhGehUq6zQpfm9MKp_CYzVmrX/exec';
-        const TEST_LIFF_ID = '2009329360-XeHfjaTY';
+        const TEST_LIFF_ID = '2009069961-FRS5kHE4';
         const PROD_GAS_URL = 'YOUR_PROD_GAS_URL_HERE';
         const PROD_LIFF_ID = 'YOUR_PROD_LIFF_ID_HERE';
 
         const GAS_URL = TEST_ENV ? TEST_GAS_URL : PROD_GAS_URL;
         const LIFF_ID = TEST_ENV ? TEST_LIFF_ID : PROD_LIFF_ID;
-
-        // ==============================================
-        // 🛡️ SAFE localStorage Wrappers (prevent quota errors)
-        // ==============================================
-        function safeSetItem(key, value) {
-            try {
-                localStorage.setItem(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
-            } catch (e) {
-                // quota เต็ม → ล้าง key ไม่สำคัญแล้วลองใหม่
-                ['lastSeenStoryCount', 'notif_asked_at', 'GAS_URL'].forEach(k => localStorage.removeItem(k));
-                try { localStorage.setItem(key, typeof value === 'object' ? JSON.stringify(value) : String(value)); } catch (e2) {
-                    console.warn('⚠️ localStorage full, cannot save:', key);
-                }
-            }
-        }
-        function safeGetItem(key, defaultVal) {
-            try { return localStorage.getItem(key) ?? defaultVal ?? null; } catch (e) { return defaultVal ?? null; }
-        }
-        function safeGetJSON(key, defaultVal) {
-            try { return JSON.parse(localStorage.getItem(key) || 'null') ?? defaultVal; } catch (e) { return defaultVal; }
-        }
 
         let currentUser = null;
         let selectedMood = 3;
@@ -2240,107 +2052,20 @@
             }
         }
 
-        // --- MAIN FUNCTION (รองรับหลายช่องทาง: LINE, Browser, Rich Menu) ---
+        // --- MAIN FUNCTION ---
         async function main() {
             try {
-                // step 1: init LIFF
                 await liff.init({ liffId: LIFF_ID });
-
-                // step 2: Login สำเร็จ → ดึง Profile
-                if (liff.isLoggedIn()) {
-                    const profile = await liff.getProfile();
-                    safeSetItem('liff_userId', profile.userId);
-                    safeSetItem('liff_displayName', profile.displayName);
-                    safeSetItem('liff_pictureUrl', profile.pictureUrl || '');
-                    await checkUser(profile.userId, profile);
-                    return;
-                }
-
-                // step 3: อยู่ใน LINE Client แต่ยังไม่ login → redirect ทันที
-                // (Rich Menu, LINE Browser) - ปลอดภัยใน LINE Client
-                if (liff.isInClient()) {
-                    console.log('📱 In LINE client, redirecting to login...');
+                if (!liff.isLoggedIn()) {
+                    // ใช้ liff.login() แบบไม่มีพารามิเตอร์ เพื่อป้องกัน 400 Bad Request
                     liff.login();
                     return;
                 }
-
-                // step 4: External Browser → เช็ค session cache ก่อน
-                const cachedId = safeGetItem('liff_userId');
-                const cachedName = safeGetItem('liff_displayName');
-                const cachedImg = safeGetItem('liff_pictureUrl');
-
-                if (cachedId) {
-                    console.log('✅ Using cached LINE session:', cachedId);
-                    await checkUser(cachedId, {
-                        userId: cachedId,
-                        displayName: cachedName || 'ผู้ใช้งาน',
-                        pictureUrl: cachedImg || ''
-                    });
-                    return;
-                }
-
-                // step 5: External Browser ไม่มี session
-                // → แสดงปุ่ม Login **แต่ไม่ redirect อัตโนมัติ**
-                // liff.login() จะ redirect ผู้ใช้ไป LINE OAuth และกลับมา (loop ถ้า domain ไม่ตรง)
-                // ผู้ใช้ต้องกดปุ่มเอง
-                document.getElementById('loading').innerHTML = `
-                    <div class="text-center p-4" style="max-width:360px;">
-                        <img src="app-icon.png" style="width:80px;height:80px;border-radius:20px;box-shadow:0 8px 24px rgba(108,92,231,0.3);margin-bottom:16px;" onerror="this.style.display='none'">
-                        <h5 class="fw-bold mb-1">ดี มีสุข</h5>
-                        <p class="text-muted small mb-4">ระบบติดตามความสุขในที่ทำงาน</p>
-                        <button onclick="doLineLogin()" class="btn btn-success btn-lg rounded-pill px-5 fw-bold w-100 mb-3 shadow">
-                            <i class="fab fa-line me-2"></i>เข้าสู่ระบบด้วย LINE
-                        </button>
-                        <p class="text-muted" style="font-size:0.72rem;line-height:1.6;">
-                            📱 เปิดผ่าน LINE ครั้งแรกเพื่อยืนยันตัวตน<br>
-                            ครั้งต่อไปเปิดใช้งานได้เลยโดยไม่ต้องล็อกอินซ้ำ
-                        </p>
-                    </div>`;
-
+                const profile = await liff.getProfile();
+                await checkUser(profile.userId, profile);
             } catch (err) {
-                console.error('LIFF init error:', err);
-
-                // Fallback 1: มี session cache → ยังเข้าได้แม้ LIFF fail
-                const cachedId = safeGetItem('liff_userId');
-                const cachedName = safeGetItem('liff_displayName');
-                const cachedImg = safeGetItem('liff_pictureUrl');
-
-                if (cachedId) {
-                    console.warn('⚠️ LIFF error, using cached session');
-                    await checkUser(cachedId, {
-                        userId: cachedId,
-                        displayName: cachedName || 'ผู้ใช้งาน',
-                        pictureUrl: cachedImg || ''
-                    });
-                    return;
-                }
-
-                // Fallback 2: ไม่มีทางไหนเลย
-                const liffUrl = `https://liff.line.me/${LIFF_ID}`;
-                document.getElementById('loading').innerHTML = `
-                    <div class="text-center p-4" style="max-width:360px;">
-                        <div style="font-size:3rem;">⚠️</div>
-                        <h6 class="mt-3 mb-2 fw-bold text-warning">เชื่อมต่อ LINE ไม่สำเร็จ</h6>
-                        <p class="text-muted small mb-3">ตรวจสอบอินเตอร์เน็ต หรือเปิดผ่านแอป LINE</p>
-                        <button onclick="location.reload()" class="btn btn-outline-primary rounded-pill px-4 mb-2 w-100">
-                            <i class="fas fa-sync me-1"></i>ลองใหม่อีกครั้ง
-                        </button>
-                        <a href="${liffUrl}" class="btn btn-success rounded-pill px-4 w-100">
-                            <i class="fab fa-line me-2"></i>เปิดผ่าน LINE
-                        </a>
-                        <div class="mt-3" style="font-size:0.65rem;color:#999;"><b>Debug:</b> ${err.message || err}</div>
-                    </div>`;
-            }
-        }
-
-        // ✅ LINE Login handler — ใช้แทน liff.login() โดยตรงเพื่อจัดการ redirect URL ได้ถูกต้อง
-        function doLineLogin() {
-            try {
-                // redirectUri = URL ปัจจุบัน เพื่อ LINE OAuth กลับมาที่เดิม (ไม่วนไปหน้าอื่น)
-                liff.login({ redirectUri: window.location.href });
-            } catch (e) {
-                // LIFF ยังไม่พร้อม หรือ error
-                window.location.href = `https://liff.line.me/${LIFF_ID}`;
+                console.error('LIFF Error:', err);
+                document.getElementById('loading').innerHTML = '<div class="text-danger mt-3">ระบบ LINE Login ขัดข้อง<br><small>กรุณารีเฟรชหรือเปิดใน LINE</small></div>';
             }
         }
         // ฟังก์ชันแสดงตัวอย่างตอนวางลิงก์
@@ -3048,6 +2773,7 @@
 
                             // 2. เมื่อกดปิดแจ้งเตือนเวอร์ชันแล้ว ค่อยเช็คแบบสอบถาม
                             checkAndShowSurvey();
+                            requestNotificationPermission();
                         }
 
                         if (data.config) {
@@ -3058,18 +2784,15 @@
 
                         showLifecycleDialogs(data.config);
                         updateAddAnnounceButton();
-                        // ✅ ขอ permission notification (ย้ายมาเรียกตรงนี้ เพื่อให้แน่ใจว่า currentUser พร้อม)
-                        requestNotificationPermission();
+                        requestNotificationPermission(); // ✅ ขอ permission notification
+                        updateAddAnnounceButton();        // ✅ แสดงปุ่ม + ถ้าเป็น manager
 
                     } else {
                         // กรณีสมาชิกใหม่
                         registerUser(userId, profile);
                     }
 
-                    // ✅ Smooth fade-out loading screen
-                    const loadingEl = document.getElementById('loading');
-                    loadingEl.classList.add('hiding');
-                    setTimeout(() => { loadingEl.style.display = 'none'; loadingEl.classList.remove('hiding'); }, 400);
+                    document.getElementById('loading').style.display = 'none';
 
 
                 })
@@ -3085,9 +2808,7 @@
                             showConfirmButton: false
                         });
                     }
-                    const loadingEl2 = document.getElementById('loading');
-                    loadingEl2.classList.add('hiding');
-                    setTimeout(() => { loadingEl2.style.display = 'none'; loadingEl2.classList.remove('hiding'); }, 400);
+                    document.getElementById('loading').style.display = 'none';
                 });
         }
 
@@ -3097,7 +2818,7 @@
         }
 
         // =====================================================
-        // 📝 ระบบแบบสอบถามประจำเดือน (ไม่บังคับ + มีปุ่มทำภายหลัง)
+        // 📝 ระบบแบบสอบถามประจำเดือน (พร้อมปุ่ม ทำภายหลัง)
         // =====================================================
         function checkAndShowSurvey() {
             if (!currentUser || !currentUser.userId) return;
@@ -3110,59 +2831,47 @@
             const monthNames = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
             const monthDisplay = `${monthNames[now.getMonth()]} ${now.getFullYear() + 543}`;
 
-            // ✅ ทำแบบสอบเดือนนี้แล้ว ไม่ต้องแสดงอีก
+            // ✅ ถ้าทำแบบสอบเดือนนี้แล้ว ไม่ต้องแสดงอีก
             if (surveyData.completedMonth === currentMonthKey) return;
 
-            // ✅ Snooze: ถ้ากด ทำภายหลัง และยังเป็นเดือนเดียวกัน → ยังไม่โชว์
+            // ✅ ถ้า snooze เป็นเดือนก่อน → ล้างทิ้งแล้วแสดงใหม่เสมอ
             if (surveyData.snoozeUntil) {
                 const snoozeDate = new Date(surveyData.snoozeUntil);
-                // ถ้า snooze เป็นเดือนก่อน → ล้างทิ้งแล้วแสดงใหม่เสมอ
                 const snoozeMonthKey = `${snoozeDate.getFullYear()}-${snoozeDate.getMonth() + 1}`;
                 if (snoozeMonthKey !== currentMonthKey) {
+                    // snooze ข้ามเดือนแล้ว → ล้างตลอดกาล
                     delete surveyData.snoozeUntil;
                     localStorage.setItem(storageKey, JSON.stringify(surveyData));
                 } else if (snoozeDate > now) {
-                    // ยังอยู่ในช่วง snooze → ข้าม
+                    // ยัง snooze อยู่ในเดือนนี้ → ข้ามไป
                     return;
                 }
             }
 
-            // ✅ รอ 5 วินาทีหลัง login ค่อยแสดง (ไม่รบกวน)
+            // ✅ แสดง popup แจ้งเตือน (delay 2.5 วินาทีหลัง login)
             setTimeout(() => {
                 Swal.fire({
                     title: `📝 แบบสอบถามประจำเดือน ${monthDisplay}`,
                     html: `
                         <div class="text-center">
-                            <div style="font-size:2.5rem;">😊</div>
-                            <p class="mt-2 mb-1">ร่วมประเมินความสุขประจำเดือนกันเถอะ!</p>
-                            <p class="text-muted small">ใช้เวลาแค่ 1 นาที ช่วยให้ผู้บริหารเข้าใจทีม</p>
+                            <div style="font-size:3rem;">😊</div>
+                            <p class="mt-2 mb-1 fw-bold">ร่วมประเมินความสุขประจำเดือนกันเถอะ!</p>
+                            <p class="text-muted small">ใช้เวลาแค่ 1 นาที ช่วยให้ผู้บริหารเข้าใจความต้องการของทีม</p>
+                            <span class="badge bg-warning text-dark">จำเป็นต้องทำเพื่อเข้าใช้งานเดือน ${monthDisplay}</span>
                         </div>
                     `,
-                    allowOutsideClick: true,   // ✅ ปิดเองได้ ไม่บังคับ
-                    allowEscapeKey: true,
-                    showCancelButton: true,
-                    showDenyButton: true,
+                    allowOutsideClick: false,   // ✅ บังคับทำ ปิดไม่ได้
+                    allowEscapeKey: false,       // ✅ บังคับทำ กด ESC ไม่ได้
+                    showCancelButton: false,     // ❌ เอาปุ่มปิดออก
+                    showDenyButton: false,       // ❌ เอาปุ่มทำทีหลังออก
                     confirmButtonColor: '#6c5ce7',
-                    confirmButtonText: '📝 ทำแบบสอปเลย!',
-                    denyButtonText: '⏰ ทำภายหลัง (7 วัน)',
-                    cancelButtonText: '❌ ไม่ทำเดือนนี้',
+                    confirmButtonText: '📝 เริ่มทำแบบสอบถามเลย!',
                 }).then(result => {
                     if (result.isConfirmed) {
                         window.location.href = `survey.html?uid=${encodeURIComponent(currentUser.userId)}`;
-                    } else if (result.isDenied) {
-                        // Snooze 7 วัน
-                        const snoozeDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-                        surveyData.snoozeUntil = snoozeDate.toISOString();
-                        localStorage.setItem(storageKey, JSON.stringify(surveyData));
-                    }
-                    // ถ้า cancel = ไม่ทำเดือนนี้ → สนะ 7 วัน เหมือนกัน
-                    else if (result.dismiss === Swal.DismissReason.cancel) {
-                        const snoozeDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-                        surveyData.snoozeUntil = snoozeDate.toISOString();
-                        localStorage.setItem(storageKey, JSON.stringify(surveyData));
                     }
                 });
-            }, 5000);
+            }, 2500);
         }
 
 
@@ -3900,18 +3609,9 @@
                 const badge = document.querySelector('#nav-stories-btn .nav-notify-badge');
                 if (badge) badge.remove();
 
-                // ✅ FIX: โหลด Feed เฉพาะครั้งแรก หรือถ้า Feed ว่างเปล่า เท่านั้น
-                // ป้องกันการรีเฟรชซ้ำทุกครั้งที่กดแท็บ (ทำให้หน้ากระพริบ)
-                const feedContainer = document.getElementById('feedContainer');
-                const hasFeedContent = feedContainer && feedContainer.querySelector('.feed-card');
-                if (!hasFeedContent) {
-                    fetchFeed();
-                } else {
-                    // อัปเดต lastSeen เงียบๆ โดยไม่โหลดใหม่
-                    if (globalFeedData && globalFeedData.length > 0) {
-                        localStorage.setItem('lastSeenStoryCount', globalFeedData.length);
-                    }
-                }
+                // อัปเดตว่าดูครบแล้ว (นับจำนวนลูก children ใน feed container หรือดึงใหม่)
+                // เพื่อความชัวร์ ให้ fetchFeed ทำหน้าที่อัปเดต localStorage เมื่อเปิดหน้านี้
+                fetchFeed();
             }
             // ---------------------------
 
@@ -4219,31 +3919,7 @@
             }
 
             if (!append && !silent) {
-                // ✅ Skeleton loading แทน spinner ทึบ
-                container.innerHTML = [
-                    '<div class="skeleton-card">',
-                    '<div class="d-flex align-items-center mb-3">',
-                    '<div class="skeleton rounded-circle me-3" style="width:45px;height:45px;flex-shrink:0;"></div>',
-                    '<div class="flex-grow-1">',
-                    '<div class="skeleton mb-2" style="height:14px;width:60%;"></div>',
-                    '<div class="skeleton" style="height:12px;width:35%;"></div>',
-                    '</div>',
-                    '</div>',
-                    '<div class="skeleton mb-2" style="height:160px;width:100%;"></div>',
-                    '<div class="skeleton" style="height:12px;width:80%;"></div>',
-                    '</div>',
-                    '<div class="skeleton-card">',
-                    '<div class="d-flex align-items-center mb-3">',
-                    '<div class="skeleton rounded-circle me-3" style="width:45px;height:45px;flex-shrink:0;"></div>',
-                    '<div class="flex-grow-1">',
-                    '<div class="skeleton mb-2" style="height:14px;width:50%;"></div>',
-                    '<div class="skeleton" style="height:12px;width:30%;"></div>',
-                    '</div>',
-                    '</div>',
-                    '<div class="skeleton mb-2" style="height:120px;width:100%;"></div>',
-                    '<div class="skeleton" style="height:12px;width:70%;"></div>',
-                    '</div>'
-                ].join('');
+                container.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-secondary"></div><br><small>กำลังโหลดเรื่องราว...</small></div>';
             } else if (append && !silent) {
                 const loadBtnWrap = document.getElementById('loadMoreBtnWrapper');
                 if (loadBtnWrap) loadBtnWrap.innerHTML = '<button class="btn btn-outline-primary rounded-pill px-4 disabled"><i class="fas fa-spinner fa-spin me-1"></i> กำลังโหลด...</button>';
@@ -4312,14 +3988,9 @@
 
                         if (isPrivate && !isMyPost) return false;
                         if (filterType === 'related' && !isMyPost && !amITagged) pass = false;
-                        // ✅ FIX: "รอมีส่วนร่วม" = โพสต์ที่ฉันถูก tag แต่ยังไม่ได้กด Verify
-                        // (ไม่ใช้ post.status เพราะ field นี้อาจไม่มีในข้อมูลจริง)
                         if (filterType === 'request') {
-                            const iAmTagged = (post.taggedFriends || '').includes(currentUser.userId);
-                            const alreadyVerified = (post.verifies || []).some(v => String(v.lineId) === String(currentUser.userId));
-                            const isOwner = String(post.user_line_id) === String(currentUser.userId);
-                            // แสดงเฉพาะ: ถูก tag + ยังไม่ verify + ไม่ใช่โพสต์ตัวเอง
-                            if (!(iAmTagged && !alreadyVerified && !isOwner)) pass = false;
+                            let isPending = post.status !== 'approved';
+                            if (!(isPending && (isMyPost || amITagged))) pass = false;
                         }
                         if (filterCategory && post.virtue !== filterCategory) pass = false;
 
@@ -4332,32 +4003,8 @@
                         return pass;
                     });
 
-                    // ✅ อัปเดต badge ปุ่ม "รอ Verify" (แสดงจำนวนเมื่อญัติที่เข้าแท็บ)
-                    const pendingCount = feed.filter(p => {
-                        const iAmTagged = (p.taggedFriends || '').includes(currentUser.userId);
-                        const alreadyVerified = (p.verifies || []).some(v => String(v.lineId) === String(currentUser.userId));
-                        const isOwner = String(p.user_line_id) === String(currentUser.userId);
-                        const isPriv = p.privacy === 'private';
-                        return iAmTagged && !alreadyVerified && !isOwner && !isPriv;
-                    }).length;
-                    const pendingBadge = document.getElementById('pending-badge');
-                    if (pendingBadge) {
-                        if (pendingCount > 0) {
-                            pendingBadge.textContent = pendingCount;
-                            pendingBadge.style.display = 'inline-block';
-                        } else {
-                            pendingBadge.style.display = 'none';
-                        }
-                    }
-
                     if (filteredFeed.length === 0 && !append) {
-                        const emptyMsg = filterType === 'request'
-                            ? '✅ ไม่มีโพสต์ที่รอการ Verify จากคุณ'
-                            : filterType === 'related'
-                                ? 'ยังไม่มีเรื่องราวของคุณ'
-                                : 'ยังไม่มีเรื่องราว';
-                        container.innerHTML = `<div class="text-center py-5 text-muted"><i class="fas fa-inbox fa-2x mb-3 d-block opacity-50"></i>${emptyMsg}</div>`;
-                        isFetchingFeed = false;
+                        container.innerHTML = '<div class="text-center py-5 text-muted">No data found</div>';
                         return;
                     }
 
@@ -4454,7 +4101,7 @@
                         htmlBuffer += `
                 <div class="glass-card feed-card p-3 mb-3 animate__animated animate__fadeIn">
                     <div class="feed-header d-flex align-items-start">
-                        <img src="${post.user_img}" class="feed-avatar me-2 mt-1" loading="lazy" onerror="this.src='https://dummyimage.com/45x45/ddd/888&text=?'">
+                        <img src="${post.user_img}" class="feed-avatar me-2 mt-1">
                         <div class="flex-grow-1">
                             <div class="d-flex justify-content-between">
                                 <h6 class="mb-0 fw-bold">${post.user_name}</h6>
@@ -4521,17 +4168,8 @@
                     }
                 })
                 .catch(err => {
-                    console.error('fetchFeed error:', err);
-                    if (container) {
-                        container.innerHTML = `<div class="text-center py-5">
-                            <i class="fas fa-wifi-slash fa-2x text-muted mb-3 d-block"></i>
-                            <span class="text-muted">โลดไม่สำเร็จ</span><br>
-                            <button onclick="fetchFeed()" class="btn btn-sm btn-outline-primary mt-3 rounded-pill px-4">
-                                <i class="fas fa-sync me-1"></i>ลองใหม่
-                            </button>
-                        </div>`;
-                    }
-                    isFetchingFeed = false; // ✅ reset เสมอใน catch
+                    console.error(err);
+                    container.innerHTML = '<div class="text-danger text-center mt-5">Load Failed <br><small class="text-muted">Please refresh</small></div>';
                 })
                 .finally(() => {
                     isFetchingFeed = false;
@@ -4786,9 +4424,9 @@
             confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
             Swal.fire({ title: 'ยินดีด้วย! อัปเกรดสำเร็จ', text: `คุณได้รับเหรียญ "${title}"`, imageUrl: `https://dummyimage.com/200x200/eee/000&text=${icon}`, imageWidth: 100, imageHeight: 100, confirmButtonColor: '#6c5ce7', confirmButtonText: 'สุดยอด!' }).then(() => {
                 let storageKey = `happyMeter_badges_${currentUser.userId}`;
-                let storedLevels = safeGetJSON(storageKey, {});
+                let storedLevels = JSON.parse(localStorage.getItem(storageKey)) || {};
                 storedLevels[badgeKey] = newLevelIdx;
-                safeSetItem(storageKey, storedLevels);
+                localStorage.setItem(storageKey, JSON.stringify(storedLevels));
                 renderBadges();
             });
         }
@@ -4890,22 +4528,21 @@
 
         // ขอ permission notification (เรียกหลัง login สำเร็จ)
         function requestNotificationPermission() {
-            if (!('Notification' in window)) return;
+            if (!('Notification' in window)) {
+                console.log('Browser ไม่รองรับ Notification');
+                return;
+            }
             if (Notification.permission === 'granted') return;
             if (Notification.permission === 'denied') return;
 
-            // ✅ ตรวจว่าเคยถามไปแล้วในรอบ 30 วันหรือยังไม่ → ไม่ถามซ้ำ
-            const lastAsked = parseInt(safeGetItem('notif_asked_at') || '0');
-            const daysSinceAsked = (Date.now() - lastAsked) / (1000 * 60 * 60 * 24);
-            if (lastAsked > 0 && daysSinceAsked < 30) return;
-
+            // ขอ permission แบบ subtle ผ่าน SweetAlert ก่อน
             setTimeout(() => {
                 Swal.fire({
                     toast: true,
                     position: 'top',
                     icon: 'info',
-                    title: '🔔 รับการแจ้งเตือนใหม่?',
-                    text: 'รับแจ้งเตือนเมื่อมีกิจกรรมหรือเรื่องราวใหม่',
+                    title: '🔔 เปิดรับการแจ้งเตือน?',
+                    text: 'รับแจ้งเตือนเมื่อมีเรื่องราวหรือข้อความใหม่',
                     showConfirmButton: true,
                     showCancelButton: true,
                     confirmButtonText: 'เปิด',
@@ -4913,7 +4550,6 @@
                     confirmButtonColor: '#6c5ce7',
                     timer: 8000
                 }).then(result => {
-                    safeSetItem('notif_asked_at', Date.now().toString());
                     if (result.isConfirmed) {
                         Notification.requestPermission().then(perm => {
                             if (perm === 'granted') {
@@ -4922,7 +4558,7 @@
                         });
                     }
                 });
-            }, 8000); // รอ 8 วินาที เพื่อไม่ซ้อนตัวแบบสอบถาม
+            }, 4000);
         }
 
         // แสดง native notification ผ่าน Service Worker
