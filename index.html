@@ -2135,13 +2135,12 @@
         // --- MAIN FUNCTION (รองรับหลายช่องทาง: LINE, Browser, Rich Menu) ---
         async function main() {
             try {
-                // ✅ พยายาม init LIFF ก่อน
+                // ✅ step 1: init LIFF
                 await liff.init({ liffId: LIFF_ID });
 
-                // ✅ ถ้า Login แล้ว ดึง Profile จาก LIFF
+                // ✅ step 2: Login สำเร็จ → ดึง Profile
                 if (liff.isLoggedIn()) {
                     const profile = await liff.getProfile();
-                    // บันทึกข้อมูลพื้นฐาน LINE ไว้ใน localStorage เพื่อ session
                     localStorage.setItem('liff_userId', profile.userId);
                     localStorage.setItem('liff_displayName', profile.displayName);
                     localStorage.setItem('liff_pictureUrl', profile.pictureUrl || '');
@@ -2149,66 +2148,74 @@
                     return;
                 }
 
-                // ✅ ถ้ายังไม่ Login แต่มี session เก่าใน localStorage → ใช้ได้เลย (กรณีเปิดบราวเซอร์)
-                const cachedUserId = localStorage.getItem('liff_userId');
-                const cachedName = localStorage.getItem('liff_displayName');
-                const cachedImg = localStorage.getItem('liff_pictureUrl');
-
-                if (cachedUserId) {
-                    console.log('✅ Using cached LINE session:', cachedUserId);
-                    const fakeProfile = {
-                        userId: cachedUserId,
-                        displayName: cachedName || 'ผู้ใช้งาน',
-                        pictureUrl: cachedImg || ''
-                    };
-                    await checkUser(cachedUserId, fakeProfile);
-                    return;
-                }
-
-                // ✅ ถ้าอยู่ใน LINE Client ให้ Login
+                // ✅ step 3: อยู่ใน LINE Client แต่ยังไม่ login
+                // (Rich Menu, ลิงก์ใน Chat) → redirect ทันทีไม่ต้องแสดง UI
                 if (liff.isInClient()) {
+                    console.log('📱 In LINE client, redirecting to login...');
                     liff.login();
                     return;
                 }
 
-                // ✅ ถ้าเปิดจาก Browser ปกติ (ไม่มี Session) → แสดงปุ่ม Login
-                document.getElementById('loading').innerHTML = `
-                    <div class="text-center p-4" style="max-width:360px;">
-                        <div style="font-size:3rem;">🌟</div>
-                        <h5 class="fw-bold mt-3 mb-1">ดี มีสุข</h5>
-                        <p class="text-muted small mb-4">ระบบบันทึกความดีและความสุขในที่ทำงาน</p>
-                        <button onclick="liff.login()" class="btn btn-success btn-lg rounded-pill px-5 shadow fw-bold w-100">
-                            <i class="fab fa-line me-2"></i>เข้าสู่ระบบด้วย LINE
-                        </button>
-                        <p class="text-muted mt-3" style="font-size:0.75rem;">* สำหรับผู้ใช้งานที่ยังไม่ได้เข้าสู่ระบบ</p>
-                    </div>`;
-
-            } catch (err) {
-                console.error('LIFF Error:', err);
-
-                // ✅ Fallback: ถ้า LIFF โหลดไม่ได้เลย แต่มี cache → ยังเข้าได้
-                const cachedUserId = localStorage.getItem('liff_userId');
+                // ✅ step 4: External Browser + มี session cache → ใช้ cache
+                const cachedId = localStorage.getItem('liff_userId');
                 const cachedName = localStorage.getItem('liff_displayName');
                 const cachedImg = localStorage.getItem('liff_pictureUrl');
 
-                if (cachedUserId) {
-                    console.warn('⚠️ LIFF failed but using cached session');
-                    await checkUser(cachedUserId, {
-                        userId: cachedUserId,
+                if (cachedId) {
+                    console.log('✅ Using cached LINE session:', cachedId);
+                    await checkUser(cachedId, {
+                        userId: cachedId,
                         displayName: cachedName || 'ผู้ใช้งาน',
                         pictureUrl: cachedImg || ''
                     });
-                } else {
-                    document.getElementById('loading').innerHTML = `
-                        <div class="text-center p-4">
-                            <div style="font-size:3rem;">⚠️</div>
-                            <h6 class="mt-3 text-danger">ไม่สามารถเชื่อมต่อ LINE ได้</h6>
-                            <p class="text-muted small">กรุณาเปิดแอปนี้ผ่าน LINE หรือตรวจสอบการเชื่อมต่ออินเตอร์เน็ต</p>
-                            <button onclick="location.reload()" class="btn btn-primary rounded-pill px-4 mt-2">
-                                <i class="fas fa-sync me-1"></i>ลองใหม่
-                            </button>
-                        </div>`;
+                    return;
                 }
+
+                // ✅ step 5: External Browser ไม่มี session → แสดงปุ่ม Login
+                document.getElementById('loading').innerHTML = `
+                    <div class="text-center p-4" style="max-width:360px;">
+                        <div style="font-size:3.5rem;">🌟</div>
+                        <h5 class="fw-bold mt-3 mb-1">ดี มีสุข</h5>
+                        <p class="text-muted small mb-4">ระบบบันทึกความดีและความสุขในที่ทำงาน</p>
+                        <button onclick="liff.login()" class="btn btn-success btn-lg rounded-pill px-5 shadow-sm fw-bold w-100 mb-2">
+                            <i class="fab fa-line me-2"></i>เข้าสู่ระบบด้วย LINE
+                        </button>
+                        <p class="text-muted" style="font-size:0.75rem;">* กรุณาเปิดผ่าน LINE หรือกดปุ่มด้านบน</p>
+                    </div>`;
+
+            } catch (err) {
+                console.error('LIFF init error:', err);
+
+                // Fallback 1: มี session cache → ยังเข้าได้แม้ LIFF fail
+                const cachedId = localStorage.getItem('liff_userId');
+                const cachedName = localStorage.getItem('liff_displayName');
+                const cachedImg = localStorage.getItem('liff_pictureUrl');
+
+                if (cachedId) {
+                    console.warn('⚠️ LIFF error, using cached session');
+                    await checkUser(cachedId, {
+                        userId: cachedId,
+                        displayName: cachedName || 'ผู้ใช้งาน',
+                        pictureUrl: cachedImg || ''
+                    });
+                    return;
+                }
+
+                // Fallback 2: ไม่มีทางไหนเลย → แสดงตัวเลือก retry + เปิดผ่าน LINE
+                const liffUrl = `https://liff.line.me/${LIFF_ID}`;
+                document.getElementById('loading').innerHTML = `
+                    <div class="text-center p-4" style="max-width:360px;">
+                        <div style="font-size:3rem;">⚠️</div>
+                        <h6 class="mt-3 mb-2 fw-bold text-warning">เชื่อมต่อ LINE ไม่สำเร็จ</h6>
+                        <p class="text-muted small mb-3">ตรวจสอบอินเตอร์เน็ต หรือเปิดผ่านแอป LINE ครับ</p>
+                        <button onclick="location.reload()" class="btn btn-outline-primary rounded-pill px-4 mb-2 w-100">
+                            <i class="fas fa-sync me-1"></i>ลองใหม่อีกครั้ง
+                        </button>
+                        <a href="${liffUrl}" class="btn btn-success rounded-pill px-4 w-100">
+                            <i class="fab fa-line me-2"></i>เปิดผ่าน LINE
+                        </a>
+                        <p class="text-muted mt-3" style="font-size:0.65rem; opacity:0.6;">${err.message || 'LIFF init failed'}</p>
+                    </div>`;
             }
         }
         // ฟังก์ชันแสดงตัวอย่างตอนวางลิงก์
