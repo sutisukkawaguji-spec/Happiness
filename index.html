@@ -2135,10 +2135,10 @@
         // --- MAIN FUNCTION (รองรับหลายช่องทาง: LINE, Browser, Rich Menu) ---
         async function main() {
             try {
-                // ✅ step 1: init LIFF
+                // step 1: init LIFF
                 await liff.init({ liffId: LIFF_ID });
 
-                // ✅ step 2: Login สำเร็จ → ดึง Profile
+                // step 2: Login สำเร็จ → ดึง Profile
                 if (liff.isLoggedIn()) {
                     const profile = await liff.getProfile();
                     localStorage.setItem('liff_userId', profile.userId);
@@ -2148,15 +2148,16 @@
                     return;
                 }
 
-                // ✅ step 3: อยู่ใน LINE Client แต่ยังไม่ login
-                // (Rich Menu, ลิงก์ใน Chat) → redirect ทันทีไม่ต้องแสดง UI
+                // step 3: อยู่ใน LINE Client แต่ยังไม่ login → redirect ทันที
+                // (Rich Menu, LINE Browser) - ปลอดภัยใน LINE Client
                 if (liff.isInClient()) {
                     console.log('📱 In LINE client, redirecting to login...');
                     liff.login();
                     return;
                 }
 
-                // ✅ step 4: External Browser + มี session cache → ใช้ cache
+                // step 4: External Browser → เช็ค session cache ก่อน
+                // (ไม่บังคับ redirect ใน External Browser เด็ดขาด → จะระบุ redirect loop)
                 const cachedId = localStorage.getItem('liff_userId');
                 const cachedName = localStorage.getItem('liff_displayName');
                 const cachedImg = localStorage.getItem('liff_pictureUrl');
@@ -2171,7 +2172,8 @@
                     return;
                 }
 
-                // ✅ step 5: External Browser ไม่มี session → แสดงปุ่ม Login
+                // step 5: External Browser ไม่มี session → แสดงปุ่ม Login
+                // *** ไม่ redirect อัตโนมัติ เพราะจะทำให้เกิด loop ***
                 document.getElementById('loading').innerHTML = `
                     <div class="text-center p-4" style="max-width:360px;">
                         <div style="font-size:3.5rem;">🌟</div>
@@ -2180,7 +2182,7 @@
                         <button onclick="liff.login()" class="btn btn-success btn-lg rounded-pill px-5 shadow-sm fw-bold w-100 mb-2">
                             <i class="fab fa-line me-2"></i>เข้าสู่ระบบด้วย LINE
                         </button>
-                        <p class="text-muted" style="font-size:0.75rem;">* กรุณาเปิดผ่าน LINE หรือกดปุ่มด้านบน</p>
+                        <p class="text-muted" style="font-size:0.75rem;">หรือเปิดผ่าน LINE Rich Menu</p>
                     </div>`;
 
             } catch (err) {
@@ -2201,7 +2203,7 @@
                     return;
                 }
 
-                // Fallback 2: ไม่มีทางไหนเลย → แสดงตัวเลือก retry + เปิดผ่าน LINE
+                // Fallback 2: ไม่มีทางไหนเลย
                 const liffUrl = `https://liff.line.me/${LIFF_ID}`;
                 document.getElementById('loading').innerHTML = `
                     <div class="text-center p-4" style="max-width:360px;">
@@ -2214,7 +2216,9 @@
                         <a href="${liffUrl}" class="btn btn-success rounded-pill px-4 w-100">
                             <i class="fab fa-line me-2"></i>เปิดผ่าน LINE
                         </a>
-                        <p class="text-muted mt-3" style="font-size:0.65rem; opacity:0.6;">${err.message || 'LIFF init failed'}</p>
+                        <div class="mt-3 p-2 bg-light rounded text-start" style="font-size:0.65rem; color:#666; word-break:break-all;">
+                            <b>Debug:</b> ${err.message || err}
+                        </div>
                     </div>`;
             }
         }
@@ -2923,7 +2927,6 @@
 
                             // 2. เมื่อกดปิดแจ้งเตือนเวอร์ชันแล้ว ค่อยเช็คแบบสอบถาม
                             checkAndShowSurvey();
-                            requestNotificationPermission();
                         }
 
                         if (data.config) {
@@ -2934,8 +2937,8 @@
 
                         showLifecycleDialogs(data.config);
                         updateAddAnnounceButton();
-                        requestNotificationPermission(); // ✅ ขอ permission notification
-                        updateAddAnnounceButton();        // ✅ แสดงปุ่ม + ถ้าเป็น manager
+                        // ✅ ขอ permission notification (ย้ายมาเรียกตรงนี้ เพื่อให้แน่ใจว่า currentUser พร้อม)
+                        requestNotificationPermission();
 
                     } else {
                         // กรณีสมาชิกใหม่
@@ -2973,7 +2976,7 @@
         }
 
         // =====================================================
-        // 📝 ระบบแบบสอบถามประจำเดือน (พร้อมปุ่ม ทำภายหลัง)
+        // 📝 ระบบแบบสอบถามประจำเดือน (ไม่บังคับ + มีปุ่มทำภายหลัง)
         // =====================================================
         function checkAndShowSurvey() {
             if (!currentUser || !currentUser.userId) return;
@@ -2986,47 +2989,59 @@
             const monthNames = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
             const monthDisplay = `${monthNames[now.getMonth()]} ${now.getFullYear() + 543}`;
 
-            // ✅ ถ้าทำแบบสอบเดือนนี้แล้ว ไม่ต้องแสดงอีก
+            // ✅ ทำแบบสอบเดือนนี้แล้ว ไม่ต้องแสดงอีก
             if (surveyData.completedMonth === currentMonthKey) return;
 
-            // ✅ ถ้า snooze เป็นเดือนก่อน → ล้างทิ้งแล้วแสดงใหม่เสมอ
+            // ✅ Snooze: ถ้ากด ทำภายหลัง และยังเป็นเดือนเดียวกัน → ยังไม่โชว์
             if (surveyData.snoozeUntil) {
                 const snoozeDate = new Date(surveyData.snoozeUntil);
+                // ถ้า snooze เป็นเดือนก่อน → ล้างทิ้งแล้วแสดงใหม่เสมอ
                 const snoozeMonthKey = `${snoozeDate.getFullYear()}-${snoozeDate.getMonth() + 1}`;
                 if (snoozeMonthKey !== currentMonthKey) {
-                    // snooze ข้ามเดือนแล้ว → ล้างตลอดกาล
                     delete surveyData.snoozeUntil;
                     localStorage.setItem(storageKey, JSON.stringify(surveyData));
                 } else if (snoozeDate > now) {
-                    // ยัง snooze อยู่ในเดือนนี้ → ข้ามไป
+                    // ยังอยู่ในช่วง snooze → ข้าม
                     return;
                 }
             }
 
-            // ✅ แสดง popup แจ้งเตือน (delay 2.5 วินาทีหลัง login)
+            // ✅ รอ 5 วินาทีหลัง login ค่อยแสดง (ไม่รบกวน)
             setTimeout(() => {
                 Swal.fire({
                     title: `📝 แบบสอบถามประจำเดือน ${monthDisplay}`,
                     html: `
                         <div class="text-center">
-                            <div style="font-size:3rem;">😊</div>
-                            <p class="mt-2 mb-1 fw-bold">ร่วมประเมินความสุขประจำเดือนกันเถอะ!</p>
-                            <p class="text-muted small">ใช้เวลาแค่ 1 นาที ช่วยให้ผู้บริหารเข้าใจความต้องการของทีม</p>
-                            <span class="badge bg-warning text-dark">จำเป็นต้องทำเพื่อเข้าใช้งานเดือน ${monthDisplay}</span>
+                            <div style="font-size:2.5rem;">😊</div>
+                            <p class="mt-2 mb-1">ร่วมประเมินความสุขประจำเดือนกันเถอะ!</p>
+                            <p class="text-muted small">ใช้เวลาแค่ 1 นาที ช่วยให้ผู้บริหารเข้าใจทีม</p>
                         </div>
                     `,
-                    allowOutsideClick: false,   // ✅ บังคับทำ ปิดไม่ได้
-                    allowEscapeKey: false,       // ✅ บังคับทำ กด ESC ไม่ได้
-                    showCancelButton: false,     // ❌ เอาปุ่มปิดออก
-                    showDenyButton: false,       // ❌ เอาปุ่มทำทีหลังออก
+                    allowOutsideClick: true,   // ✅ ปิดเองได้ ไม่บังคับ
+                    allowEscapeKey: true,
+                    showCancelButton: true,
+                    showDenyButton: true,
                     confirmButtonColor: '#6c5ce7',
-                    confirmButtonText: '📝 เริ่มทำแบบสอบถามเลย!',
+                    confirmButtonText: '📝 ทำแบบสอปเลย!',
+                    denyButtonText: '⏰ ทำภายหลัง (7 วัน)',
+                    cancelButtonText: '❌ ไม่ทำเดือนนี้',
                 }).then(result => {
                     if (result.isConfirmed) {
                         window.location.href = `survey.html?uid=${encodeURIComponent(currentUser.userId)}`;
+                    } else if (result.isDenied) {
+                        // Snooze 7 วัน
+                        const snoozeDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+                        surveyData.snoozeUntil = snoozeDate.toISOString();
+                        localStorage.setItem(storageKey, JSON.stringify(surveyData));
+                    }
+                    // ถ้า cancel = ไม่ทำเดือนนี้ → สนะ 7 วัน เหมือนกัน
+                    else if (result.dismiss === Swal.DismissReason.cancel) {
+                        const snoozeDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+                        surveyData.snoozeUntil = snoozeDate.toISOString();
+                        localStorage.setItem(storageKey, JSON.stringify(surveyData));
                     }
                 });
-            }, 2500);
+            }, 5000);
         }
 
 
@@ -4716,21 +4731,22 @@
 
         // ขอ permission notification (เรียกหลัง login สำเร็จ)
         function requestNotificationPermission() {
-            if (!('Notification' in window)) {
-                console.log('Browser ไม่รองรับ Notification');
-                return;
-            }
+            if (!('Notification' in window)) return;
             if (Notification.permission === 'granted') return;
             if (Notification.permission === 'denied') return;
 
-            // ขอ permission แบบ subtle ผ่าน SweetAlert ก่อน
+            // ✅ ตรวจว่าเคยถามไปแล้วในรอบ 30 วันหรือยังไม่ → ไม่ถามซ้ำ
+            const lastAsked = parseInt(localStorage.getItem('notif_asked_at') || '0');
+            const daysSinceAsked = (Date.now() - lastAsked) / (1000 * 60 * 60 * 24);
+            if (lastAsked > 0 && daysSinceAsked < 30) return; // ถามซ้ำทุก 30 วัน
+
             setTimeout(() => {
                 Swal.fire({
                     toast: true,
                     position: 'top',
                     icon: 'info',
-                    title: '🔔 เปิดรับการแจ้งเตือน?',
-                    text: 'รับแจ้งเตือนเมื่อมีเรื่องราวหรือข้อความใหม่',
+                    title: '🔔 รับการแจ้งเตือนใหม่?',
+                    text: 'รับแจ้งเตือนเมื่อมีกิจกรรมหรือเรื่องราวใหม่',
                     showConfirmButton: true,
                     showCancelButton: true,
                     confirmButtonText: 'เปิด',
@@ -4738,6 +4754,7 @@
                     confirmButtonColor: '#6c5ce7',
                     timer: 8000
                 }).then(result => {
+                    localStorage.setItem('notif_asked_at', Date.now().toString());
                     if (result.isConfirmed) {
                         Notification.requestPermission().then(perm => {
                             if (perm === 'granted') {
@@ -4746,7 +4763,7 @@
                         });
                     }
                 });
-            }, 4000);
+            }, 8000); // รอ 8 วินาที เพื่อไม่ซ้อนตัวแบบสอบถาม
         }
 
         // แสดง native notification ผ่าน Service Worker
@@ -5263,4 +5280,3 @@
 </body>
 
 </html>
-
