@@ -2,6 +2,13 @@
 <html lang="th">
 
 <head>
+    <!-- ✅ เรียกก่อน CSS โลด เพื่อไม่ให้หน้ากระพริบสี (Dark Mode Flash Fix) -->
+    <script>
+        (function () {
+            var t = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-theme', t);
+        })();
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Happy Meter | Executive Intelligence</title>
@@ -1987,6 +1994,24 @@
         </div>
     </div>
 
+    <!--
+    ============================================================
+    📦 JavaScript Modules — โหลดตามลำดับที่กำหนด
+    ============================================================
+    1. config.js  — Global settings, constants, safe localStorage
+    2. auth.js    — LIFF login, checkUser, registerUser
+    3. feed.js    — fetchFeed, render, filter, reactions
+    4. app.js     — UI, tabs, forms, charts, notifications (TODO)
+    ============================================================
+    NOTE: ถ้า deploy บน Google Apps Script (ไม่มี static server)
+    ให้ copy โค้ดจากแต่ละไฟล์กลับมาใส่ใน <script> เดิม 1 ก้อน
+    ============================================================
+    -->
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/feed.js"></script>
+
+    <!-- ✅ Inline script: ส่วนที่ยังไม่ได้แยกออก (UI, Charts, Forms, Notifications) -->
     <script>
         // --- GLOBAL SETTINGS ---
         const TEST_ENV = true; // 🔴 เปลี่ยนเป็น false เมื่อขึ้นระบบจริง
@@ -1997,6 +2022,27 @@
 
         const GAS_URL = TEST_ENV ? TEST_GAS_URL : PROD_GAS_URL;
         const LIFF_ID = TEST_ENV ? TEST_LIFF_ID : PROD_LIFF_ID;
+
+        // ==============================================
+        // 🛡️ SAFE localStorage Wrappers (prevent quota errors)
+        // ==============================================
+        function safeSetItem(key, value) {
+            try {
+                localStorage.setItem(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
+            } catch (e) {
+                // quota เต็ม → ล้าง key ไม่สำคัญแล้วลองใหม่
+                ['lastSeenStoryCount', 'notif_asked_at', 'GAS_URL'].forEach(k => localStorage.removeItem(k));
+                try { localStorage.setItem(key, typeof value === 'object' ? JSON.stringify(value) : String(value)); } catch (e2) {
+                    console.warn('⚠️ localStorage full, cannot save:', key);
+                }
+            }
+        }
+        function safeGetItem(key, defaultVal) {
+            try { return localStorage.getItem(key) ?? defaultVal ?? null; } catch (e) { return defaultVal ?? null; }
+        }
+        function safeGetJSON(key, defaultVal) {
+            try { return JSON.parse(localStorage.getItem(key) || 'null') ?? defaultVal; } catch (e) { return defaultVal; }
+        }
 
         let currentUser = null;
         let selectedMood = 3;
@@ -2203,9 +2249,9 @@
                 // step 2: Login สำเร็จ → ดึง Profile
                 if (liff.isLoggedIn()) {
                     const profile = await liff.getProfile();
-                    localStorage.setItem('liff_userId', profile.userId);
-                    localStorage.setItem('liff_displayName', profile.displayName);
-                    localStorage.setItem('liff_pictureUrl', profile.pictureUrl || '');
+                    safeSetItem('liff_userId', profile.userId);
+                    safeSetItem('liff_displayName', profile.displayName);
+                    safeSetItem('liff_pictureUrl', profile.pictureUrl || '');
                     await checkUser(profile.userId, profile);
                     return;
                 }
@@ -2219,10 +2265,9 @@
                 }
 
                 // step 4: External Browser → เช็ค session cache ก่อน
-                // (ไม่บังคับ redirect ใน External Browser เด็ดขาด → จะระบุ redirect loop)
-                const cachedId = localStorage.getItem('liff_userId');
-                const cachedName = localStorage.getItem('liff_displayName');
-                const cachedImg = localStorage.getItem('liff_pictureUrl');
+                const cachedId = safeGetItem('liff_userId');
+                const cachedName = safeGetItem('liff_displayName');
+                const cachedImg = safeGetItem('liff_pictureUrl');
 
                 if (cachedId) {
                     console.log('✅ Using cached LINE session:', cachedId);
@@ -2234,26 +2279,31 @@
                     return;
                 }
 
-                // step 5: External Browser ไม่มี session → แสดงปุ่ม Login
-                // *** ไม่ redirect อัตโนมัติ เพราะจะทำให้เกิด loop ***
+                // step 5: External Browser ไม่มี session
+                // → แสดงปุ่ม Login **แต่ไม่ redirect อัตโนมัติ**
+                // liff.login() จะ redirect ผู้ใช้ไป LINE OAuth และกลับมา (loop ถ้า domain ไม่ตรง)
+                // ผู้ใช้ต้องกดปุ่มเอง
                 document.getElementById('loading').innerHTML = `
                     <div class="text-center p-4" style="max-width:360px;">
-                        <div style="font-size:3.5rem;">🌟</div>
-                        <h5 class="fw-bold mt-3 mb-1">ดี มีสุข</h5>
-                        <p class="text-muted small mb-4">ระบบบันทึกความดีและความสุขในที่ทำงาน</p>
-                        <button onclick="liff.login()" class="btn btn-success btn-lg rounded-pill px-5 shadow-sm fw-bold w-100 mb-2">
+                        <img src="app-icon.png" style="width:80px;height:80px;border-radius:20px;box-shadow:0 8px 24px rgba(108,92,231,0.3);margin-bottom:16px;" onerror="this.style.display='none'">
+                        <h5 class="fw-bold mb-1">ดี มีสุข</h5>
+                        <p class="text-muted small mb-4">ระบบติดตามความสุขในที่ทำงาน</p>
+                        <button onclick="doLineLogin()" class="btn btn-success btn-lg rounded-pill px-5 fw-bold w-100 mb-3 shadow">
                             <i class="fab fa-line me-2"></i>เข้าสู่ระบบด้วย LINE
                         </button>
-                        <p class="text-muted" style="font-size:0.75rem;">หรือเปิดผ่าน LINE Rich Menu</p>
+                        <p class="text-muted" style="font-size:0.72rem;line-height:1.6;">
+                            📱 เปิดผ่าน LINE ครั้งแรกเพื่อยืนยันตัวตน<br>
+                            ครั้งต่อไปเปิดใช้งานได้เลยโดยไม่ต้องล็อกอินซ้ำ
+                        </p>
                     </div>`;
 
             } catch (err) {
                 console.error('LIFF init error:', err);
 
                 // Fallback 1: มี session cache → ยังเข้าได้แม้ LIFF fail
-                const cachedId = localStorage.getItem('liff_userId');
-                const cachedName = localStorage.getItem('liff_displayName');
-                const cachedImg = localStorage.getItem('liff_pictureUrl');
+                const cachedId = safeGetItem('liff_userId');
+                const cachedName = safeGetItem('liff_displayName');
+                const cachedImg = safeGetItem('liff_pictureUrl');
 
                 if (cachedId) {
                     console.warn('⚠️ LIFF error, using cached session');
@@ -2271,17 +2321,26 @@
                     <div class="text-center p-4" style="max-width:360px;">
                         <div style="font-size:3rem;">⚠️</div>
                         <h6 class="mt-3 mb-2 fw-bold text-warning">เชื่อมต่อ LINE ไม่สำเร็จ</h6>
-                        <p class="text-muted small mb-3">ตรวจสอบอินเตอร์เน็ต หรือเปิดผ่านแอป LINE ครับ</p>
+                        <p class="text-muted small mb-3">ตรวจสอบอินเตอร์เน็ต หรือเปิดผ่านแอป LINE</p>
                         <button onclick="location.reload()" class="btn btn-outline-primary rounded-pill px-4 mb-2 w-100">
                             <i class="fas fa-sync me-1"></i>ลองใหม่อีกครั้ง
                         </button>
                         <a href="${liffUrl}" class="btn btn-success rounded-pill px-4 w-100">
                             <i class="fab fa-line me-2"></i>เปิดผ่าน LINE
                         </a>
-                        <div class="mt-3 p-2 bg-light rounded text-start" style="font-size:0.65rem; color:#666; word-break:break-all;">
-                            <b>Debug:</b> ${err.message || err}
-                        </div>
+                        <div class="mt-3" style="font-size:0.65rem;color:#999;"><b>Debug:</b> ${err.message || err}</div>
                     </div>`;
+            }
+        }
+
+        // ✅ LINE Login handler — ใช้แทน liff.login() โดยตรงเพื่อจัดการ redirect URL ได้ถูกต้อง
+        function doLineLogin() {
+            try {
+                // redirectUri = URL ปัจจุบัน เพื่อ LINE OAuth กลับมาที่เดิม (ไม่วนไปหน้าอื่น)
+                liff.login({ redirectUri: window.location.href });
+            } catch (e) {
+                // LIFF ยังไม่พร้อม หรือ error
+                window.location.href = `https://liff.line.me/${LIFF_ID}`;
             }
         }
         // ฟังก์ชันแสดงตัวอย่างตอนวางลิงก์
@@ -4395,7 +4454,7 @@
                         htmlBuffer += `
                 <div class="glass-card feed-card p-3 mb-3 animate__animated animate__fadeIn">
                     <div class="feed-header d-flex align-items-start">
-                        <img src="${post.user_img}" class="feed-avatar me-2 mt-1">
+                        <img src="${post.user_img}" class="feed-avatar me-2 mt-1" loading="lazy" onerror="this.src='https://dummyimage.com/45x45/ddd/888&text=?'">
                         <div class="flex-grow-1">
                             <div class="d-flex justify-content-between">
                                 <h6 class="mb-0 fw-bold">${post.user_name}</h6>
@@ -4462,8 +4521,17 @@
                     }
                 })
                 .catch(err => {
-                    console.error(err);
-                    container.innerHTML = '<div class="text-danger text-center mt-5">Load Failed <br><small class="text-muted">Please refresh</small></div>';
+                    console.error('fetchFeed error:', err);
+                    if (container) {
+                        container.innerHTML = `<div class="text-center py-5">
+                            <i class="fas fa-wifi-slash fa-2x text-muted mb-3 d-block"></i>
+                            <span class="text-muted">โลดไม่สำเร็จ</span><br>
+                            <button onclick="fetchFeed()" class="btn btn-sm btn-outline-primary mt-3 rounded-pill px-4">
+                                <i class="fas fa-sync me-1"></i>ลองใหม่
+                            </button>
+                        </div>`;
+                    }
+                    isFetchingFeed = false; // ✅ reset เสมอใน catch
                 })
                 .finally(() => {
                     isFetchingFeed = false;
@@ -4718,9 +4786,9 @@
             confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
             Swal.fire({ title: 'ยินดีด้วย! อัปเกรดสำเร็จ', text: `คุณได้รับเหรียญ "${title}"`, imageUrl: `https://dummyimage.com/200x200/eee/000&text=${icon}`, imageWidth: 100, imageHeight: 100, confirmButtonColor: '#6c5ce7', confirmButtonText: 'สุดยอด!' }).then(() => {
                 let storageKey = `happyMeter_badges_${currentUser.userId}`;
-                let storedLevels = JSON.parse(localStorage.getItem(storageKey)) || {};
+                let storedLevels = safeGetJSON(storageKey, {});
                 storedLevels[badgeKey] = newLevelIdx;
-                localStorage.setItem(storageKey, JSON.stringify(storedLevels));
+                safeSetItem(storageKey, storedLevels);
                 renderBadges();
             });
         }
@@ -4827,9 +4895,9 @@
             if (Notification.permission === 'denied') return;
 
             // ✅ ตรวจว่าเคยถามไปแล้วในรอบ 30 วันหรือยังไม่ → ไม่ถามซ้ำ
-            const lastAsked = parseInt(localStorage.getItem('notif_asked_at') || '0');
+            const lastAsked = parseInt(safeGetItem('notif_asked_at') || '0');
             const daysSinceAsked = (Date.now() - lastAsked) / (1000 * 60 * 60 * 24);
-            if (lastAsked > 0 && daysSinceAsked < 30) return; // ถามซ้ำทุก 30 วัน
+            if (lastAsked > 0 && daysSinceAsked < 30) return;
 
             setTimeout(() => {
                 Swal.fire({
@@ -4845,7 +4913,7 @@
                     confirmButtonColor: '#6c5ce7',
                     timer: 8000
                 }).then(result => {
-                    localStorage.setItem('notif_asked_at', Date.now().toString());
+                    safeSetItem('notif_asked_at', Date.now().toString());
                     if (result.isConfirmed) {
                         Notification.requestPermission().then(perm => {
                             if (perm === 'granted') {
