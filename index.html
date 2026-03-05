@@ -222,11 +222,71 @@
             background-image: var(--bg-gradient);
             color: var(--text-color);
             transition: background 0.3s, color 0.3s;
-
             font-family: 'Kanit', sans-serif;
             min-height: 100vh;
-            padding-bottom: 100px;
+            min-height: 100dvh;
+            /* Dynamic viewport height for mobile */
+            width: 100%;
+            max-width: 100%;
+            padding-bottom: 80px;
             overflow-x: hidden;
+            margin: 0;
+        }
+
+        /* ทำให้ main wrapper เต็มจอ */
+        .main-wrapper {
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 0 0 80px 0;
+        }
+
+        /* เพิ่ม CSS สำหรับ Badge แท็บนาวิเกชัน */
+        .nav-notify-badge {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            background: #e74c3c;
+            color: #fff;
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            font-size: 0.65rem;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: bounce-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            border: 2px solid #fff;
+            box-shadow: 0 2px 6px rgba(231, 76, 60, 0.5);
+            z-index: 10;
+            line-height: 1;
+        }
+
+        @keyframes bounce-in {
+            from {
+                transform: scale(0);
+                opacity: 0;
+            }
+
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        /* ปรับ .nav-item ให้มี position:relative เพื่อ badge absolute ทำงานได้ */
+        .nav-item {
+            position: relative;
+            transition: color 0.25s, background 0.25s, transform 0.15s;
+        }
+
+        .nav-item.active {
+            transform: scale(1.05);
+        }
+
+        .nav-item:active {
+            transform: scale(0.92);
         }
 
         .glass-card {
@@ -1763,7 +1823,9 @@
         <div class="filter-box px-2 mb-2" style="overflow-x: auto; white-space: nowrap;">
             <button class="filter-btn active" onclick="setFeedFilter('all', this)">ทั้งหมด</button>
             <button class="filter-btn" onclick="setFeedFilter('related', this)">ของฉัน</button>
-            <button class="filter-btn" onclick="setFeedFilter('request', this)">⚡ รอมีส่วนร่วม</button>
+            <button class="filter-btn" id="btn-filter-request" onclick="setFeedFilter('request', this)">⚡ รอ Verify
+                <span id="pending-badge" class="badge bg-danger rounded-pill ms-1"
+                    style="display:none;font-size:0.65rem;"></span></button>
         </div>
 
         <div class="px-2 mb-3 d-flex gap-2 text-nowrap" style="overflow-x: auto;">
@@ -4191,9 +4253,14 @@
 
                         if (isPrivate && !isMyPost) return false;
                         if (filterType === 'related' && !isMyPost && !amITagged) pass = false;
+                        // ✅ FIX: "รอมีส่วนร่วม" = โพสต์ที่ฉันถูก tag แต่ยังไม่ได้กด Verify
+                        // (ไม่ใช้ post.status เพราะ field นี้อาจไม่มีในข้อมูลจริง)
                         if (filterType === 'request') {
-                            let isPending = post.status !== 'approved';
-                            if (!(isPending && (isMyPost || amITagged))) pass = false;
+                            const iAmTagged = (post.taggedFriends || '').includes(currentUser.userId);
+                            const alreadyVerified = (post.verifies || []).some(v => String(v.lineId) === String(currentUser.userId));
+                            const isOwner = String(post.user_line_id) === String(currentUser.userId);
+                            // แสดงเฉพาะ: ถูก tag + ยังไม่ verify + ไม่ใช่โพสต์ตัวเอง
+                            if (!(iAmTagged && !alreadyVerified && !isOwner)) pass = false;
                         }
                         if (filterCategory && post.virtue !== filterCategory) pass = false;
 
@@ -4206,8 +4273,32 @@
                         return pass;
                     });
 
+                    // ✅ อัปเดต badge ปุ่ม "รอ Verify" (แสดงจำนวนเมื่อญัติที่เข้าแท็บ)
+                    const pendingCount = feed.filter(p => {
+                        const iAmTagged = (p.taggedFriends || '').includes(currentUser.userId);
+                        const alreadyVerified = (p.verifies || []).some(v => String(v.lineId) === String(currentUser.userId));
+                        const isOwner = String(p.user_line_id) === String(currentUser.userId);
+                        const isPriv = p.privacy === 'private';
+                        return iAmTagged && !alreadyVerified && !isOwner && !isPriv;
+                    }).length;
+                    const pendingBadge = document.getElementById('pending-badge');
+                    if (pendingBadge) {
+                        if (pendingCount > 0) {
+                            pendingBadge.textContent = pendingCount;
+                            pendingBadge.style.display = 'inline-block';
+                        } else {
+                            pendingBadge.style.display = 'none';
+                        }
+                    }
+
                     if (filteredFeed.length === 0 && !append) {
-                        container.innerHTML = '<div class="text-center py-5 text-muted">No data found</div>';
+                        const emptyMsg = filterType === 'request'
+                            ? '✅ ไม่มีโพสต์ที่รอการ Verify จากคุณ'
+                            : filterType === 'related'
+                                ? 'ยังไม่มีเรื่องราวของคุณ'
+                                : 'ยังไม่มีเรื่องราว';
+                        container.innerHTML = `<div class="text-center py-5 text-muted"><i class="fas fa-inbox fa-2x mb-3 d-block opacity-50"></i>${emptyMsg}</div>`;
+                        isFetchingFeed = false;
                         return;
                     }
 
