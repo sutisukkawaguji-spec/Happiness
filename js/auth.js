@@ -138,11 +138,29 @@ function checkUser(userId, profile) {
                 };
 
                 renderProfile();
-                updateAddAnnounceButton();
+                updateNavigationVisibility();
+
+                if (currentHome) {
+                    Swal.fire({
+                        toast: true,
+                        position: 'top',
+                        icon: 'success',
+                        title: `🏠 ยินดีต้อนรับสู่บ้าน ${decodeURIComponent(currentHome)}`,
+                        showConfirmButton: false,
+                        timer: 3500
+                    });
+                }
+
+                if (typeof fetchAnnouncements === 'function') fetchAnnouncements();
 
                 cacheUsers().then(() => {
                     fetchFeed();
                     fetchFriendsList();
+                    // ถ้าอยู่ที่หน้าทำเนียบ ให้วาดใหม่ทันทีที่ข้อมูลมา
+                    const relTab = document.getElementById('page-relation');
+                    if (relTab && relTab.classList.contains('active')) {
+                        if (typeof renderRelationTab === 'function') renderRelationTab();
+                    }
                 });
 
                 // ตั้งค่า Dark Mode
