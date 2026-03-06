@@ -672,9 +672,6 @@ function showStaffModal(uid) {
                             <i class="fas fa-award me-1"></i> บรรณาธิการ
                         </button>
                     </div>
-                    <button class="btn btn-primary btn-sm fw-bold rounded-pill shadow-sm py-2" onclick="promoteToAlumni('${user.id}', 'ส่งคนดีเข้าสู่บ้านใหม่')">
-                        <i class="fas fa-paper-plane me-2"></i> ส่งคนดีเข้าสู่บ้านใหม่
-                    </button>
                 </div>
             ` : ''}
 
@@ -735,36 +732,7 @@ function changeUserRole(uid, newRole) {
     });
 }
 
-function generateInviteQR() {
-    Swal.fire({
-        title: 'สร้าง QR Code เข้าร่วมกลุ่ม',
-        input: 'text',
-        inputLabel: 'ตั้งชื่อบ้านของคุณ (กลุ่ม)',
-        inputPlaceholder: 'เช่น: บ้านคนดี...',
-        showCancelButton: true,
-        confirmButtonText: 'สร้าง QR Code',
-        cancelButtonText: 'ยกเลิก',
-        inputValidator: (value) => { if (!value) return 'กรุณาระบุชื่อบ้าน!' }
-    }).then((result) => {
-        if (result.isConfirmed) {
-            const homeName = encodeURIComponent(result.value);
-            const inviteUrl = window.location.href.split('?')[0] + `?home=${homeName}`;
-            const qrUrl = `https://chart.googleapis.com/chart?chs=300x300&cht=qr&chl=${encodeURIComponent(inviteUrl)}&choe=UTF-8`;
 
-            Swal.fire({
-                title: result.value,
-                html: `
-                    <div class="text-center">
-                        <img src="${qrUrl}" class="img-fluid mb-3 rounded shadow" style="width:200px;">
-                        <p class="small text-muted">ให้เพื่อนสแกนเพื่อเข้าสู่กลุ่ม "${result.value}"</p>
-                        <div class="p-2 border rounded bg-light small selectable-text">${inviteUrl}</div>
-                    </div>
-                `,
-                confirmButtonText: 'ปิด'
-            });
-        }
-    });
-}
 
 // Helper for premium radar charts
 function drawPremiumRadar(ctxId, data, isAlumni = false, options = {}) {
