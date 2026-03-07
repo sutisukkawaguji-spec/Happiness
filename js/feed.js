@@ -4,24 +4,62 @@
 // ============================================================
 
 // ----- Media Helpers -----
-function getMediaContent(url) {
+function getMediaContent(url, note = '') {
     if (!url) return '';
     url = url.trim();
+
+    // ป้องกัน Error จากตัวอักษรพิเศษเวลาส่งผ่าน onclick
+    const safeNote = encodeURIComponent(note || '').replace(/'/g, "%27");
+
+    // 🌟 อัปเดต: เพิ่มการตรวจสอบลิงก์จาก Googleusercontent และ Drive
+    const isImageUrl = url.match(/\.(jpeg|jpg|gif|png|webp|bin)($|\?)/i) ||
+        url.includes('googleusercontent') ||
+        url.includes('drive.google.com') ||
+        url.includes('cloudinary');
+
+    if (url.includes(',') || isImageUrl) {
+        const urls = url.split(',').map(u => u.trim()).filter(u => u.length > 0);
+
+        // กรองเฉพาะที่เป็นรูปลิงก์จริงๆ (รวมถึงลิงก์ Google เก่าๆ)
+        const imgUrls = urls.filter(u =>
+            u.match(/\.(jpeg|jpg|gif|png|webp|bin)($|\?)/i) ||
+            u.includes('googleusercontent') ||
+            u.includes('drive.google.com') ||
+            u.includes('cloudinary')
+        );
+
+        if (imgUrls.length > 0) {
+            const count = imgUrls.length;
+            const displayCount = Math.min(count, 5);
+            let gridHtml = `<div class="image-grid image-grid-${displayCount}">`;
+
+            window.postImages = window.postImages || {};
+            const mediaId = 'media_' + Math.random().toString(36).substr(2, 9);
+            window.postImages[mediaId] = imgUrls;
+
+            imgUrls.slice(0, displayCount).forEach((img, idx) => {
+                const isLast = idx === 4 && count > 5;
+                gridHtml += `
+                    <div class="grid-img-wrapper" onclick="openImageViewer(window.postImages['${mediaId}'], ${idx}, '${safeNote}')">
+                        <img src="${img}" loading="lazy" class="grid-img" onerror="this.src='https://dummyimage.com/300x300/ddd/888&text=Image+Error'">
+                        ${isLast ? `<div class="more-overlay">+${count - 5}</div>` : ''}
+                    </div>`;
+            });
+            gridHtml += `</div>`;
+            return gridHtml;
+        }
+    }
+
+    // ส่วนของวิดีโอและลิงก์อื่นๆ ยังคงเดิม
     const ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:.*v=|.*\/))([w-]{11})/);
     if (ytMatch?.[1]) {
         const vid = ytMatch[1];
-        return `<div class="ratio ratio-16x9 rounded-4 overflow-hidden shadow-sm border">
-                    <iframe src="https://www.youtube.com/embed/${vid}?enablejsapi=1" allowfullscreen style="border:0;" class="yt-video"></iframe>
-                </div>`;
+        return `<div class="ratio ratio-16x9 rounded-4 overflow-hidden shadow-sm border"><iframe src="https://www.youtube.com/embed/${vid}?enablejsapi=1" allowfullscreen style="border:0;" class="yt-video"></iframe></div>`;
     }
     if (url.match(/\.(mp4|webm|ogg)($|\?)/i)) {
-        return `<div class="ratio ratio-16x9 rounded-4 overflow-hidden shadow-sm border bg-dark">
-                    <video src="${url}" controls style="width:100%;height:100%;"></video>
-                </div>`;
+        return `<div class="ratio ratio-16x9 rounded-4 overflow-hidden shadow-sm border bg-dark"><video src="${url}" controls style="width:100%;height:100%;"></video></div>`;
     }
-    if (url.includes('drive.google.com') || url.includes('googleusercontent.com') || url.match(/\.(jpeg|jpg|gif|png|webp)($|\?)/i)) {
-        return `<img src="${url}" loading="lazy" class="img-fluid rounded-4 shadow-sm border" style="max-height:400px;width:100%;object-fit:cover;cursor:pointer;" onclick="viewImage('${url}')">`;
-    }
+
     if (url.includes('tiktok.com')) return createLinkCard(url, 'TikTok', 'fab fa-tiktok', '#000000');
     if (url.includes('facebook.com') || url.includes('fb.watch')) return createLinkCard(url, 'Facebook', 'fab fa-facebook', '#1877F2');
     if (url.includes('instagram.com')) return createLinkCard(url, 'Instagram', 'fab fa-instagram', '#E1306C');
@@ -66,22 +104,23 @@ function setFeedFilter(type, btn) {
 
 // ----- Fetch & Render Feed -----
 function fetchFeed(append = false, silent = false) {
-    if (isFetchingFeed) return;
-    if (!silent) isFetchingFeed = true;
+    return new Promise((resolve) => {
+        if (isFetchingFeed) return resolve();
+        if (!silent) isFetchingFeed = true;
 
-    if (!append) { currentFeedLimit = 10; renderedPostIds.clear(); }
+        if (!append) { currentFeedLimit = 10; renderedPostIds.clear(); }
 
-    const container = document.getElementById('feedContainer');
-    const filterType = currentFeedFilter;
-    const filterCategory = document.getElementById('filterCategory')?.value || '';
-    const filterDate = document.getElementById('filterDate')?.value || '';
-    const filterYear = document.getElementById('filterYear')?.value || '';
+        const container = document.getElementById('feedContainer');
+        const filterType = currentFeedFilter;
+        const filterCategory = document.getElementById('filterCategory')?.value || '';
+        const filterDate = document.getElementById('filterDate')?.value || '';
+        const filterYear = document.getElementById('filterYear')?.value || '';
 
-    if (!container) { isFetchingFeed = false; return; }
+        if (!container) { isFetchingFeed = false; return resolve(); }
 
-    if (!append && !silent) {
-        // Skeleton Loading with shimmer effect
-        container.innerHTML = `
+        if (!append && !silent) {
+            // แสดง Skeleton Loading (เหมือนเดิม)
+            container.innerHTML = `
             <div class="skeleton-card" style="animation: fadeSlideIn 0.3s ease;">
                 <div class="d-flex align-items-center mb-3">
                     <div class="skeleton rounded-circle me-3" style="width:45px;height:45px;flex-shrink:0;"></div>
@@ -95,53 +134,24 @@ function fetchFeed(append = false, silent = false) {
                     <div class="skeleton" style="height:12px;width:25%;"></div>
                     <div class="skeleton" style="height:12px;width:15%;"></div>
                 </div>
-                <div class="d-flex justify-content-between mt-3">
-                    <div class="skeleton" style="height:28px;width:80px;border-radius:20px;"></div>
-                    <div class="skeleton rounded-circle" style="height:28px;width:28px;"></div>
-                </div>
-            </div>
-            <div class="skeleton-card" style="animation: fadeSlideIn 0.3s ease 0.1s; animation-fill-mode: both;">
-                <div class="d-flex align-items-center mb-3">
-                    <div class="skeleton rounded-circle me-3" style="width:45px;height:45px;flex-shrink:0;"></div>
-                    <div class="flex-grow-1">
-                        <div class="skeleton mb-2" style="height:14px;width:50%;"></div>
-                        <div class="skeleton" style="height:12px;width:30%;"></div>
-                    </div>
-                </div>
-                <div class="skeleton mb-2" style="height:100px;width:100%;border-radius:12px;"></div>
-                <div class="skeleton" style="height:12px;width:70%;"></div>
-            </div>
-            <div class="skeleton-card" style="animation: fadeSlideIn 0.3s ease 0.2s; animation-fill-mode: both;">
-                <div class="d-flex align-items-center mb-3">
-                    <div class="skeleton rounded-circle me-3" style="width:45px;height:45px;flex-shrink:0;"></div>
-                    <div class="flex-grow-1">
-                        <div class="skeleton mb-2" style="height:14px;width:45%;"></div>
-                        <div class="skeleton" style="height:12px;width:25%;"></div>
-                    </div>
-                </div>
-                <div class="skeleton mb-2" style="height:80px;width:100%;border-radius:12px;"></div>
-                <div class="d-flex gap-2">
-                    <div class="skeleton" style="height:12px;width:40%;"></div>
-                    <div class="skeleton" style="height:12px;width:20%;"></div>
-                </div>
             </div>`;
-    } else if (append && !silent) {
-        const btn = document.getElementById('loadMoreBtnWrapper');
-        if (btn) btn.innerHTML = '<button class="btn btn-outline-primary rounded-pill px-4 disabled"><i class="fas fa-spinner fa-spin me-1"></i>กำลังโหลด...</button>';
-    }
+        } else if (append && !silent) {
+            const btn = document.getElementById('loadMoreBtnWrapper');
+            if (btn) btn.innerHTML = '<button class="btn btn-outline-primary rounded-pill px-4 disabled"><i class="fas fa-spinner fa-spin me-1"></i>กำลังโหลด...</button>';
+        }
 
-    fetch(GAS_URL + '?action=get_feed&limit=' + currentFeedLimit + '&t=' + Date.now())
-        .then(r => r.json())
-        .then(data => {
+        // 🌟 ฟังก์ชันหลักสำหรับ Render Feed หลังจากได้ข้อมูลมาแล้ว (ใช้ร่วมกันทั้ง Fetch และ JSONP)
+        const handleFeedData = (data) => {
             if (!append) container.innerHTML = '';
             else { document.getElementById('loadMoreBtnWrapper')?.remove(); }
 
-            if (!currentUser) return;
+            if (!currentUser) return resolve();
 
             let feed = [];
             if (data?.status === 'error') {
                 container.innerHTML = `<div class="text-danger text-center mt-5">Error: ${data.message}</div>`;
-                return;
+                isFetchingFeed = false;
+                return resolve();
             }
             if (Array.isArray(data)) feed = data;
             else if (data?.feed) { feed = data.feed; if (data.userMap) Object.assign(allUsersMap, data.userMap); }
@@ -166,7 +176,6 @@ function fetchFeed(append = false, silent = false) {
                 const isOwner = String(p.user_line_id) === String(currentUser.userId);
                 const alreadyDone = (p.verifies || []).some(v => String(v.lineId) === String(currentUser.userId));
                 const isPublic = p.privacy !== 'private';
-                // นับโพสต์ที่ฉันถูกแท็ก และยังไม่ได้ verify
                 const iAmTagged = (p.taggedFriends || '').includes(currentUser.userId);
                 return iAmTagged && !alreadyDone && !isOwner && isPublic;
             }).length;
@@ -175,41 +184,57 @@ function fetchFeed(append = false, silent = false) {
                 pendingBadge.textContent = pendingCount;
                 pendingBadge.style.display = pendingCount > 0 ? 'inline-block' : 'none';
             }
-            // Also show the filter button highlight if there are pending items
+
             const filterBtn = document.getElementById('btn-filter-request');
             if (filterBtn) {
                 if (pendingCount > 0) {
-                    filterBtn.style.borderColor = '#e74c3c';
-                    filterBtn.style.color = '#e74c3c';
-                    filterBtn.style.fontWeight = 'bold';
+                    filterBtn.style.borderColor = '#e74c3c'; filterBtn.style.color = '#e74c3c'; filterBtn.style.fontWeight = 'bold';
                 } else {
-                    filterBtn.style.borderColor = '';
-                    filterBtn.style.color = '';
-                    filterBtn.style.fontWeight = '';
+                    filterBtn.style.borderColor = ''; filterBtn.style.color = ''; filterBtn.style.fontWeight = '';
                 }
             }
 
-            // --- Filter ---
+            // --- 🎛️ Filter Logic (อัปเดต: ปลดล็อกให้ Verify ได้ทุกคน) ---
             const filteredFeed = feed.filter(post => {
-                let pass = true;
-                const postDate = post.timestamp ? new Date(post.timestamp) : null;
-                const isValidDate = postDate && !isNaN(postDate);
-                const isMyPost = String(post.user_line_id) === String(currentUser.userId);
-                const amITagged = (post.taggedFriends || '').includes(currentUser.userId);
+                // เช็คว่าเป็นโพสต์ของเราเองหรือไม่
+                const isMyPost = String(post.user_line_id || post.userId) === String(currentUser.userId);
                 const isPrivate = post.privacy === 'private';
 
-                if (isPrivate && !isMyPost) return false;
-                if (filterType === 'related' && !isMyPost && !amITagged) pass = false;
-                if (filterType === 'request') {
-                    const alreadyVerified = (post.verifies || []).some(v => String(v.lineId) === String(currentUser.userId));
-                    if (!(amITagged && !alreadyVerified && !isMyPost)) pass = false;
+                // 🌟 เช็คว่าเราเคยกด Verify โพสต์นี้ไปหรือยัง (รองรับโครงสร้างข้อมูลทุกแบบ)
+                const verifyList = post.verifies || [];
+                let alreadyVerified = false;
+                if (Array.isArray(verifyList)) {
+                    alreadyVerified = verifyList.some(v =>
+                        String(v.lineId || v.userId) === String(currentUser.userId) ||
+                        String(v) === String(currentUser.userId)
+                    );
                 }
-                if (filterCategory && post.virtue !== filterCategory) pass = false;
-                if (isValidDate) {
-                    if (filterDate && postDate.toISOString().split('T')[0] !== filterDate) pass = false;
-                    if (filterYear && String(postDate.getFullYear()) !== filterYear) pass = false;
-                } else if (filterDate || filterYear) pass = false;
-                return pass;
+
+                // กฎข้อ 1: ถ้าเป็นโพสต์ส่วนตัว (Private) และไม่ใช่ของเรา ให้ซ่อนทันที
+                if (isPrivate && !isMyPost) return false;
+
+                // กฎข้อ 2: ถ้าเลือก "เรื่องของฉัน" (ต้องเป็นโพสต์เรา หรือ เราถูกแท็ก)
+                if (filterType === 'related') {
+                    let taggedList = [];
+                    if (typeof post.taggedFriends === 'string') {
+                        taggedList = post.taggedFriends.split(',').map(id => id.trim());
+                    } else if (Array.isArray(post.taggedFriends)) {
+                        taggedList = post.taggedFriends.map(id => String(id).trim());
+                    }
+                    const amITagged = taggedList.includes(String(currentUser.userId)) || taggedList.includes(currentUser.name);
+
+                    if (!isMyPost && !amITagged) return false;
+                }
+
+                // กฎข้อ 3: 🌟 ถ้าเลือก "รอ Verify" (แก้ไขใหม่)
+                if (filterType === 'request') {
+                    // โชว์เฉพาะ: "ไม่ใช่โพสต์เรา" และ "เรายังไม่ได้กดยืนยันให้เขา"
+                    if (isMyPost || alreadyVerified) {
+                        return false;
+                    }
+                }
+
+                return true;
             });
 
             if (filteredFeed.length === 0 && !append) {
@@ -218,10 +243,10 @@ function fetchFeed(append = false, silent = false) {
                         : 'ยังไม่มีเรื่องราว';
                 container.innerHTML = `<div class="text-center py-5 text-muted"><i class="fas fa-inbox fa-2x mb-3 d-block opacity-50"></i>${msg}</div>`;
                 isFetchingFeed = false;
-                return;
+                return resolve();
             }
 
-            // --- Render ---
+            // --- Render Cards ---
             const virtueMap = { volunteer: '🤝 จิตอาสา', sufficiency: '🌱 พอเพียง', discipline: '📏 วินัย', integrity: '💎 สุจริต', gratitude: '🙏 กตัญญู' };
             const iconMap = { like: '👍', love: '❤️', wow: '😮', laugh: '😂', sad: '😢', pray: '🙏' };
 
@@ -241,7 +266,6 @@ function fetchFeed(append = false, silent = false) {
                 const verifyList = post.verifies || [];
                 const isVerifiedByMe = verifyList.some(v => String(v.lineId) === String(currentUser.userId));
 
-                // Tagged avatars
                 let teamList = post.tagged_avatars || [];
                 if (teamList.length === 0 && taggedIds.length > 0)
                     teamList = taggedIds.map(id => allUsersMap[id]).filter(Boolean);
@@ -253,7 +277,6 @@ function fetchFeed(append = false, silent = false) {
                     taggedHtml += `</div></div>`;
                 }
 
-                // Witness
                 let witnessHtml = '';
                 if (verifyList.length > 0 && canSee) {
                     witnessHtml = `<div class="row-witness animate__animated animate__fadeIn"><small class="text-success me-2 fw-bold"><i class="fas fa-check-circle"></i> Witness:</small><div class="d-flex align-items-center">`;
@@ -261,86 +284,73 @@ function fetchFeed(append = false, silent = false) {
                     witnessHtml += `</div></div>`;
                 }
 
-                // Action Button
                 let btnHtml = '';
                 if (isPrivate) {
                     if (isMyPost) btnHtml = `<span class="badge bg-secondary rounded-pill ms-auto"><i class="fas fa-lock"></i> Private</span>`;
                 } else if (isMyPost) {
                     if (isTeam) btnHtml = `<span class="badge bg-info text-dark rounded-pill ms-auto"><i class="fas fa-users"></i> Team Work</span>`;
-                    else btnHtml = verifyList.length > 0
-                        ? `<span class="badge bg-success rounded-pill ms-auto"><i class="fas fa-check"></i> Approved</span>`
-                        : `<span class="badge bg-secondary rounded-pill ms-auto"><i class="fas fa-clock"></i> Pending</span>`;
+                    else btnHtml = verifyList.length > 0 ? `<span class="badge bg-success rounded-pill ms-auto"><i class="fas fa-check"></i> Approved</span>` : `<span class="badge bg-secondary rounded-pill ms-auto"><i class="fas fa-clock"></i> Pending</span>`;
                 } else {
                     if (amITagged) btnHtml = `<span class="badge bg-light text-primary border rounded-pill ms-auto"><i class="fas fa-user-tag"></i> You're in team</span>`;
-                    else btnHtml = isVerifiedByMe
-                        ? `<button class="btn btn-sm btn-success rounded-pill ms-auto disabled">Verified</button>`
-                        : `<button onclick="verifyPost('${post.id}','${post.user_line_id}','${post.user_name}',this)" class="btn btn-sm btn-outline-primary rounded-pill ms-auto">Verify (+3)</button>`;
+                    else btnHtml = isVerifiedByMe ? `<button class="btn btn-sm btn-success rounded-pill ms-auto disabled">Verified</button>` : `<button onclick="verifyPost('${post.id}','${post.user_line_id}','${post.user_name}',this)" class="btn btn-sm btn-outline-primary rounded-pill ms-auto">Verify (+3)</button>`;
                 }
 
-                // Reaction
                 let myReaction = (post.likes || []).find(u => String(u.lineId) === String(currentUser.userId));
                 let reactIcon = myReaction ? (iconMap[myReaction.type] || '❤️') : '🤍';
 
-                // Media
-                const mediaContent = canSee ? getMediaContent(post.image) : '';
+                const mediaContent = canSee ? getMediaContent(post.image, post.note) : '';
                 const noteContent = canSee ? post.note : '<span class="text-muted fst-italic"><i class="fas fa-lock"></i> Private</span>';
+
                 let vdoBtnHtml = '';
                 const lnk = post.image || '';
-                if (lnk.includes('youtube') || lnk.includes('youtu.be'))
-                    vdoBtnHtml = `<a href="${lnk}" target="_blank" class="btn btn-sm btn-light text-danger rounded-pill border ms-2" style="font-size:0.75rem;"><i class="fab fa-youtube"></i> Watch VDO</a>`;
-                else if (lnk.includes('tiktok'))
-                    vdoBtnHtml = `<a href="${lnk}" target="_blank" class="btn btn-sm btn-light text-dark rounded-pill border ms-2" style="font-size:0.75rem;"><i class="fab fa-tiktok"></i> TikTok</a>`;
-                else if (lnk.includes('facebook') || lnk.includes('fb.watch'))
-                    vdoBtnHtml = `<a href="${lnk}" target="_blank" class="btn btn-sm btn-light text-primary rounded-pill border ms-2" style="font-size:0.75rem;"><i class="fab fa-facebook"></i> Facebook</a>`;
+                if (lnk.includes('youtube') || lnk.includes('youtu.be')) vdoBtnHtml = `<a href="${lnk}" target="_blank" class="btn btn-sm btn-light text-danger rounded-pill border ms-2" style="font-size:0.75rem;"><i class="fab fa-youtube"></i> Watch VDO</a>`;
+                else if (lnk.includes('tiktok')) vdoBtnHtml = `<a href="${lnk}" target="_blank" class="btn btn-sm btn-light text-dark rounded-pill border ms-2" style="font-size:0.75rem;"><i class="fab fa-tiktok"></i> TikTok</a>`;
+                else if (lnk.includes('facebook') || lnk.includes('fb.watch')) vdoBtnHtml = `<a href="${lnk}" target="_blank" class="btn btn-sm btn-light text-primary rounded-pill border ms-2" style="font-size:0.75rem;"><i class="fab fa-facebook"></i> Facebook</a>`;
 
                 const dateStr = isValidDate ? postDate.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '-';
 
                 htmlBuffer += `
-                <div class="glass-card feed-card p-3 mb-3 animate__animated animate__fadeIn">
-                    <div class="feed-header d-flex align-items-start">
-                        <img src="${post.user_img}" class="feed-avatar me-2 mt-1" loading="lazy" onerror="this.src='https://dummyimage.com/45x45/ddd/888&text=?'">
-                        <div class="flex-grow-1">
-                            <div class="d-flex justify-content-between">
-                                <h6 class="mb-0 fw-bold">${post.user_name}</h6>
-                                <small class="text-muted" style="font-size:0.7rem;">${dateStr}</small>
-                            </div>
-                            <small class="text-primary mb-1 d-block fw-bold">${virtueMap[post.virtue] || post.virtue || ''}</small>
+            <div class="glass-card feed-card p-3 mb-3 animate__animated animate__fadeIn">
+                <div class="feed-header d-flex align-items-start">
+                    <img src="${post.user_img}" class="feed-avatar me-2 mt-1" loading="lazy" onerror="this.src='https://dummyimage.com/45x45/ddd/888&text=?'">
+                    <div class="flex-grow-1">
+                        <div class="d-flex justify-content-between">
+                            <h6 class="mb-0 fw-bold">${post.user_name}</h6>
+                            <small class="text-muted" style="font-size:0.7rem;">${dateStr}</small>
+                        </div>
+                        <small class="text-primary mb-1 d-block fw-bold">${virtueMap[post.virtue] || post.virtue || ''}</small>
+                    </div>
+                </div>
+                ${taggedHtml}
+                <div class="text-end mb-2 mt-2">${btnHtml}</div>
+                <div class="mt-2 mb-2 p-2 bg-light rounded text-dark">${noteContent}</div>
+                <div class="mb-2">${mediaContent}</div>
+                ${witnessHtml}
+                <div class="feed-actions border-top pt-2 d-flex align-items-center mt-2">
+                    <div class="reaction-wrapper me-1" id="react-wrap-${post.id}">
+                        <div class="reaction-popup" id="popup-${post.id}" style="display:none;" onmouseleave="closeReaction('${post.id}')">
+                            <span class="reaction-btn" onclick="submitReaction('${post.id}','like')">👍</span>
+                            <span class="reaction-btn" onclick="submitReaction('${post.id}','love')">❤️</span>
+                            <span class="reaction-btn" onclick="submitReaction('${post.id}','laugh')">😂</span>
+                            <span class="reaction-btn" onclick="submitReaction('${post.id}','wow')">😮</span>
+                            <span class="reaction-btn" onclick="submitReaction('${post.id}','pray')">🙏</span>
+                        </div>
+                        <div class="action-btn ${myReaction ? 'liked' : ''}" onclick="toggleReaction('${post.id}')">
+                            <span id="icon-${post.id}" style="font-size:1.2rem;">${reactIcon}</span>
+                            <span id="count-${post.id}" class="ms-1" style="font-size:0.9rem;">${post.likes ? post.likes.length : 0}</span>
                         </div>
                     </div>
-                    ${taggedHtml}
-                    <div class="text-end mb-2 mt-2">${btnHtml}</div>
-                    <div class="mt-2 mb-2 p-2 bg-light rounded text-dark">${noteContent}</div>
-                    <div class="mb-2">${mediaContent}</div>
-                    ${witnessHtml}
-                    <div class="feed-actions border-top pt-2 d-flex align-items-center mt-2">
-                        <div class="reaction-wrapper me-1" id="react-wrap-${post.id}">
-                            <div class="reaction-popup" id="popup-${post.id}" style="display:none;" onmouseleave="closeReaction('${post.id}')">
-                                <span class="reaction-btn" onclick="submitReaction('${post.id}','like')">👍</span>
-                                <span class="reaction-btn" onclick="submitReaction('${post.id}','love')">❤️</span>
-                                <span class="reaction-btn" onclick="submitReaction('${post.id}','laugh')">😂</span>
-                                <span class="reaction-btn" onclick="submitReaction('${post.id}','wow')">😮</span>
-                                <span class="reaction-btn" onclick="submitReaction('${post.id}','pray')">🙏</span>
-                            </div>
-                            <div class="action-btn ${myReaction ? 'liked' : ''}" onclick="toggleReaction('${post.id}')">
-                                <span id="icon-${post.id}" style="font-size:1.2rem;">${reactIcon}</span>
-                                <span id="count-${post.id}" class="ms-1" style="font-size:0.9rem;">${post.likes ? post.likes.length : 0}</span>
-                            </div>
-                        </div>
-                        ${vdoBtnHtml}
-                        <div class="ms-auto d-flex align-items-center gap-2">
-                            <span class="fs-4">${post.happy == 3 ? '😁' : (post.happy == 2 ? '😐' : '😞')}</span>
-                            ${isMyPost ? `
-                            <button class="btn btn-sm btn-outline-secondary rounded-circle" style="width:28px;height:28px;padding:0;font-size:0.75rem;"
-                                onclick="editPost('${post.id}','${encodeURIComponent(post.note || '')}')" title="แก้ไข">
-                                <i class="fas fa-pen"></i>
-                            </button>
-                            <button class="btn btn-sm btn-outline-danger rounded-circle" style="width:28px;height:28px;padding:0;font-size:0.75rem;"
-                                onclick="deletePost('${post.id}')" title="ลบ">
-                                <i class="fas fa-trash"></i>
-                            </button>` : ''}
-                        </div>
+                    ${vdoBtnHtml}
+                    <div class="ms-auto d-flex align-items-center gap-2">
+                        <span class="fs-4">${post.happy == 3 ? '😁' : (post.happy == 2 ? '😐' : '😞')}</span>
+                        ${isMyPost ? `
+                        <button class="btn btn-sm btn-outline-secondary rounded-circle" style="width:28px;height:28px;padding:0;font-size:0.75rem;"
+                            onclick="editPost('${post.id}','${encodeURIComponent(post.note || '')}')" title="แก้ไข"><i class="fas fa-pen"></i></button>
+                        <button class="btn btn-sm btn-outline-danger rounded-circle" style="width:28px;height:28px;padding:0;font-size:0.75rem;"
+                            onclick="deletePost('${post.id}')" title="ลบ"><i class="fas fa-trash"></i></button>` : ''}
                     </div>
-                </div>`;
+                </div>
+            </div>`;
             });
 
             if (htmlBuffer) container.insertAdjacentHTML('beforeend', htmlBuffer);
@@ -348,26 +358,42 @@ function fetchFeed(append = false, silent = false) {
             if (feed.length >= currentFeedLimit) {
                 container.insertAdjacentHTML('beforeend',
                     `<div id="loadMoreBtnWrapper" class="text-center mt-3 mb-5">
-                        <button class="btn btn-outline-primary rounded-pill px-4" onclick="loadMoreFeed()">
-                            <i class="fas fa-arrow-down me-1"></i>ดูเรื่องราวเพิ่มเติม
-                        </button>
-                    </div>`);
-            }
-        })
-        .catch(err => {
-            console.error('fetchFeed error:', err);
-            if (container) {
-                container.innerHTML = `<div class="text-center py-5">
-                    <i class="fas fa-wifi fa-2x text-muted mb-3 d-block opacity-50"></i>
-                    <span class="text-muted">โหลดไม่สำเร็จ</span><br>
-                    <button onclick="fetchFeed()" class="btn btn-sm btn-outline-primary mt-3 rounded-pill px-4">
-                        <i class="fas fa-sync me-1"></i>ลองใหม่
-                    </button>
-                </div>`;
+                    <button class="btn btn-outline-primary rounded-pill px-4" onclick="loadMoreFeed()"><i class="fas fa-arrow-down me-1"></i>ดูเรื่องราวเพิ่มเติม</button>
+                </div>`);
             }
             isFetchingFeed = false;
-        })
-        .finally(() => { isFetchingFeed = false; });
+            resolve();
+        };
+
+        // 🚀 1. ลองดึงแบบปกติก่อน (fetch) -> 2. ดัก Error ถ้าเจอ HTML หน้าล็อกอิน -> 3. สลับไปใช้ JSONP ทันที
+        fetch(`${GAS_URL}?action=get_feed&limit=${currentFeedLimit}&t=${Date.now()}`)
+            .then(res => res.text()) // แปลงเป็นข้อความเพื่อตรวจสอบก่อนแกะ JSON
+            .then(text => {
+                if (text.startsWith('<')) throw new Error("CORS / Google Blocked"); // ดักหน้า HTML ขาวๆ
+                handleFeedData(JSON.parse(text));
+            })
+            .catch(err => {
+                console.warn('Feed Loading Blocked, Switching to JSONP...', err.message);
+                // 🛡️ ใช้ JSONP Fallback เมื่อ fetch ปกติล้มเหลว
+                window.__gasFeedCb = (data) => handleFeedData(data);
+                const oldScript = document.getElementById('jsonp_feed');
+                if (oldScript) oldScript.remove();
+
+                const script = document.createElement('script');
+                script.id = 'jsonp_feed';
+                script.src = `${GAS_URL}?action=get_feed&limit=${currentFeedLimit}&callback=__gasFeedCb&t=${Date.now()}`;
+                document.head.appendChild(script);
+
+                // หมดเวลา (Timeout) ถ้า JSONP ก็ยังพัง
+                setTimeout(() => {
+                    if (isFetchingFeed) {
+                        if (container) container.innerHTML = `<div class="text-center py-5 text-danger"><i class="fas fa-exclamation-triangle fa-2x mb-3 d-block opacity-50"></i>โหลดไม่สำเร็จ ลองรีเฟรชหน้าใหม่อีกครั้ง</div>`;
+                        isFetchingFeed = false;
+                    }
+                    resolve();
+                }, 10000);
+            });
+    });
 }
 
 function loadMoreFeed() {
@@ -464,6 +490,106 @@ function editPost(postId, encodedNote) {
 }
 
 // ----- View Image -----
-function viewImage(url) {
-    Swal.fire({ imageUrl: url, imageWidth: '100%', showConfirmButton: false, showCloseButton: true, background: 'transparent' });
+// ----- Fullscreen Image Viewer (พร้อมระบบพิมพ์ดีด) -----
+let viewerImages = [];
+let viewerIndex = 0;
+let typewriterTimeout;
+let isViewerOpen = false;
+let currentViewerNote = '';
+
+function openImageViewer(images, index = 0, encodedNote = '') {
+    if (typeof images === 'string') images = images.split(',').map(s => s.trim());
+    viewerImages = images;
+    viewerIndex = index;
+    // ถอดรหัสข้อความกลับมา
+    currentViewerNote = encodedNote ? decodeURIComponent(encodedNote) : '';
+
+    const viewer = document.getElementById('imageViewer');
+    if (!viewer) return;
+
+    // สร้างกล่องข้อความพิมพ์ดีดหากยังไม่มี
+    let overlay = document.getElementById('viewerTextOverlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'viewerTextOverlay';
+        viewer.appendChild(overlay);
+    }
+
+    viewer.style.display = 'flex';
+    isViewerOpen = true;
+    updateViewer();
+    document.body.style.overflow = 'hidden';
+
+    // เริ่มเล่นเอฟเฟกต์พิมพ์ดีด
+    startTypewriter(currentViewerNote);
+}
+
+function startTypewriter(text) {
+    clearTimeout(typewriterTimeout);
+    const overlay = document.getElementById('viewerTextOverlay');
+    if (!overlay) return;
+
+    if (!text || !isViewerOpen) {
+        overlay.style.display = 'none';
+        return;
+    }
+
+    overlay.style.display = 'block';
+    let i = 0;
+
+    function typeNext() {
+        if (!isViewerOpen) return; // หยุดถ้ายกเลิกดูรูปแล้ว
+
+        // พิมพ์ทีละตัว พร้อมเคอร์เซอร์กะพริบ
+        overlay.innerHTML = text.substring(0, i + 1) + '<span class="blink-cursor">|</span>';
+
+        // 🌟 หัวใจสำคัญ: สั่งให้กล่อง Scroll ลงล่างสุดอัตโนมัติ 
+        // (เมื่อข้อความล้นกล่อง บรรทัดเก่าจะถูกดันขึ้นไปข้างบนเรื่อยๆ)
+        overlay.scrollTop = overlay.scrollHeight;
+
+        i++;
+
+        if (i <= text.length) {
+            typewriterTimeout = setTimeout(typeNext, 60); // ความเร็ว 60ms ต่อตัวอักษร (ปรับเลขให้น้อยลง = พิมพ์เร็วขึ้น)
+        } else {
+            // เมื่อพิมพ์จบ รอ 4 วินาที แล้ววนลูปใหม่ตั้งแต่ต้น
+            typewriterTimeout = setTimeout(() => {
+                startTypewriter(text);
+            }, 4000);
+        }
+    }
+    typeNext();
+}
+
+function updateViewer() {
+    const imgEl = document.getElementById('viewerImg');
+    const currentEl = document.getElementById('viewerCurrent');
+    const totalEl = document.getElementById('viewerTotal');
+
+    if (imgEl) imgEl.src = viewerImages[viewerIndex];
+    if (currentEl) currentEl.innerText = viewerIndex + 1;
+    if (totalEl) totalEl.innerText = viewerImages.length;
+
+    document.querySelector('.viewer-prev').style.visibility = viewerImages.length > 1 ? 'visible' : 'hidden';
+    document.querySelector('.viewer-next').style.visibility = viewerImages.length > 1 ? 'visible' : 'hidden';
+}
+
+function changeViewerImg(dir) {
+    viewerIndex += dir;
+    if (viewerIndex < 0) viewerIndex = viewerImages.length - 1;
+    if (viewerIndex >= viewerImages.length) viewerIndex = 0;
+    updateViewer();
+}
+
+function closeImageViewer() {
+    isViewerOpen = false;
+    clearTimeout(typewriterTimeout); // หยุดเอฟเฟกต์ทันที
+
+    const viewer = document.getElementById('imageViewer');
+    if (viewer) viewer.style.display = 'none';
+    document.body.style.overflow = '';
+}
+
+function viewImage(url, note = '') {
+    openImageViewer([url], 0, encodeURIComponent(note).replace(/'/g, "%27"));
 }
