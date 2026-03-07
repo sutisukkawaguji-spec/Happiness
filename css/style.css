@@ -449,27 +449,73 @@ body {
     transition: all 0.5s ease;
 }
 
+/* =========================================
+   🎛️ ปุ่มกรองเรื่องราว (แบ่ง 3 ช่องเท่ากัน)
+========================================= */
 .filter-box {
     display: flex;
-    gap: 10px;
-    margin-bottom: 15px;
+    justify-content: center; /* จัดให้อยู่กึ่งกลาง */
+    gap: 10px;               /* ระยะห่างระหว่างปุ่ม */
+    margin: 0 auto 20px auto;
+    padding: 5px 15px;       /* เพิ่มพื้นที่ด้านข้างให้ดูไม่ติดขอบจอเกินไป */
+    max-width: 500px;        /* 🌟 ล็อกความกว้างสูงสุดเพื่อให้ปุ่มไม่ยาวจนเกินไปในจอใหญ่ */
+    width: 100%;
 }
 
 .filter-btn {
-    flex: 1;
-    border: 1px solid #ddd;
-    background: #fff;
-    color: #888;
-    border-radius: 20px;
-    padding: 5px;
+    flex: 1;                 /* 🌟 บังคับให้ทั้ง 3 ปุ่มมีขนาดกว้างเท่ากันเป๊ะ */
+    background: var(--glass-bg);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;     /* ขอบมนสวยๆ */
+    padding: 8px 5px;
     font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;     /* ป้องกันตัวหนังสือตกบรรทัด */
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }
 
+/* เอฟเฟกต์ตอนกด/เลือก */
 .filter-btn.active {
-    background: var(--primary);
-    color: #fff;
-    border-color: var(--primary);
-    box-shadow: 0 4px 10px rgba(108, 92, 231, 0.3);
+    background: var(--primary) !important;
+    color: #fff !important;
+    border-color: transparent;
+    transform: scale(1.05); /* ขยายขึ้นนิดนึงให้ดูเด่น */
+}
+
+/* 🌟 สถานะตอนถูกเลือกใช้งาน (Active) */
+.filter-btn.active {
+    background: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%);
+    color: #fff !important; /* บังคับข้อความสีขาวเสมอ */
+    border-color: transparent !important;
+    box-shadow: 0 4px 12px rgba(108, 92, 231, 0.35);
+    font-weight: 600;
+    transform: scale(1.02);
+}
+
+/* --- 🌙 รองรับ Dark Mode 100% --- */
+[data-theme="dark"] .filter-btn {
+    background: rgba(255, 255, 255, 0.04);
+    color: #aaa;
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: none;
+}
+
+[data-theme="dark"] .filter-btn:hover {
+    background: rgba(138, 125, 240, 0.1);
+    color: #a29bfe;
+    border-color: rgba(138, 125, 240, 0.4);
+}
+
+[data-theme="dark"] .filter-btn.active {
+    background: linear-gradient(135deg, #514ea1 0%, #6c5ce7 100%);
+    color: #ffffff !important;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
 }
 
 @keyframes pulse-slow {
@@ -762,6 +808,255 @@ body {
 
 .status-normal {
     border-left-color: #55efc4;
+}
+
+/* =========================================
+   🖼️ Image Grid (ล็อกกรอบ + ครอปเต็มช่อง + เส้นระยะห่างรองรับ Dark Mode)
+========================================= */
+.image-grid {
+    display: grid !important;
+    gap: 3px !important;
+    /* 🌟 ปรับเส้นขอบให้เล็กลง (จากเดิม 4px เหลือ 2px) */
+    width: 100% !important;
+    height: 350px !important;
+    /* ล็อกความสูงรวม ไม่ให้ดันการ์ด */
+    border-radius: 12px !important;
+    overflow: hidden !important;
+    margin-top: 10px !important;
+
+    /* 🌟 สีของเส้นแบ่งใน โหมดสว่าง (Light Mode) */
+    background-color: #ffffff !important;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    /* ขอบบางๆ ล้อมรอบรูปทั้งหมดในโหมดสว่าง */
+}
+
+/* 🌟 สีของเส้นแบ่งใน โหมดมืด (Dark Mode) */
+[data-theme="dark"] .image-grid {
+    background-color: #252538 !important;
+    /* สีเนียนไปกับพื้นหลังการ์ด Dark Mode */
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    /* ขอบบางๆ ล้อมรอบรูปทั้งหมดในโหมดมืด */
+}
+
+/* 📱 แบบ 1 รูป: เต็มกรอบ */
+.image-grid-1 {
+    grid-template-columns: 1fr !important;
+    grid-template-rows: 1fr !important;
+}
+
+/* 📱 แบบ 2 รูป: แบ่งครึ่ง ซ้าย-ขวา เท่ากัน */
+.image-grid-2 {
+    grid-template-columns: 1fr 1fr !important;
+    grid-template-rows: 1fr !important;
+    height: 250px !important;
+    /* 2 รูปให้กรอบแคบลงมานิดนึง */
+}
+
+/* 📱 แบบ 3 รูป: ซ้าย 1 (ใหญ่), ขวา 2 (เล็ก บน-ล่าง) */
+.image-grid-3 {
+    grid-template-columns: 2fr 1fr !important;
+    grid-template-rows: 1fr 1fr !important;
+}
+
+.image-grid-3 .grid-img-wrapper:first-child {
+    grid-row: span 2 !important;
+}
+
+/* 📱 แบบ 4 รูป: 4 ช่องเท่ากัน (2x2) */
+.image-grid-4 {
+    grid-template-columns: 1fr 1fr !important;
+    grid-template-rows: 1fr 1fr !important;
+}
+
+/* 📱 แบบ 5 รูปขึ้นไป: แถวบน 2 ช่อง (แบ่งครึ่ง), แถวล่าง 3 ช่อง (แบ่งสาม) */
+.image-grid-5 {
+    grid-template-columns: repeat(6, 1fr) !important;
+    grid-template-rows: 1fr 1fr !important;
+}
+
+.image-grid-5 .grid-img-wrapper:nth-child(1),
+.image-grid-5 .grid-img-wrapper:nth-child(2) {
+    grid-column: span 3 !important;
+}
+
+.image-grid-5 .grid-img-wrapper:nth-child(n+3) {
+    grid-column: span 2 !important;
+}
+
+/* --- 🌟 กรอบครอบรูปแต่ละช่อง (ตัวล็อกขนาด) --- */
+.grid-img-wrapper {
+    position: relative !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+    cursor: pointer !important;
+}
+
+/* --- 🌟 ตัวรูปภาพ (แก้ปัญหารูปบี้ 100%) --- */
+.grid-img {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    display: block !important;
+    transition: filter 0.2s, transform 0.2s !important;
+}
+
+.grid-img-wrapper:hover .grid-img {
+    filter: brightness(0.85) !important;
+    transform: scale(1.05) !important;
+}
+
+/* =========================================
+   📝 Typewriter Overlay ใน Image Viewer
+========================================= */
+#viewerTextOverlay {
+    position: absolute;
+    /* 🌟 เปลี่ยนมาใช้ top ให้อยู่ข้างบนของหน้าจอ */
+    top: 10%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90%;
+    max-width: 600px;
+
+    /* 🌟 จำกัดความสูงกล่อง ถ้าข้อความยาวเกินนี้ มันจะถูกดันขึ้นไป */
+    max-height: 25vh;
+    overflow-y: hidden;
+    /* ซ่อนแถบสกอร์บาร์ด้านข้างให้ดูเนียนตา */
+
+    /* 🌟 จัดข้อความชิดซ้าย ให้อ่านง่ายเหมือนกำลังพิมพ์ */
+    text-align: left;
+    color: #fff;
+    font-size: 1.1rem;
+    font-family: 'Kanit', sans-serif;
+    text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.9);
+    background: rgba(0, 0, 0, 0.5);
+    /* พื้นหลังดำโปร่งแสง */
+    padding: 15px 20px;
+    border-radius: 16px;
+    z-index: 10002;
+    pointer-events: none;
+    /* ให้คลิกทะลุได้ ไม่บังปุ่ม */
+    backdrop-filter: blur(4px);
+    line-height: 1.6;
+}
+
+.blink-cursor {
+    font-weight: bold;
+    color: #f1c40f;
+    /* สีเคอร์เซอร์สีเหลือง */
+    animation: blink 0.8s step-end infinite;
+}
+
+@keyframes blink {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0;
+    }
+}
+
+/* --- ป้าย + จำนวนรูปที่เหลือ --- */
+.more-overlay {
+    position: absolute !important;
+    inset: 0 !important;
+    background: rgba(0, 0, 0, 0.6) !important;
+    color: white !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 2.5rem !important;
+    font-weight: bold !important;
+    pointer-events: none !important;
+    z-index: 10 !important;
+}
+
+/* --- Lightbox / Fullscreen Viewer --- */
+#imageViewer {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.95);
+    z-index: 99999;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.viewer-content {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.viewer-img {
+    max-width: 100%;
+    max-height: 90vh;
+    object-fit: contain;
+    animation: zoomIn 0.3s ease;
+}
+
+@keyframes zoomIn {
+    from {
+        transform: scale(0.9);
+        opacity: 0;
+    }
+
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.viewer-close {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    color: white;
+    font-size: 2rem;
+    cursor: pointer;
+    z-index: 10;
+}
+
+.viewer-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    border: none;
+    padding: 15px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 1.2rem;
+}
+
+.viewer-prev {
+    left: 20px;
+}
+
+.viewer-next {
+    right: 20px;
+}
+
+.viewer-counter {
+    position: absolute;
+    bottom: 20px;
+    color: white;
+    background: rgba(0, 0, 0, 0.5);
+    padding: 5px 15px;
+    border-radius: 20px;
 }
 
 .img-preview-container {
@@ -1666,4 +1961,517 @@ body {
 
 [data-theme="dark"] .heart-badge {
     border-color: #1a1a2a;
+}
+
+
+/* --- Fullscreen Image Viewer --- */
+#imageViewer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.95);
+    z-index: 10000;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(10px);
+}
+
+.viewer-close {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    color: white;
+    font-size: 2rem;
+    cursor: pointer;
+    z-index: 10001;
+}
+
+.viewer-content {
+    width: 100%;
+    height: 80%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.viewer-img {
+    max-width: 95%;
+    max-height: 100%;
+    object-fit: contain;
+    border-radius: 8px;
+    box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+    animation: zoomIn 0.3s ease;
+}
+
+.viewer-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: white;
+    padding: 15px 20px;
+    font-size: 1.5rem;
+    cursor: pointer;
+    border-radius: 50%;
+    transition: background 0.2s;
+    z-index: 10001;
+}
+
+.viewer-nav:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.viewer-prev {
+    left: 20px;
+}
+
+.viewer-next {
+    right: 20px;
+}
+
+.viewer-counter {
+    position: absolute;
+    bottom: 20px;
+    color: white;
+    font-size: 0.9rem;
+    background: rgba(0, 0, 0, 0.5);
+    padding: 5px 15px;
+    border-radius: 20px;
+}
+
+@keyframes zoomIn {
+    from {
+        transform: scale(0.9);
+        opacity: 0;
+    }
+
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+/* =========================================
+   🏆 หอเกียรติยศ (Hall of Fame) CSS
+========================================= */
+.hof-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.hof-card {
+    position: relative;
+    display: flex;
+    align-items: center;
+    background: var(--glass-bg);
+    border-radius: 20px;
+    padding: 16px;
+    cursor: pointer;
+    border: 1px solid rgba(241, 196, 15, 0.4);
+    /* ขอบสีทองบางๆ */
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.05), inset 0 0 0 1px rgba(255, 215, 0, 0.1);
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    overflow: hidden;
+}
+
+/* แถบสีทองด้านซ้าย */
+.hof-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 6px;
+    background: linear-gradient(180deg, #f1c40f, #e67e22);
+    border-radius: 20px 0 0 20px;
+}
+
+.hof-card:hover {
+    transform: translateY(-4px) scale(1.01);
+    box-shadow: 0 15px 35px rgba(241, 196, 15, 0.15);
+    border-color: rgba(241, 196, 15, 0.8);
+}
+
+.hof-rank {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 1.3rem;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+    z-index: 10;
+}
+
+/* --- ส่วนของรูปภาพและออร่า --- */
+.hof-avatar-wrapper {
+    position: relative;
+    width: 75px;
+    /* ขนาดพื้นที่วงกลมรวม */
+    height: 75px;
+    margin-right: 18px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.hof-avatar {
+    width: 62px;
+    /* ขนาดรูปภาพใหญ่ขึ้น */
+    height: 62px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid #fff;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    position: relative;
+    z-index: 2;
+}
+
+.hof-aura {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 110%;
+    height: 110%;
+    border-radius: 50%;
+    z-index: 1;
+    filter: blur(12px);
+    opacity: 0.6;
+    animation: hofPulse 3s infinite alternate;
+}
+
+@keyframes hofPulse {
+    0% {
+        transform: translate(-50%, -50%) scale(0.9);
+        opacity: 0.4;
+    }
+
+    100% {
+        transform: translate(-50%, -50%) scale(1.3);
+        opacity: 0.8;
+    }
+}
+
+.hof-virtue-icon {
+    position: absolute;
+    bottom: -2px;
+    right: 0px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: bold;
+    border: 2px solid #fff;
+    z-index: 3;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+/* --- ข้อมูลข้อความ --- */
+.hof-info {
+    flex-grow: 1;
+    min-width: 0;
+    padding-right: 10px;
+}
+
+.hof-name {
+    font-weight: 800;
+    margin: 0 0 3px 0;
+    font-size: 1.05rem;
+    color: var(--text-color);
+}
+
+.hof-score {
+    text-align: right;
+    padding-left: 15px;
+    border-left: 1px dashed var(--border-color);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.hof-score .score-value {
+    font-size: 1.3rem;
+    font-weight: 900;
+    color: #e67e22;
+    /* สีสำรอง (Fallback) กรณีบราวเซอร์ไม่รองรับ */
+    line-height: 1;
+
+    /* สร้างพื้นหลังไล่สี (Gradient) */
+    background: -webkit-linear-gradient(#f1c40f, #e67e22);
+    background: linear-gradient(#f1c40f, #e67e22);
+
+    /* ตัดพื้นหลังให้อยู่แค่ในตัวหนังสือ */
+    -webkit-background-clip: text;
+    background-clip: text;
+    /* 🌟 มาตรฐานกลาง (Standard property) */
+
+    /* ทำให้ตัวหนังสือโปร่งใสเพื่อโชว์สีพื้นหลัง */
+    -webkit-text-fill-color: transparent;
+}
+
+.hof-score .score-label {
+    font-size: 0.65rem;
+    color: #888;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-top: 4px;
+}
+
+/* --- รองรับ Dark Mode --- */
+[data-theme="dark"] .hof-card {
+    background: rgba(26, 26, 42, 0.9);
+    border-color: rgba(241, 196, 15, 0.2);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .hof-card:hover {
+    background: rgba(35, 35, 55, 1);
+    border-color: rgba(241, 196, 15, 0.6);
+}
+
+[data-theme="dark"] .hof-avatar,
+[data-theme="dark"] .hof-virtue-icon {
+    border-color: #2a2a40;
+}
+
+/* =========================================
+   ✨ Sub-Tabs (ปุ่มสลับ เพื่อนร่วมงาน / ผู้บริหาร)
+========================================= */
+.relation-sub-tabs {
+    display: flex;
+    background: rgba(0, 0, 0, 0.05);
+    /* พื้นหลังกรอบรวม */
+    border-radius: 50px;
+    padding: 5px;
+    margin-bottom: 20px;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.relation-sub-btn {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: #666;
+    font-family: 'Kanit', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 600;
+    padding: 10px 15px;
+    border-radius: 50px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.relation-sub-btn:hover {
+    color: #333;
+    background: rgba(255, 255, 255, 0.6);
+}
+
+/* 🌟 สถานะเมื่อปุ่มถูกเลือก (Active) */
+.relation-sub-btn.active {
+    /* ไล่สีทองพรีเมียมให้เข้ากับหน้าหอเกียรติยศ */
+    background: linear-gradient(135deg, #f1c40f 0%, #e67e22 100%);
+    color: #fff !important;
+    box-shadow: 0 4px 15px rgba(230, 126, 34, 0.4);
+    transform: scale(1.02);
+    /* ขยายขึ้นนิดนึงให้ดูมีมิติ */
+}
+
+/* --- 🌙 รองรับ Dark Mode --- */
+[data-theme="dark"] .relation-sub-tabs {
+    background: rgba(0, 0, 0, 0.4);
+    box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="dark"] .relation-sub-btn {
+    color: #aaa;
+}
+
+[data-theme="dark"] .relation-sub-btn:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .relation-sub-btn.active {
+    color: #fff !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* =========================================
+   🏅 แท็บเหรียญรางวัล (Badges Grid)
+========================================= */
+#badgeContainer {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(105px, 1fr));
+    gap: 15px;
+    padding: 5px;
+}
+
+.badge-item {
+    background: var(--glass-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    padding: 20px 10px;
+    text-align: center;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.04);
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.badge-item:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(108, 92, 231, 0.2);
+    border-color: rgba(108, 92, 231, 0.5);
+}
+
+.badge-icon {
+    font-size: 2.8rem;
+    margin-bottom: 10px;
+    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.15));
+    transition: transform 0.3s;
+}
+
+.badge-item:hover .badge-icon {
+    transform: scale(1.15) rotate(5deg);
+}
+
+.badge-item small {
+    font-weight: 700;
+    color: var(--text-color);
+    font-size: 0.8rem;
+    line-height: 1.3;
+}
+
+.badge-locked {
+    opacity: 0.6;
+    filter: grayscale(1);
+    background: rgba(0, 0, 0, 0.02);
+    border: 1px dashed rgba(0,0,0,0.1);
+}
+
+.badge-locked:hover {
+    transform: none;
+    box-shadow: none;
+    border-color: rgba(0,0,0,0.1);
+}
+
+/* =========================================
+   📊 แท็บสถิติ (Stats Design)
+========================================= */
+#page-stats .glass-card {
+    border-top: 4px solid var(--primary); /* เพิ่มแถบสีด้านบนการ์ดหลัก */
+}
+
+.stat-card {
+    background: var(--glass-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 15px;
+    text-align: center;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
+    transition: transform 0.2s;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.stat-card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(108, 92, 231, 0.3);
+}
+
+.stat-card h3 {
+    font-size: 1.8rem;
+    font-weight: 900;
+    color: var(--primary);
+    margin-bottom: 0;
+    line-height: 1.2;
+}
+
+.stat-card small {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* ปรับแต่งกล่องวิเคราะห์จุดเด่น */
+#statAnalysis {
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: inset 0 2px 10px rgba(0,0,0,0.02);
+}
+
+#statTitle {
+    font-weight: 800;
+    font-size: 1.1rem;
+    margin-bottom: 8px;
+}
+
+/* รองรับ Dark Mode */
+[data-theme="dark"] .badge-item, 
+[data-theme="dark"] .stat-card {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .badge-locked {
+    background: rgba(0, 0, 0, 0.2);
+}
+
+/* =========================================
+   🎁 แก้ปัญหารูปกล่องรางวัล/อนิเมชัน ทะลุกรอบ
+========================================= */
+/* บังคับรูปภาพและวิดีโอทุกอย่างใน SweetAlert (Popup) ให้อยู่ในกรอบ */
+.swal2-html-container img,
+.swal2-html-container video,
+.swal2-html-container iframe,
+.swal2-html-container lottie-player {
+    max-width: 100% !important; /* ห้ามกว้างเกินกล่อง */
+    height: auto !important;    /* ปรับความสูงให้สมดุลตามสัดส่วน */
+    object-fit: contain !important; /* ให้รูปแสดงเต็มใบ ไม่โดนตัด */
+    margin: 0 auto !important;  /* จัดให้อยู่กึ่งกลางเสมอ */
+    display: block !important;
+    border-radius: 12px;        /* ลบมุมให้เนียนไปกับกล่อง (ถ้าต้องการ) */
+}
+
+/* ถ้าคุณมีคลาสเฉพาะของกล่อง (เช่น .reward-box หรือ .mystery-box) 
+   สามารถใส่เพิ่มตรงนี้ได้ เพื่อความชัวร์ */
+.reward-box-image, 
+.box-animation {
+    max-width: 100% !important;
+    max-height: 250px !important; /* ล็อกความสูงไม่ให้ดันหน้าจอจนยาวเกินไป */
+    object-fit: contain !important;
+}
+
+/* SweetAlert Select Dark Mode Fix */
+[data-theme="dark"] .swal2-select {
+    background: #2a2a40 !important;
+    color: #eee !important;
+    border-color: #3a3a55 !important;
+}
+[data-theme="dark"] .swal2-select option {
+    background: #2a2a40 !important;
+    color: #eee !important;
 }
