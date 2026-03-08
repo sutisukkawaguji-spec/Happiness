@@ -50,32 +50,46 @@ function getMediaContent(url, note = '') {
         }
     }
 
-    // ส่วนของวิดีโอและลิงก์อื่นๆ ยังคงเดิม
-    const ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:.*v=|.*\/))([w-]{11})/);
+    // YouTube Support
+    const ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:.*v=|.*\/))([a-zA-Z0-9_-]{11})/);
     if (ytMatch?.[1]) {
         const vid = ytMatch[1];
-        return `<div class="ratio ratio-16x9 rounded-4 overflow-hidden shadow-sm border"><iframe src="https://www.youtube.com/embed/${vid}?enablejsapi=1" allowfullscreen style="border:0;" class="yt-video"></iframe></div>`;
-    }
-    if (url.match(/\.(mp4|webm|ogg)($|\?)/i)) {
-        return `<div class="ratio ratio-16x9 rounded-4 overflow-hidden shadow-sm border bg-dark"><video src="${url}" controls style="width:100%;height:100%;"></video></div>`;
+        return `<div class="video-container shadow-sm border rounded-4 overflow-hidden mb-2">
+            <div class="ratio ratio-16x9">
+                <iframe src="https://www.youtube.com/embed/${vid}?autoplay=0&rel=0" allowfullscreen loading="lazy"></iframe>
+            </div>
+        </div>`;
     }
 
-    if (url.includes('tiktok.com')) return createLinkCard(url, 'TikTok', 'fab fa-tiktok', '#000000');
-    if (url.includes('facebook.com') || url.includes('fb.watch')) return createLinkCard(url, 'Facebook', 'fab fa-facebook', '#1877F2');
-    if (url.includes('instagram.com')) return createLinkCard(url, 'Instagram', 'fab fa-instagram', '#E1306C');
-    if (url.startsWith('http')) return createLinkCard(url, 'Link', 'fas fa-external-link-alt', '#6c757d');
+    // Direct Video Files
+    if (url.match(/\.(mp4|webm|ogg)($|\?)/i)) {
+        return `<div class="video-container shadow-sm border rounded-4 overflow-hidden mb-2 bg-dark">
+            <div class="ratio ratio-16x9">
+                <video src="${url}" controls preload="metadata"></video>
+            </div>
+        </div>`;
+    }
+
+    // Social Media Links (Premium Cards)
+    if (url.includes('tiktok.com')) return createLinkCard(url, 'TikTok', 'fab fa-tiktok', '#000000', 'ดูวิดีโอต้นฉบับบน TikTok');
+    if (url.includes('facebook.com') || url.includes('fb.watch')) return createLinkCard(url, 'Facebook', 'fab fa-facebook', '#1877F2', 'รับชมวิดีโอผ่าน Facebook');
+    if (url.includes('instagram.com')) return createLinkCard(url, 'Instagram', 'fab fa-instagram', '#E1306C', 'เปิดดูรูปภาพ/วิดีโอใน Instagram');
+    if (url.startsWith('http')) return createLinkCard(url, 'External Link', 'fas fa-external-link-alt', '#636e72', 'คลิกเพื่อเปิดลิงก์ภายนอก');
+
     return '';
 }
 
-function createLinkCard(url, name, icon, color) {
-    return `<a href="${url}" target="_blank" class="text-decoration-none">
-        <div class="d-flex align-items-center p-3 rounded-4 bg-light border shadow-sm" style="border-left:5px solid ${color}!important;">
-            <div class="me-3 fs-1" style="color:${color};"><i class="${icon}"></i></div>
-            <div class="text-truncate flex-grow-1">
-                <div class="fw-bold text-dark" style="font-size:0.9rem;">ดูเนื้อหาบน ${name}</div>
-                <small class="text-muted text-truncate d-block" style="font-size:0.75rem;">${url}</small>
+function createLinkCard(url, name, icon, color, label) {
+    return `<a href="${url}" target="_blank" class="text-decoration-none d-block animate__animated animate__fadeIn">
+        <div class="social-link-card p-3 rounded-4 border shadow-sm d-flex align-items-center mb-2" style="border-left:5px solid ${color} !important; background: var(--glass-bg);">
+            <div class="card-icon me-3 d-flex align-items-center justify-content-center" style="width:50px; height:50px; background:${color}15; color:${color}; border-radius:15px; font-size:1.5rem;">
+                <i class="${icon}"></i>
             </div>
-            <div class="ms-2 text-secondary"><i class="fas fa-chevron-right"></i></div>
+            <div class="flex-grow-1 overflow-hidden">
+                <div class="fw-bold text-dark mb-0" style="font-size:0.95rem;">${label || name}</div>
+                <div class="text-muted text-truncate small">${url}</div>
+            </div>
+            <div class="ms-2 text-muted opacity-50"><i class="fas fa-chevron-right"></i></div>
         </div>
     </a>`;
 }
@@ -108,13 +122,17 @@ function fetchFeed(append = false, silent = false) {
         if (isFetchingFeed) return resolve();
         if (!silent) isFetchingFeed = true;
 
-        if (!append) { currentFeedLimit = 10; renderedPostIds.clear(); }
-
         const container = document.getElementById('feedContainer');
         const filterType = currentFeedFilter;
         const filterCategory = document.getElementById('filterCategory')?.value || '';
         const filterDate = document.getElementById('filterDate')?.value || '';
         const filterYear = document.getElementById('filterYear')?.value || '';
+
+        if (!append) {
+            // 🌟 ถ้าเลือกเป็นกิจกรรมเด่น ให้ดึงข้อมูลมาเยอะๆ เลย (เช่น 100 แถว) เพื่อค้นหาโพสต์ที่ปักหมุดไว้
+            currentFeedLimit = (filterCategory === 'featured') ? 100 : 10;
+            renderedPostIds.clear();
+        }
 
         if (!container) { isFetchingFeed = false; return resolve(); }
 
@@ -156,6 +174,15 @@ function fetchFeed(append = false, silent = false) {
             if (Array.isArray(data)) feed = data;
             else if (data?.feed) { feed = data.feed; if (data.userMap) Object.assign(allUsersMap, data.userMap); }
             if (!Array.isArray(feed)) feed = [];
+
+            // 🌟 Extract [PINNED] indicator (Case-insensitive & Robust)
+            feed.forEach(p => {
+                let noteText = (p.note || '').trim();
+                if (/\[PINNED\]/i.test(noteText)) {
+                    p.isPinned = true;
+                    p.note = noteText.replace(/\[PINNED\]/gi, '').trim();
+                } else p.isPinned = false;
+            });
 
             globalFeedData = feed;
 
@@ -214,7 +241,8 @@ function fetchFeed(append = false, silent = false) {
                 if (isPrivate && !isMyPost) return false;
 
                 // กฎข้อ 2: ถ้าเลือก "เรื่องของฉัน" (ต้องเป็นโพสต์เรา หรือ เราถูกแท็ก)
-                if (filterType === 'related') {
+                // 🌟 ยกเว้นถ้าเลือก "กิจกรรมเด่น" ให้โชว์ทุกคนที่ถูกปักหมุด
+                if (filterType === 'related' && filterCategory !== 'featured') {
                     let taggedList = [];
                     if (typeof post.taggedFriends === 'string') {
                         taggedList = post.taggedFriends.split(',').map(id => id.trim());
@@ -232,6 +260,20 @@ function fetchFeed(append = false, silent = false) {
                     if (isMyPost || alreadyVerified) {
                         return false;
                     }
+                }
+
+                // กฎข้อ 4: ถ้าเลือก "กิจกรรมเด่น" (Featured)
+                if (filterCategory === 'featured') {
+                    // 📌 เปลี่ยนตามคำขอ: แสดงเฉพาะโพสต์ที่ Admin/NewsEditor ปักหมุดไว้เท่านั้น (Manual Pin)
+                    if (!post.isPinned) return false;
+                } else if (filterCategory && post.virtue !== filterCategory) {
+                    return false;
+                }
+
+                // กฎข้อ 5: ถ้าเลือกปี
+                if (filterYear) {
+                    const py = post.timestamp ? new Date(post.timestamp).getFullYear() : '';
+                    if (String(py) !== filterYear) return false;
                 }
 
                 return true;
@@ -258,6 +300,7 @@ function fetchFeed(append = false, silent = false) {
                 const postDate = post.timestamp ? new Date(post.timestamp) : null;
                 const isValidDate = postDate && !isNaN(postDate);
                 const isMyPost = String(post.user_line_id) === String(currentUser.userId);
+                const isAdmin = currentUser.role && /admin|ผู้บริหาร|manager|บรรณาธิการ|newseditor/i.test(currentUser.role);
                 const isPrivate = post.privacy === 'private';
                 const canSee = !isPrivate || isMyPost;
                 const taggedIds = post.taggedFriends ? String(post.taggedFriends).split(',').map(s => s.trim()).filter(s => s.length > 5) : [];
@@ -315,7 +358,7 @@ function fetchFeed(append = false, silent = false) {
                     <img src="${post.user_img}" class="feed-avatar me-2 mt-1" loading="lazy" onerror="this.src='https://dummyimage.com/45x45/ddd/888&text=?'">
                     <div class="flex-grow-1">
                         <div class="d-flex justify-content-between">
-                            <h6 class="mb-0 fw-bold">${post.user_name}</h6>
+                            <h6 class="mb-0 fw-bold">${post.user_name} ${post.isPinned ? '<i class="fas fa-thumbtack text-warning ms-1" title="กิจกรรมเด่นปักหมุดโดยผู้ดูแล"></i>' : ''}</h6>
                             <small class="text-muted" style="font-size:0.7rem;">${dateStr}</small>
                         </div>
                         <small class="text-primary mb-1 d-block fw-bold">${virtueMap[post.virtue] || post.virtue || ''}</small>
@@ -348,6 +391,9 @@ function fetchFeed(append = false, silent = false) {
                             onclick="editPost('${post.id}','${encodeURIComponent(post.note || '')}')" title="แก้ไข"><i class="fas fa-pen"></i></button>
                         <button class="btn btn-sm btn-outline-danger rounded-circle" style="width:28px;height:28px;padding:0;font-size:0.75rem;"
                             onclick="deletePost('${post.id}')" title="ลบ"><i class="fas fa-trash"></i></button>` : ''}
+                        ${isAdmin ? `
+                        <button class="btn btn-sm btn-outline-${post.isPinned ? 'warning' : 'secondary'} rounded-circle ms-1" style="width:28px;height:28px;padding:0;font-size:0.75rem; ${post.isPinned ? 'background:#fff3cd;' : ''}"
+                            onclick="togglePinPost('${post.id}','${encodeURIComponent(post.note || '')}', ${post.isPinned})" title="ปักหมุดกิจกรรมเด่น"><i class="fas fa-thumbtack"></i></button>` : ''}
                     </div>
                 </div>
             </div>`;
@@ -592,4 +638,18 @@ function closeImageViewer() {
 
 function viewImage(url, note = '') {
     openImageViewer([url], 0, encodeURIComponent(note).replace(/'/g, "%27"));
+}
+
+function togglePinPost(postId, encodedCurrentNote, isCurrentlyPinned) {
+    if (!currentUser || !currentUser.role || !/admin|ผู้บริหาร|manager|บรรณาธิการ|newseditor/i.test(currentUser.role)) return;
+
+    let decoded = decodeURIComponent(encodedCurrentNote);
+    let newNote = isCurrentlyPinned ? decoded.replace(/\[PINNED\]/g, '').trim() : decoded + '\n\n[PINNED]';
+
+    Swal.fire({ title: isCurrentlyPinned ? 'กำลังเลิกปักหมุด...' : 'กำลังปักหมุด...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'edit_post', postId, newNote, userId: currentUser.userId }) })
+        .then(res => res.json()).then(d => {
+            if (d.status === 'success') { Swal.fire({ toast: true, icon: 'success', title: isCurrentlyPinned ? 'เลิกปักหมุดแล้ว' : 'ปักหมุดกิจกรรมแล้ว!', position: 'top', timer: 3000, showConfirmButton: false }); fetchFeed(); }
+            else Swal.fire({ icon: 'error', title: 'ดำเนินการไม่สำเร็จ', text: d.message || '' });
+        }).catch(() => { fetchFeed(); Swal.close(); });
 }
