@@ -78,6 +78,7 @@ async function main() {
                             if (typeof renderAnnouncement === 'function') renderAnnouncement(data.config);
                             if (typeof loadNotificationsFromConfig === 'function') loadNotificationsFromConfig(data.config);
                             if (typeof notifyFromConfig === 'function') notifyFromConfig(data.config);
+                            if (typeof showLifecycleDialogs === 'function') showLifecycleDialogs(data.config);
                         }
                         console.log('🔄 อัปเดตข้อมูลเบื้องหลังเสร็จสมบูรณ์');
                     }
@@ -346,18 +347,15 @@ function finishLoginProcess(configData = null) {
         if (typeof fetchManagerData === 'function') fetchManagerData();
     }
 
-    // จัดการระบบแจ้งเตือนต่างๆ 
+    // จัดการระบบแจ้งเตือนต่างๆ (เฉพาะเมื่อได้ข้อมูล Config ล่าสุดมาแล้ว)
     if (configData) {
         if (typeof renderAnnouncement === 'function') renderAnnouncement(configData);
         if (typeof loadNotificationsFromConfig === 'function') loadNotificationsFromConfig(configData);
         if (typeof notifyFromConfig === 'function') notifyFromConfig(configData);
         showLifecycleDialogs(configData);
-    } else {
-        showLifecycleDialogs({});
     }
 
     if (typeof updateAddAnnounceButton === 'function') updateAddAnnounceButton();
-    if (typeof requestNotificationPermission === 'function') requestNotificationPermission();
 
     // 🌟 ก๊อปปี้โค้ดชุดนี้ไปวางตรงนี้เลยครับ (ก่อนปิดปีกกาฟังก์ชัน) 🌟
     const loadingEl = document.getElementById('loading');
@@ -371,25 +369,28 @@ function finishLoginProcess(configData = null) {
 }
 
 async function showLifecycleDialogs(config) {
-    const APP_LOCAL_VERSION = '3.2.0';
-    const configVersion = config?.version || APP_LOCAL_VERSION;
-    const localVer = safeGetItem('appVersion');
+    if (config && config.version) {
+        const configVersion = config.version;
+        const localVer = safeGetItem('appVersion');
 
-    if (localVer !== configVersion) {
-        const updateMsg = config?.message || `
-        <div class="text-start" style="font-size:0.9rem;line-height:1.7;">
-            <span class="badge bg-success mb-2">Version ${configVersion}</span><br>
-            ✅ <b>ความเสถียร:</b> แก้ไขข้อผิดพลาดต่างๆ<br>
-            ✅ <b>Badge แท็บ:</b> ระบบ Notification ปรับปรุงใหม่
-        </div>`;
-        await Swal.fire({
-            title: config?.title || '🆕 อัปเดตระบบใหม่!',
-            html: updateMsg, icon: 'info',
-            confirmButtonText: '👍 รับทราบ!',
-            confirmButtonColor: '#6c5ce7',
-            allowOutsideClick: false
-        });
-        safeSetItem('appVersion', configVersion);
+        if (localVer !== configVersion) {
+            const updateMsg = config?.message || `
+            <div class="text-start" style="font-size:0.9rem;line-height:1.7;">
+                <span class="badge bg-success mb-2">Version ${configVersion}</span><br>
+                ✅ <b>ความเสถียร:</b> แก้ไขข้อผิดพลาดต่างๆ<br>
+                ✅ <b>Badge แท็บ:</b> ระบบ Notification ปรับปรุงใหม่
+            </div>`;
+            await Swal.fire({
+                title: config?.title || '🆕 อัปเดตระบบใหม่!',
+                html: updateMsg, icon: 'info',
+                confirmButtonText: '👍 รับทราบ!',
+                confirmButtonColor: '#6c5ce7',
+                allowOutsideClick: false
+            });
+            safeSetItem('appVersion', configVersion);
+        }
     }
-    if (typeof checkAndShowSurvey === 'function') checkAndShowSurvey();
+
+    if (typeof checkAndShowSurvey === 'function') await checkAndShowSurvey();
+    if (typeof requestNotificationPermission === 'function') await requestNotificationPermission();
 }
