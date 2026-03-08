@@ -1124,6 +1124,7 @@ body {
     cursor: pointer;
     position: relative;
     overflow: hidden;
+    animation: pulse-mystery 2s infinite ease-in-out;
 }
 
 [data-theme="dark"] .badge-mystery-upgrade {
@@ -1678,9 +1679,28 @@ body {
 }
 
 .badge-mystery-upgrade {
-    animation: pulse-slow 2s infinite;
-    border: 2px dashed var(--primary);
+    animation: pulse-mystery 2s infinite ease-in-out;
+    border: 2px dashed #f39c12 !important;
     cursor: pointer;
+    background: linear-gradient(135deg, rgba(255, 243, 191, 0.4) 0%, rgba(255, 255, 255, 0.1) 100%) !important;
+}
+
+@keyframes pulse-mystery {
+    0% {
+        transform: scale(1);
+        opacity: 0.8;
+    }
+
+    50% {
+        transform: scale(1.05);
+        opacity: 1;
+        box-shadow: 0 0 20px rgba(243, 156, 18, 0.4);
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 0.8;
+    }
 }
 
 /* --- Nav Glow Effect --- */
@@ -2539,4 +2559,58 @@ body {
 [data-theme="dark"] .swal2-select option {
     background: #2a2a40 !important;
     color: #eee !important;
+}
+
+/* =========================================
+   📺 Video & Social Link Styling
+========================================= */
+.social-link-card {
+    transition: all 0.3s ease;
+    cursor: pointer;
+    overflow: hidden;
+}
+
+.social-link-card:hover {
+    transform: translateY(-3px);
+    border-color: var(--primary-color) !important;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08) !important;
+}
+
+.social-link-card .card-icon {
+    transition: transform 0.3s ease;
+}
+
+.social-link-card:hover .card-icon {
+    transform: scale(1.1) rotate(5deg);
+}
+
+.video-container {
+    background: #000;
+    transition: all 0.3s ease;
+}
+
+.video-container:hover {
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2) !important;
+}
+
+.ratio-16x9 iframe,
+.ratio-16x9 video {
+    border: none;
+    display: block;
+}
+
+/* Announcement Animations */
+.animate__fadeOutUp {
+    animation-name: fadeOutUp;
+}
+
+@keyframes fadeOutUp {
+    from {
+        opacity: 1;
+    }
+
+    to {
+        opacity: 0;
+        transform: translate3d(0, -100%, 0);
+    }
 }
