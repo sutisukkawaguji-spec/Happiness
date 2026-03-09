@@ -58,7 +58,7 @@ async function main() {
                     const text = await res.text();
                     return JSON.parse(text);
                 })
-                .then(data => {
+                .then(async data => {
                     if (data.exists) {
                         // อัปเดตเฉพาะตัวเลขและสถานะที่อาจจะเปลี่ยนไป
                         currentUser.score = data.user.score || currentUser.score;
@@ -78,7 +78,7 @@ async function main() {
                             if (typeof renderAnnouncement === 'function') renderAnnouncement(data.config);
                             if (typeof loadNotificationsFromConfig === 'function') loadNotificationsFromConfig(data.config);
                             if (typeof notifyFromConfig === 'function') notifyFromConfig(data.config);
-                            if (typeof showLifecycleDialogs === 'function') showLifecycleDialogs(data.config);
+                            if (typeof showLifecycleDialogs === 'function') await showLifecycleDialogs(data.config);
                         }
                         console.log('🔄 อัปเดตข้อมูลเบื้องหลังเสร็จสมบูรณ์');
                     }
