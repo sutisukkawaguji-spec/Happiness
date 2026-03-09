@@ -198,14 +198,26 @@ function fetchFeed(append = false, silent = false) {
                 safeSetItem('lastSeenStoryCount', feed.length);
             }
 
-            // --- Badge ปุ่ม "รอ Verify" ---
+            // --- Badge ปุ่ม "รอ Verify" (ยอดที่ "เรา" ยังไม่ได้กด) ---
             const pendingCount = feed.filter(p => {
-                const isOwner = String(p.user_line_id) === String(currentUser.userId);
-                const alreadyDone = (p.verifies || []).some(v => String(v.lineId) === String(currentUser.userId));
+                const isOwner = String(p.user_line_id || p.userId) === String(currentUser.userId);
                 const isPublic = p.privacy !== 'private';
-                const iAmTagged = (p.taggedFriends || '').includes(currentUser.userId);
-                return iAmTagged && !alreadyDone && !isOwner && isPublic;
+                const verifyList = p.verifies || [];
+                const alreadyVerified = verifyList.some(v =>
+                    String(v.lineId || v.userId) === String(currentUser.userId) ||
+                    String(v) === String(currentUser.userId)
+                );
+
+                // ตรวจสอบว่าเราถูกแท็ก (เป็นทีม) หรือไม่?
+                let taggedList = [];
+                if (typeof p.taggedFriends === 'string') taggedList = p.taggedFriends.split(',').map(id => id.trim());
+                else if (Array.isArray(p.taggedFriends)) taggedList = p.taggedFriends.map(id => String(id).trim());
+                const amITagged = taggedList.includes(String(currentUser.userId));
+
+                // 🌟 ยอดแจ้งเตือนจะตรง ก็ต่อเมื่อ: สาธารณะ + ไม่ใช่ของเรา + เรายังไม่ได้กดยืนยัน + เราไม่ใช่คนถูกแท็ก (เพราะคนในทีม Verify ไม่ได้)
+                return isPublic && !isOwner && !alreadyVerified && !amITagged;
             }).length;
+
             const pendingBadge = document.getElementById('pending-badge');
             if (pendingBadge) {
                 pendingBadge.textContent = pendingCount;
@@ -254,10 +266,15 @@ function fetchFeed(append = false, silent = false) {
                     if (!isMyPost && !amITagged) return false;
                 }
 
-                // กฎข้อ 3: 🌟 ถ้าเลือก "รอ Verify" (แก้ไขใหม่)
+                // กฎข้อ 3: 🌟 ถ้าเลือก "รอ Verify" (ยอดที่เรายังไม่ได้กด)
                 if (filterType === 'request') {
-                    // โชว์เฉพาะ: "ไม่ใช่โพสต์เรา" และ "เรายังไม่ได้กดยืนยันให้เขา"
-                    if (isMyPost || alreadyVerified) {
+                    // โชว์เฉพาะ: "ไม่ใช่โพสต์เรา" และ "เรายังไม่ได้กดยืนยันให้เขา" และ "เราต้องไม่ใช่คนในทีม"
+                    let taggedList = [];
+                    if (typeof post.taggedFriends === 'string') taggedList = post.taggedFriends.split(',').map(id => id.trim());
+                    else if (Array.isArray(post.taggedFriends)) taggedList = post.taggedFriends.map(id => String(id).trim());
+                    const amITagged = taggedList.includes(String(currentUser.userId));
+
+                    if (isMyPost || alreadyVerified || amITagged) {
                         return false;
                     }
                 }
@@ -353,12 +370,12 @@ function fetchFeed(append = false, silent = false) {
                 const dateStr = isValidDate ? postDate.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '-';
 
                 htmlBuffer += `
-            <div class="glass-card feed-card p-3 mb-3 animate__animated animate__fadeIn">
+            <div id="post-${post.id}" class="glass-card feed-card p-3 mb-3 animate__animated animate__fadeIn">
                 <div class="feed-header d-flex align-items-start">
                     <img src="${post.user_img}" class="feed-avatar me-2 mt-1" loading="lazy" onerror="this.src='https://dummyimage.com/45x45/ddd/888&text=?'">
                     <div class="flex-grow-1">
                         <div class="d-flex justify-content-between">
-                            <h6 class="mb-0 fw-bold">${post.user_name} ${post.isPinned ? '<i class="fas fa-thumbtack text-warning ms-1" title="กิจกรรมเด่นปักหมุดโดยผู้ดูแล"></i>' : ''}</h6>
+                            <h6 class="mb-0 fw-bold">${post.user_name} <span class="pin-indicator">${post.isPinned ? '<i class="fas fa-thumbtack text-warning ms-1" title="กิจกรรมเด่นปักหมุดโดยผู้ดูแล"></i>' : ''}</span></h6>
                             <small class="text-muted" style="font-size:0.7rem;">${dateStr}</small>
                         </div>
                         <small class="text-primary mb-1 d-block fw-bold">${virtueMap[post.virtue] || post.virtue || ''}</small>
@@ -392,7 +409,7 @@ function fetchFeed(append = false, silent = false) {
                         <button class="btn btn-sm btn-outline-danger rounded-circle" style="width:28px;height:28px;padding:0;font-size:0.75rem;"
                             onclick="deletePost('${post.id}')" title="ลบ"><i class="fas fa-trash"></i></button>` : ''}
                         ${isAdmin ? `
-                        <button class="btn btn-sm btn-outline-${post.isPinned ? 'warning' : 'secondary'} rounded-circle ms-1" style="width:28px;height:28px;padding:0;font-size:0.75rem; ${post.isPinned ? 'background:#fff3cd;' : ''}"
+                        <button class="btn btn-sm btn-outline-${post.isPinned ? 'warning' : 'secondary'} pin-btn rounded-circle ms-1" style="width:28px;height:28px;padding:0;font-size:0.75rem; ${post.isPinned ? 'background:#fff3cd;' : ''}"
                             onclick="togglePinPost('${post.id}','${encodeURIComponent(post.note || '')}', ${post.isPinned})" title="ปักหมุดกิจกรรมเด่น"><i class="fas fa-thumbtack"></i></button>` : ''}
                     </div>
                 </div>
@@ -596,12 +613,10 @@ function startTypewriter(text) {
         i++;
 
         if (i <= text.length) {
-            typewriterTimeout = setTimeout(typeNext, 60); // ความเร็ว 60ms ต่อตัวอักษร (ปรับเลขให้น้อยลง = พิมพ์เร็วขึ้น)
+            typewriterTimeout = setTimeout(typeNext, 60);
         } else {
-            // เมื่อพิมพ์จบ รอ 4 วินาที แล้ววนลูปใหม่ตั้งแต่ต้น
-            typewriterTimeout = setTimeout(() => {
-                startTypewriter(text);
-            }, 4000);
+            // จบรอบเดียวตามคำขอ: นิ่งไว้ที่ข้อความสุดท้าย
+            overlay.innerHTML = text;
         }
     }
     typeNext();
@@ -646,10 +661,50 @@ function togglePinPost(postId, encodedCurrentNote, isCurrentlyPinned) {
     let decoded = decodeURIComponent(encodedCurrentNote);
     let newNote = isCurrentlyPinned ? decoded.replace(/\[PINNED\]/g, '').trim() : decoded + '\n\n[PINNED]';
 
-    Swal.fire({ title: isCurrentlyPinned ? 'กำลังเลิกปักหมุด...' : 'กำลังปักหมุด...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    // 🌟 Optimistic UI Update (Background working)
+    const card = document.getElementById(`post-${postId}`);
+    if (card) {
+        const pinIndicator = card.querySelector('.pin-indicator');
+        const pinBtn = card.querySelector('.pin-btn');
+        const nextPinnedState = !isCurrentlyPinned;
+        const encodedNewNote = encodeURIComponent(newNote);
+
+        if (pinIndicator) {
+            pinIndicator.innerHTML = nextPinnedState ? '<i class="fas fa-thumbtack text-warning ms-1" title="กิจกรรมเด่นปักหมุดโดยผู้ดูแล"></i>' : '';
+        }
+        if (pinBtn) {
+            pinBtn.className = `btn btn-sm btn-outline-${nextPinnedState ? 'warning' : 'secondary'} pin-btn rounded-circle ms-1`;
+            pinBtn.style.background = nextPinnedState ? '#fff3cd' : '';
+            // อัปเดต onclick ให้สลับสถานะกลับได้ทันที
+            pinBtn.onclick = () => togglePinPost(postId, encodedNewNote, nextPinnedState);
+        }
+    }
+
+    // 🚀 ส่งข้อมูลไปหลังบ้านแบบไม่บล็อกหน้าจอ
     fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'edit_post', postId, newNote, userId: currentUser.userId }) })
         .then(res => res.json()).then(d => {
-            if (d.status === 'success') { Swal.fire({ toast: true, icon: 'success', title: isCurrentlyPinned ? 'เลิกปักหมุดแล้ว' : 'ปักหมุดกิจกรรมแล้ว!', position: 'top', timer: 3000, showConfirmButton: false }); fetchFeed(); }
-            else Swal.fire({ icon: 'error', title: 'ดำเนินการไม่สำเร็จ', text: d.message || '' });
-        }).catch(() => { fetchFeed(); Swal.close(); });
+            if (d.status === 'success') {
+                // อัปเดตข้อมูลในตัวแปร Global ด้วยเพื่อให้การ Render ครั้งหน้า (เช่น Load More) ถูกต้อง
+                const post = globalFeedData.find(p => p.id === postId);
+                if (post) {
+                    post.isPinned = !isCurrentlyPinned;
+                    post.note = newNote.replace(/\[PINNED\]/gi, '').trim();
+                }
+
+                // 🌟 ถ้ากำลังดู "กิจกรรมเด่น" แล้วเราเลิกปักหมุด ให้ค่อยๆ หายไปจากหน้าจอ
+                const filterCategory = document.getElementById('filterCategory')?.value || '';
+                if (filterCategory === 'featured' && isCurrentlyPinned && card) {
+                    card.classList.add('animate__fadeOutRight');
+                    setTimeout(() => card.remove(), 500);
+                }
+
+                Swal.fire({ toast: true, icon: 'success', title: isCurrentlyPinned ? 'เลิกปักหมุดแล้ว' : 'ปักหมุดกิจกรรมแล้ว!', position: 'top', timer: 2000, showConfirmButton: false });
+            } else {
+                Swal.fire({ icon: 'error', title: 'ดำเนินการไม่สำเร็จ', text: d.message || '' });
+                fetchFeed(); // ถ้าพลาดให้โหลดใหม่เพื่อคืนค่าเดิม
+            }
+        }).catch(() => {
+            console.error('Pin update failed');
+            fetchFeed();
+        });
 }
