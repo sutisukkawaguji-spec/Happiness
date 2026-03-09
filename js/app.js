@@ -1325,7 +1325,7 @@ function loadNotificationsFromConfig(config) {
 }
 
 // 🌟 เพิ่มตัวแปรเช็คว่าผู้ใช้จงใจปิดเพลงหรือยัง (วางไว้นอกฟังก์ชัน)
-let userMutedMusic = false;
+let userMutedMusic = true; // 🌟 เริ่มต้นเป็น True (ใบ้) จนกว่าผู้ใช้จะอนุญาต
 
 // =====================================================
 // 🏗️ การควบคุม Tab และ Modal
@@ -2196,6 +2196,21 @@ function toggleMusic() {
         Swal.fire({ toast: true, position: 'top-end', icon: 'info', title: '🔇 หยุดเล่นเพลง', timer: 1500, showConfirmButton: false });
     }
 }
+
+
+// 🌐 ระบบจัดการเพลงเมื่อสลับแท็บบราวเซอร์ (Browser Tab Visibility)
+document.addEventListener('visibilitychange', () => {
+    const bgMusic = document.getElementById('bgMusic');
+    if (!bgMusic) return;
+
+    if (document.hidden) {
+        bgMusic.pause();
+    } else {
+        if (!userMutedMusic && bgMusic.paused) {
+            bgMusic.play().catch(e => console.log('Auto-play after visibility change blocked:', e));
+        }
+    }
+});
 
 // =====================================================
 // 📢 ระบบประกาศ (renderAnnouncement)
