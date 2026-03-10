@@ -5,7 +5,7 @@
 
 // --- 🌐 ENV SETTINGS ---
 const TEST_ENV = true; // 🔴 เปลี่ยนเป็น false เมื่อขึ้นระบบจริง
-const TEST_GAS_URL = 'https://script.google.com/macros/s/AKfycbxRvEyRoQaxOUWR_6pTslNmCrM7IiZTRYzDDUtPtDmrhGehUq6zQpfm9MKp_CYzVmrX/exec';
+const TEST_GAS_URL = 'https://script.google.com/macros/s/AKfycbzx43HHaxF_Z9_Kf6441lr3rJqdsaMljo-7OtfCPMxlVl7GkI9O3Fv4cWIb_SRAJ3RfTQ/exec';
 const TEST_LIFF_ID = '2009329360-XeHfjaTY';
 const PROD_GAS_URL = 'YOUR_PROD_GAS_URL_HERE';
 const PROD_LIFF_ID = 'YOUR_PROD_LIFF_ID_HERE';
@@ -34,12 +34,12 @@ function safeGetJSON(key, defaultVal) {
 }
 
 // --- 📦 GLOBAL STATE ---
-let currentUser = null;
-let selectedMood = 3;
-let chartData = [];
-let allUsersMap = {};
-let globalAppUsers = [];
-let globalFeedData = [];
+var currentUser = null;
+var selectedMood = 3;
+var chartData = [];
+var allUsersMap = {};
+var globalAppUsers = [];
+var globalFeedData = [];
 
 var appNotifications = [];
 var configNotifications = [];
@@ -54,28 +54,33 @@ var CATEGORY_COLORS = {
     meeting: '#00b894', holiday: '#fdcb6e', general: '#636e72'
 };
 
-// --- 🔒 ROLE PERMISSION SYSTEM (4 Levels) ---
+// --- 🔒 ROLE PERMISSION SYSTEM (5 Levels) ---
 const ROLE_MAP = {
-    'ผู้ดูแลระบบ': 1, 'admin': 1, 'superadmin': 1, 'administrator': 1,
-    'ผู้บริหาร': 2, 'ผู้อำนวยการ': 2, 'executive': 2, 'manager': 2, 'director': 2, 'supervisor': 2,
-    'ผู้จัดการข่าวสาร': 3, 'newseditor': 3, 'editor': 3, 'pr': 3,
+    'Admin': 1, 'ผู้ดูแลระบบ': 1, 'admin': 1,
+    'Manager': 2, 'ผู้บริหาร': 2, 'manager': 2,
+    'NewsEditor': 3, 'บรรณาธิการข่าว': 3, 'newseditor': 3, 'officer': 3, 'เจ้าหน้าที่': 3,
+    'Staff': 4, 'พนักงาน': 4, 'staff': 4,
+    'Guest': 5, 'ผู้เยี่ยมชม': 5, 'guest': 5, 'ผู้เข้าใหม่': 5
 };
 
 function getUserLevel(user) {
-    if (!user) return 4;
+    if (!user) return 5;
     const role = String(user.role || '').toLowerCase().trim();
+    if (!role) return 5; // Default to Level 5 (Guest) for new users
+
     for (const key in ROLE_MAP) {
         if (role === key.toLowerCase()) return ROLE_MAP[key];
     }
     for (const key in ROLE_MAP) {
         if (role.includes(key.toLowerCase())) return ROLE_MAP[key];
     }
-    return 4;
+    return 5; // Default to Guest if role exists but not matched
 }
 
-const canManageSystem = () => getUserLevel(currentUser) <= 1;
+const canManageSystem = () => getUserLevel(currentUser) <= 2; // Admin & Manager can manage others
 const canViewDashboard = () => getUserLevel(currentUser) <= 2;
 const canPostNews = () => getUserLevel(currentUser) <= 3;
+const canPostStory = () => getUserLevel(currentUser) <= 4;
 
 // --- 🔧 FEED STATE ---
 let currentFeedFilter = 'all';
@@ -177,7 +182,5 @@ const themeObserver = new MutationObserver((mutations) => {
     });
 });
 themeObserver.observe(document.documentElement, { attributes: true });
-
-
 
 
