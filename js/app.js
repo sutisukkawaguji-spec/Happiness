@@ -4,7 +4,10 @@
 // ============================================================
 
 // --- UI State (ประกาศไว้ใน config.js แล้ว ไม่ประกาศซ้ำ) ---
-let currentRelationSubTab = 'staff';
+var currentRelationSubTab = 'staff';
+// --- Relation View States ---
+var currentRelationPosts = [];
+var currentRelationVisibleCount = 10;
 // currentImageFiles ประกาศแล้วใน config.js
 
 // 🌟 Helper: ตรวจสอบว่าเป็นกลุ่มศิษย์เก่า/เกษียณ หรือไม่
@@ -14,6 +17,18 @@ const isAlumni = (r) => {
     return keywords.some(k => roleStr.includes(k.toLowerCase()));
 };
 
+// 🌟 Helper: ตรวจสอบว่าเป็น Guest หรือไม่ (ยังไม่รับการแต่งตั้ง)
+const isGuest = (r) => {
+    const roleStr = String(r || '').toLowerCase();
+    const guestKeywords = ['guest', 'ผู้เยี่ยมชม', 'ผู้เข้าใหม่', 'แขก'];
+    return guestKeywords.some(k => roleStr.includes(k.toLowerCase()));
+};
+
+// 🌟 Helper: ตรวจสอบว่าควรนำมาคำนวณสถิติหรือไม่
+const shouldIncludeInStats = (r) => {
+    return !isAlumni(r) && !isGuest(r);
+};
+
 // =====================================================
 // 📝 ระบบแบบสอบถามประจำเดือน
 // =====================================================
@@ -21,17 +36,28 @@ async function checkAndShowSurvey() {
     if (!currentUser || !currentUser.userId) return;
 
     const storageKey = `survey_${currentUser.userId}`;
-    const surveyData = JSON.parse(localStorage.getItem(storageKey) || '{}');
+    let surveyData = JSON.parse(localStorage.getItem(storageKey) || '{}');
+
+    // 🔄 Sync กับหลังบ้าน (ดึงสถานะจริงมาทับ Local)
+    try {
+        const gasRes = await fetch(`${GAS_URL}?action=get_survey&userId=${currentUser.userId}`);
+        const gasData = await gasRes.json();
+        if (gasData.status === 'success' && gasData.data) {
+            const remoteData = JSON.parse(gasData.data);
+            if (remoteData.completedMonth) {
+                surveyData = remoteData;
+                localStorage.setItem(storageKey, JSON.stringify(surveyData));
+            }
+        }
+    } catch (e) { console.warn("Survey sync failed", e); }
 
     const now = new Date();
     const currentMonthKey = `${now.getFullYear()}-${now.getMonth() + 1}`;
     const monthNames = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
     const monthDisplay = `${monthNames[now.getMonth()]} ${now.getFullYear() + 543}`;
 
-    // ถ้าเดือนนี้ทำไปแล้ว ให้หยุดทำงานทันที
     if (surveyData.completedMonth === currentMonthKey) return;
 
-    // ระบบเลื่อนการเตือน (Snooze)
     if (surveyData.snoozeUntil) {
         const snoozeDate = new Date(surveyData.snoozeUntil);
         const snoozeMonthKey = `${snoozeDate.getFullYear()}-${snoozeDate.getMonth() + 1}`;
@@ -39,12 +65,11 @@ async function checkAndShowSurvey() {
             delete surveyData.snoozeUntil;
             localStorage.setItem(storageKey, JSON.stringify(surveyData));
         } else if (snoozeDate > now) {
-            return; // ยังไม่ถึงเวลาที่เลื่อนไว้
+            return;
         }
     }
 
-    // หน่วงเวลาเล็กน้อยเพื่อให้หน้าจอพร้อม
-    await new Promise(r => setTimeout(r, 1000));
+    await new Promise(r => setTimeout(r, 1500));
 
     const result = await Swal.fire({
         title: `📝 ประเมินความสุขเดือน${monthDisplay}`,
@@ -66,13 +91,19 @@ async function checkAndShowSurvey() {
     });
 
     if (result.isConfirmed) {
-        // ไปหน้าฟอร์ม (ถ้ามีลิงก์หน้าฟอร์ม ให้เปลี่ยนที่นี่)
+        // เมื่อกดไปทำ ให้บันทึกสถานะลงหลังบ้านทันที (หรือถ้ามีหน้าขอบคุณให้บันทึกตอนนั้นก็ได้)
+        // ในที่นี้สมมติว่ากดไปแล้วเท่ากับ "เริ่มทำ" ให้ flag ไว้เลยป้องกันการเด้งซ้ำ
+        surveyData.completedMonth = currentMonthKey;
+        localStorage.setItem(storageKey, JSON.stringify(surveyData));
+        fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'save_survey', userId: currentUser.userId, surveyStatus: JSON.stringify(surveyData) }) });
+
         window.location.href = `survey.html?uid=${encodeURIComponent(currentUser.userId)}`;
     } else if (result.isDenied) {
-        // เลื่อนไปอีก 7 วัน
         const snoozeDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
         surveyData.snoozeUntil = snoozeDate.toISOString();
         localStorage.setItem(storageKey, JSON.stringify(surveyData));
+        // เซฟคิว Snooze ไปหลังบ้านด้วย
+        fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'save_survey', userId: currentUser.userId, surveyStatus: JSON.stringify(surveyData) }) });
         await Swal.fire({ toast: true, icon: 'info', title: 'จะแจ้งเตือนอีกครั้งใน 7 วัน', position: 'top', timer: 2000, showConfirmButton: false });
     }
 }
@@ -226,8 +257,8 @@ function fetchFriendsList() {
         usersArray.forEach(user => {
             if (String(user.lineId) === String(currentUser.userId)) return;
 
-            // 🌟 กรองรายชื่อ: ถ้าขึ้นทำเนียบ (Alumni/Retired) แล้ว ไม่ต้องแสดงในหน้าแท็กโพสต์
-            if (isAlumni(user.role)) return;
+            // 🌟 กรองรายชื่อ: ถ้าขึ้นทำเนียบ (Alumni/Retired) หรือเป็น Guest แล้ว ไม่ต้องแสดงในหน้าแท็กโพสต์
+            if (isAlumni(user.role) || isGuest(user.role)) return;
 
             count++;
             const div = document.createElement('div');
@@ -410,35 +441,54 @@ function viewBadge(title, desc, icon) {
 // =====================================================
 // 📈 ระบบผู้บริหาร (Dashboard)
 // =====================================================
-function fetchManagerData() {
+function fetchManagerData(silent = false) {
     const sList = document.getElementById('staffListArea');
-    if (sList) sList.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div><br><small class="text-muted">กำลังโหลดข้อมูล...</small></div>';
+    const isManagerPage = document.getElementById('page-manager')?.classList.contains('active');
+
+    // ถ้าหน้าผู้บริหารเปิดอยู่และไม่มีข้อมูลเลย หรือไม่ใช่การโหลดแบบเงียบ (Silent) ให้แสดง Spinner
+    if (!silent && sList && (!globalAppUsers || globalAppUsers.length === 0)) {
+        sList.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div><br><small class="text-muted">กำลังโหลดข้อมูลผู้บริหาร...</small></div>';
+    }
 
     const handleData = (data) => {
         if (data.status === 'error') {
-            if (sList) sList.innerHTML = `<div class="text-danger text-center py-3">${data.message}</div>`;
+            if (sList && !silent) sList.innerHTML = `<div class="text-danger text-center py-3">${data.message}</div>`;
             return;
         }
         if (data.users && data.users.length > 0) {
             globalAppUsers = data.users;
 
-            // รอให้ดึง Feed มาก่อนเพื่อใช้ในการคำนวณ KPI ทีมเวิร์คในหน้า Dashboard
+            // 🌟 ซิงค์ข้อมูลเข้า allUsersMap ด้วยเพื่อให้หน้าหมุดและอื่นๆ เข้าถึงข้อมูลล่าสุดได้
+            data.users.forEach(u => {
+                const uid = u.lineId || u.userId || u.id;
+                if (uid) allUsersMap[uid] = u;
+            });
+
+            // ฟังก์ชันสำหรับเรนเดอร์ข้อมูล
             const proceedWithRender = () => {
-                renderDashboard(data.users);
-                renderTRDChart(data.users);
+                // เรนเดอร์เฉพาะเมื่อผู้ใช้อยู่ที่หน้า Manager เท่านั้น เพื่อประหยัด CPU
+                if (isManagerPage || !silent) {
+                    renderDashboard(data.users);
+                    renderTRDChart(data.users);
+                    if (data.trend) {
+                        chartData = data.trend;
+                        renderManagerChart();
+                    }
+                }
             };
 
+            // ตรวจสอบข้อมูล Feed ก่อนเรนเดอร์ (เพื่อใช้คำนวณ KPI)
             if (!globalFeedData?.length && typeof fetchFeed === 'function') {
-                Promise.resolve(fetchFeed(true)).then(proceedWithRender);
+                Promise.resolve(fetchFeed(false, true)).then(proceedWithRender);
             } else {
                 proceedWithRender();
             }
-        } else {
+        } else if (!silent) {
             if (sList) sList.innerHTML = '<div class="text-center py-5 text-muted"><i class="fas fa-users-slash fa-2x mb-3 d-block opacity-50"></i>ยังไม่มีข้อมูลพนักงานในระบบ</div>';
         }
-        if (data.trend) { chartData = data.trend; renderManagerChart(); }
     };
 
+    // ปรับปรุงการ Fetch ให้รองรับโหมด Silent
     fetch(`${GAS_URL}?action=get_dashboard&t=` + Date.now())
         .then(res => res.text())
         .then(text => {
@@ -489,10 +539,14 @@ function renderTRDChart(users) {
     if (!ctx) return;
     if (window.myTrdChart) window.myTrdChart.destroy();
 
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark' || localStorage.getItem('theme') === 'dark';
+    const gridColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)';
+    const textColor = isDark ? '#eee' : '#666';
+
     window.myTrdChart = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: ['Transparent (สุจริต)', 'Responsible (วินัย+พอเพียง)', 'Dedicated (อาสา+กตัญญู)'],
+            labels: ['T', 'R', 'D'],
             datasets: [{
                 label: 'คะแนนรวมกลุ่ม',
                 data: [
@@ -501,27 +555,40 @@ function renderTRDChart(users) {
                     parseFloat(scoreD.toFixed(1))
                 ],
                 backgroundColor: [
-                    'rgba(52, 152, 219, 0.7)',
-                    'rgba(241, 196, 15, 0.7)',
-                    'rgba(231, 76, 60, 0.7)'
+                    'rgba(108, 92, 231, 0.8)', // Purple for T
+                    'rgba(243, 156, 18, 0.8)', // Orange for R
+                    'rgba(231, 76, 60, 0.8)'  // Red for D
                 ],
-                borderColor: [
-                    'rgba(52, 152, 219, 1)',
-                    'rgba(241, 196, 15, 1)',
-                    'rgba(231, 76, 60, 1)'
-                ],
-                borderWidth: 1,
-                borderRadius: 5,
-                barThickness: 40
+                borderRadius: 8,
+                barThickness: 45, // ปรับขนาดแท่งให้แคบลงตามคำขอ
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    titleFont: { family: 'Kanit' },
+                    bodyFont: { family: 'Kanit' },
+                    callbacks: {
+                        title: function (context) {
+                            const fullLabels = ['Transparent (สุจริต)', 'Responsible (วินัย+พอเพียง)', 'Dedicated (อาสา+กตัญญู)'];
+                            return fullLabels[context[0].dataIndex];
+                        }
+                    }
+                }
+            },
             scales: {
-                y: { beginAtZero: true, grid: { display: false } },
-                x: { grid: { display: false } }
+                y: {
+                    beginAtZero: true,
+                    grid: { color: gridColor },
+                    ticks: { color: textColor, font: { family: 'Kanit' } }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { color: textColor, font: { family: 'Kanit', size: 16, weight: 'bold' } }
+                }
             }
         }
     });
@@ -546,8 +613,8 @@ function renderDashboard(appUsers) {
             witnessCount: parseInt(u.witnessCount || 0), topFriends: u.topFriends || []
         };
 
-        // 🌟 กรองออก: ถ้าขึ้นทำเนียบแล้ว ไม่ต้องนำมาคำนวณ KPI รวมของผู้บริหาร
-        if (isAlumni(role)) return;
+        // 🌟 กรองออก: ถ้าเป็น Guest หรือ ศิษย์เก่า ไม่ต้องนำมาคำนวณ KPI รวม
+        if (!shouldIncludeInStats(role)) return;
 
         if (happyRaw > 0) { totalHappy += happyRaw; userWithData++; if (happyRaw < 5.0) issueCount++; }
     });
@@ -598,10 +665,11 @@ function renderDashboard(appUsers) {
     }
 
     let totalPosts = 0, totalTeam = 0;
-    Object.values(globalUserStatsMap).forEach(u => { totalPosts += u.postsMade; totalTeam += u.taggedIn; });
+    const statsUsers = Object.values(globalUserStatsMap).filter(u => shouldIncludeInStats(u.role));
+    statsUsers.forEach(u => { totalPosts += u.postsMade; totalTeam += u.taggedIn; });
 
     document.getElementById('kpi-happy').innerText = (userWithData > 0 ? (totalHappy / userWithData * 10).toFixed(0) : '0') + '%';
-    document.getElementById('kpi-posts').innerText = Object.keys(globalUserStatsMap).length + ' คน';
+    document.getElementById('kpi-posts').innerText = statsUsers.length + ' คน';
 
     let teamRate = 0;
     if (globalFeedData?.length) {
@@ -619,8 +687,11 @@ function renderDashboard(appUsers) {
 
 function renderStaffTable(map) {
     const sList = document.getElementById('staffListArea');
+    const gList = document.getElementById('guestListArea');
+    const gSection = document.getElementById('guestSectionArea');
     if (!sList) return;
     sList.innerHTML = '';
+    if (gList) gList.innerHTML = '';
 
     const getRolePriority = (r) => {
         const roleStr = String(r || '').toLowerCase();
@@ -632,9 +703,10 @@ function renderStaffTable(map) {
     };
 
     const allUsers = Object.values(map);
-    const activeStaff = allUsers.filter(u => !isAlumni(u.role));
+    const activeStaff = allUsers.filter(u => shouldIncludeInStats(u.role));
+    const guestStaff = allUsers.filter(u => isGuest(u.role));
 
-    // --- Render Active Staff Only ---
+    // --- Render Active Staff ---
     if (activeStaff.length > 0) {
         activeStaff.sort((a, b) => {
             const pA = getRolePriority(a.role);
@@ -649,6 +721,39 @@ function renderStaffTable(map) {
                 ไม่พบรายชื่อบุคลากรปัจจุบันในระบบ
             </div>
         `;
+    }
+
+    // --- Render Guest Staff ---
+    if (guestStaff.length > 0 && gSection) {
+        gSection.style.display = 'block';
+        guestStaff.sort((a, b) => a.name.localeCompare(b.name)).forEach(f => renderStaffRow(f, gList));
+    } else if (gSection) {
+        gSection.style.display = 'none';
+    }
+}
+
+function filterStaffList() {
+    const query = document.getElementById('staffFilterInput').value.toLowerCase().trim();
+    const rows = document.querySelectorAll('#staffListArea .staff-row, #guestListArea .staff-row');
+
+    rows.forEach(row => {
+        const name = row.querySelector('.fw-bold')?.innerText.toLowerCase() || "";
+        const role = row.querySelector('.badge')?.innerText.toLowerCase() || "";
+        if (name.includes(query) || role.includes(query)) {
+            row.style.display = 'block';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+
+    // ซ่อนหัวข้อ Guest ถ้าค้นหาแล้วไม่เจอ Guest เลย
+    const gSection = document.getElementById('guestSectionArea');
+    if (gSection && query) {
+        const visibleGuests = document.querySelectorAll('#guestListArea .staff-row[style="display: block;"]');
+        gSection.style.display = visibleGuests.length > 0 ? 'block' : 'none';
+    } else if (gSection) {
+        const guestStaffCount = document.querySelectorAll('#guestListArea .staff-row').length;
+        gSection.style.display = guestStaffCount > 0 ? 'block' : 'none';
     }
 }
 
@@ -824,14 +929,14 @@ function showStaffModal(uid) {
                     </div>
                 </div>
                 
-                ${typeof canViewDashboard === 'function' && canViewDashboard() ? `
+                ${typeof canManageSystem === 'function' && canManageSystem() ? `
                     <div class="mt-3 d-flex flex-column gap-2 px-1">
                         <div class="d-flex gap-2">
-                            <button class="btn btn-warning btn-sm fw-bold rounded-pill shadow-sm py-2 flex-grow-1" onclick="promoteToAlumni('${user.id}', 'ขึ้นทำเนียบ')">
+                            <button class="btn btn-warning btn-sm fw-bold rounded-pill shadow-sm py-2 flex-grow-1" onclick="promoteToAlumni('${user.id}')">
                                 <i class="fas fa-crown me-1"></i> ขึ้นทำเนียบ
                             </button>
-                            <button class="btn btn-info btn-sm fw-bold rounded-pill shadow-sm py-2 flex-grow-1 text-white" onclick="changeUserRole('${user.id}', 'NewsEditor')">
-                                <i class="fas fa-award me-1"></i> บรรณาธิการ
+                            <button class="btn btn-primary btn-sm fw-bold rounded-pill shadow-sm py-2 flex-grow-1 text-white" onclick="changeUserRole('${user.id}')">
+                                <i class="fas fa-user-shield me-1"></i> จัดการสิทธิ์
                             </button>
                         </div>
                     </div>
@@ -858,6 +963,9 @@ function showStaffModal(uid) {
 }
 
 function promoteToAlumni(uid) {
+    if (!uid) return;
+    console.log("Promoting user to alumni:", uid);
+
     Swal.fire({
         title: 'ขึ้นทำเนียบผู้ผูกพัน',
         text: `กรุณาเลือกหมวดหมู่สำหรับรหัส ${uid}`,
@@ -876,63 +984,163 @@ function promoteToAlumni(uid) {
         confirmButtonText: 'ยืนยัน',
         cancelButtonText: 'ยกเลิก',
         inputValidator: (value) => {
-            return new Promise((resolve) => {
-                if (value) {
-                    resolve();
-                } else {
-                    resolve('กรุณาเลือกหมวดหมู่ทำเนียบก่อนครับ');
-                }
-            });
+            if (!value) return 'กรุณาเลือกหมวดหมู่ทำเนียบก่อนครับ';
         }
-    }).then(r => {
-        if (r.isConfirmed) {
-            const selectedCategory = r.value;
-            const staffData = globalUserStatsMap[uid];
+    }).then((result) => {
+        if (result.isConfirmed) {
+            const selectedCategory = result.value;
+            const staffData = globalUserStatsMap[uid] || allUsersMap[uid];
             const currentScore = staffData ? (staffData.score || 0) : 0;
 
-            Swal.fire({ title: 'กำลังบันทึก...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            // 🌪️ Optimistic UI
+            if (globalUserStatsMap[uid]) globalUserStatsMap[uid].role = selectedCategory;
+            if (allUsersMap[uid]) allUsersMap[uid].role = selectedCategory;
+
+            Swal.fire({
+                title: 'กำลังส่งรายชื่อขึ้นทำเนียบ...',
+                text: 'กรุณารอสักครู่ ระบบกำลังสื่อสารกับหลังบ้าน',
+                allowOutsideClick: false,
+                didOpen: () => { Swal.showLoading(); }
+            });
+
             fetch(GAS_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                 body: JSON.stringify({ action: 'promote_alumni', userId: uid, label: selectedCategory, score: currentScore })
-            }).then(res => res.json()).then(data => {
-                if (data.status === 'success') {
-                    Swal.fire('สำเร็จ', `อัปเดตสถานะเป็น ${selectedCategory} เรียบร้อย`, 'success');
-                    fetchManagerData(); // รีเฟรชข้อมูลหน้า Dashboard
-                    if (typeof fetchFriendsList === 'function') fetchFriendsList(); // รีเฟรชรายชื่อในหน้าแท็กโพสต์
-                } else {
-                    Swal.fire('ผิดพลาด', data.message || 'ไม่สามารถบันทึกได้', 'error');
-                }
-            }).catch(e => Swal.fire('ผิดพลาด', 'การเชื่อมต่อขัดข้อง: ' + e.message, 'error'));
+            })
+                .then(async (res) => {
+                    const text = await res.text();
+                    console.log("Promote Response:", text);
+
+                    if (!res.ok || text.startsWith('<')) throw new Error("Server Error (HTML/CORS)");
+
+                    const data = JSON.parse(text);
+                    if (data.status === 'success') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'ขึ้นทำเนียบสำเร็จ!',
+                            text: data.message,
+                            timer: 3000,
+                            showConfirmButton: false
+                        });
+
+                        // รีเฟรชข้อมูลทั้งหมด
+                        fetchManagerData();
+                        if (document.getElementById('page-relation')?.classList.contains('active')) {
+                            renderRelationTab();
+                        }
+                        if (typeof fetchFriendsList === 'function') fetchFriendsList();
+                    } else {
+                        Swal.fire({ icon: 'warning', title: 'ไม่สามารถบันทึกได้', text: data.message });
+                    }
+                })
+                .catch((e) => {
+                    console.error("Promote Error:", e);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'การเชื่อมต่อมีปัญหา',
+                        text: 'ไม่สามารถส่งข้อมูลได้: ' + e.message
+                    });
+                });
         }
     });
 }
 
-function changeUserRole(uid, newRole) {
+function changeUserRole(uid) {
+    if (!canManageSystem()) {
+        Swal.fire('🚫 ปฏิเสธการเข้าถึง', 'ต้องเป็นผู้ดูแลระบบหรือผู้บริหารเท่านั้นจึงจะสามารถปรับสถานะได้', 'error');
+        return;
+    }
+
+    // ป้องกันการแก้สิทธิ์ตัวเอง
+    if (uid === currentUser.userId) {
+        Swal.fire('⚠️ คำเตือน', 'คุณไม่สามารถเปลี่ยนบทบาทของตัวเองได้', 'warning');
+        return;
+    }
+
+    // 🔒 ระบบความปลอดภัยเพิ่มเติม: Manager (Lv.2) ไม่สามารถเปลี่ยนสิทธิ์ของ Admin (Lv.1) ได้
+    const targetUser = allUsersMap[uid];
+    if (getUserLevel(currentUser) === 2 && targetUser && getUserLevel(targetUser) === 1) {
+        Swal.fire('🚫 ปฏิเสธการเข้าถึง', 'ผู้บริหารไม่สามารถแก้ไขสิทธิ์ของผู้ดูแลระบบสูงสุดได้', 'error');
+        return;
+    }
+
     Swal.fire({
-        title: 'ยืนยันการตั้งค่า',
-        text: `ต้องการเปลี่ยนบทบาทเป็น ${newRole} ใช่หรือไม่?`,
-        icon: 'warning',
+        title: '⚙️ ตั้งค่าบทบาทผู้ใช้งาน',
+        text: `เลือกบทบาทใหม่สำหรับรหัส ${uid}`,
+        icon: 'question',
+        input: 'select',
+        inputOptions: {
+            'Admin': '🛡️ ผู้ดูแลระบบ (Admin)',
+            'Manager': '👨‍💼 ผู้บริหาร (Manager)',
+            'NewsEditor': '📢 บรรณาธิการข่าว (News Editor)',
+            'Staff': '👤 พนักงานทั่วไป (Staff)',
+            'Guest': '👣 ผู้เยี่ยมชม (Guest)',
+            ...(!isAlumni(targetUser?.role) ? {} : { [targetUser.role]: `⏳ สถานะปัจจุบัน: ${targetUser.role}` })
+        },
+        inputValue: targetUser?.role || 'Staff',
+        inputPlaceholder: 'คลิกเลือกบทบาท...',
         showCancelButton: true,
-        confirmButtonText: 'ตกลง',
-        cancelButtonText: 'ยกเลิก'
+        confirmButtonColor: '#6c5ce7',
+        confirmButtonText: 'ยืนยันการเปลี่ยน',
+        cancelButtonText: 'ยกเลิก',
+        inputValidator: (value) => {
+            return new Promise((resolve) => {
+                if (value) resolve();
+                else resolve('กรุณาเลือกบทบาทก่อนครับ');
+            });
+        }
     }).then(r => {
         if (r.isConfirmed) {
-            Swal.fire({ title: 'กำลังบันทึก...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            const newRole = r.value;
+            const target = globalUserStatsMap[uid] || allUsersMap[uid];
+
+            // 🌪️ Optimistic UI
+            if (allUsersMap[uid]) allUsersMap[uid].role = newRole;
+            if (globalUserStatsMap[uid]) {
+                globalUserStatsMap[uid].role = newRole;
+                if (typeof renderStaffTable === 'function') renderStaffTable(globalUserStatsMap);
+            }
+
+            Swal.fire({
+                title: 'กำลังบันทึก...',
+                text: 'กรุณารอสักครู่ ระบบกำลังสื่อสารกับหลังบ้าน',
+                allowOutsideClick: false,
+                didOpen: () => { Swal.showLoading(); }
+            });
+
             fetch(GAS_URL, {
                 method: 'POST',
-                // 🌟 สิ่งสำคัญที่หายไปคือบรรทัดนี้ครับ
                 headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                 body: JSON.stringify({ action: 'update_role', userId: uid, role: newRole })
-            }).then(res => res.json()).then(data => {
-                if (data.status === 'success') {
-                    Swal.fire('สำเร็จ', 'อัปเดตบทบาทเรียบร้อย', 'success');
-                    fetchManagerData(); // รีเฟรชข้อมูลหน้า Dashboard
-                    if (typeof fetchFriendsList === 'function') fetchFriendsList(); // รีเฟรชรายชื่อในหน้าแท็กโพสต์
-                } else {
-                    Swal.fire('ผิดพลาด', data.message || 'ไม่สามารถบันทึกได้', 'error');
-                }
-            }).catch(e => Swal.fire('ผิดพลาด', 'การเชื่อมต่อขัดข้อง: ' + e.message, 'error'));
+            })
+                .then(async res => {
+                    const text = await res.text();
+                    console.log("Backend Raw Response:", text);
+
+                    if (!res.ok || text.startsWith('<')) {
+                        throw new Error("Server Error: " + (text.substring(0, 50) || 'Unknown'));
+                    }
+
+                    let data;
+                    try { data = JSON.parse(text); }
+                    catch (je) { throw new Error("Invalid JSON: " + text.substring(0, 50)); }
+
+                    if (data.status === 'success') {
+                        Swal.fire({ icon: 'success', title: 'บันทึกสำเร็จ!', text: data.message, timer: 2000, showConfirmButton: false });
+                        fetchManagerData();
+                    } else {
+                        Swal.fire({ icon: 'warning', title: 'ข้อมูลไม่เปลี่ยนในตาราง', text: data.message + (data.samplesInSheet ? '\n\nเช็คข้อมูลในระบบ: ' + data.samplesInSheet.join('\n') : '') });
+                    }
+                })
+                .catch(e => {
+                    console.error("Update Role Error:", e);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'การเชื่อมต่อมีปัญหา',
+                        text: 'ไม่สามารถบันทึกได้: ' + e.message + '\n(โปรดเช็ค Deployment หรือสิทธิ์การเขียนไฟล์)'
+                    });
+                });
         }
     });
 }
@@ -1010,7 +1218,6 @@ function initUserRadar() {
     if (window.myRadarChart) window.myRadarChart.destroy();
 
     const v = currentUser.virtueStats || {};
-    // ข้อมูลคะแนน 5 ด้านของคุณ (รองรับทศนิยม)
     const dataPoints = [
         parseFloat(v.volunteer || 0),
         parseFloat(v.sufficiency || 0),
@@ -1019,57 +1226,66 @@ function initUserRadar() {
         parseFloat(v.gratitude || 0)
     ];
 
-    // 🌟 สร้างกราฟใหม่ด้วยดีไซน์พรีเมียม (แทนที่ drawPremiumRadar เดิม)
+    // 🌗 เช็ค Dark Mode เพื่อปรับสีเส้นให้ชัดขึ้น
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const gridColor = isDark ? 'rgba(255, 255, 255, 0.25)' : 'rgba(0, 0, 0, 0.1)';
+    const labelColor = isDark ? '#a29bfe' : '#6c5ce7'; // สีตัวหนังสือ
+
+    // 🌟 คำนวณค่าสูงสุดเพื่อปรับสเกลให้สวยงาม ไม่รวน
+    const maxVal = Math.max(...dataPoints, 5);
+    const suggestedMax = Math.ceil(maxVal * 1.2 / 5) * 5;
+
     window.myRadarChart = new Chart(ctx, {
         type: 'radar',
         data: {
-            // ชื่อหัวข้อความดี (เรียงตาม dataPoints ด้านบน)
-            labels: ['จิตอาสา', 'พอเพียง', 'วินัย', 'สุจริต', 'กตัญญู'],
+            // เพิ่มไอคอนหมวดหมู่หน้าชื่อ
+            labels: ['🤝 จิตอาสา', '🌱 พอเพียง', '📏 วินัย', '💎 สุจริต', '🙏 กตัญญู'],
             datasets: [{
-                label: 'พลังความดี',
+                label: 'คะแนนสะสม',
                 data: dataPoints,
-                backgroundColor: 'rgba(108, 92, 231, 0.25)', /* พื้นหลังม่วงโปร่งแสง */
-                borderColor: '#6c5ce7', /* เส้นขอบม่วงเข้ม */
-                borderWidth: 2,
-                pointBackgroundColor: '#f1c40f', /* จุดสีทอง */
-                pointBorderColor: '#ffffff',
-                pointHoverBackgroundColor: '#ffffff',
-                pointHoverBorderColor: '#f1c40f',
+                backgroundColor: isDark ? 'rgba(162, 155, 254, 0.25)' : 'rgba(108, 92, 231, 0.2)',
+                borderColor: isDark ? '#a29bfe' : '#6c5ce7',
+                borderWidth: 3,
+                pointBackgroundColor: isDark ? '#fff' : '#fff',
+                pointBorderColor: isDark ? '#a29bfe' : '#6c5ce7',
+                pointBorderWidth: 2,
                 pointRadius: 4,
-                pointHoverRadius: 6,
-                fill: true
+                fill: true,
+                tension: 0.1
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            scales: {
+                r: {
+                    angleLines: { display: true, color: gridColor },
+                    grid: { color: gridColor },
+                    suggestedMin: 0,
+                    suggestedMax: suggestedMax,
+                    ticks: {
+                        stepSize: Math.max(1, Math.floor(suggestedMax / 5)),
+                        display: false
+                    },
+                    pointLabels: {
+                        font: { size: 14, weight: 'bold', family: "'Kanit', sans-serif" },
+                        color: labelColor,
+                        padding: 10
+                    }
+                }
+            },
             plugins: {
                 legend: { display: false },
                 tooltip: {
-                    backgroundColor: 'rgba(0,0,0,0.8)',
-                    titleFont: { family: 'Kanit', size: 14 },
-                    bodyFont: { family: 'Kanit', size: 13 },
-                    padding: 10,
-                    cornerRadius: 8,
-                    displayColors: false
-                }
-            },
-            scales: {
-                r: {
-                    angleLines: { color: 'rgba(162, 155, 254, 0.3)' }, /* เส้นแฉก */
-                    grid: { color: 'rgba(162, 155, 254, 0.3)' }, /* เส้นใยแมงมุม */
-                    pointLabels: {
-                        font: { family: 'Kanit', size: 12, weight: '600' },
-                        color: '#6c5ce7' /* สีชื่อหัวข้อ */
-                    },
-                    ticks: {
-                        display: false, /* ซ่อนตัวเลขสเกล */
-                        beginAtZero: true
+                    callbacks: {
+                        label: (ctx) => ` ${ctx.label}: ${ctx.raw} คะแนน`
                     }
                 }
             }
         }
     });
+
+    if (typeof updateStatAnalysis === 'function') updateStatAnalysis(dataPoints);
 }
 
 function renderManagerChart() {
@@ -1104,9 +1320,40 @@ function renderManagerChart() {
         }
     }
 
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark' || localStorage.getItem('theme') === 'dark';
+    const gridColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)';
+    const textColor = isDark ? '#eee' : '#666';
+
     window.myManagerChart = new Chart(ctx, {
-        type: 'line', data: { labels, datasets: [{ data: dataPoints, borderColor: '#0984e3', backgroundColor: 'rgba(9,132,227,0.1)', fill: true, tension: 0.1 }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { suggestedMin: 4, suggestedMax: 10 } } }
+        type: 'line',
+        data: {
+            labels,
+            datasets: [{
+                data: dataPoints,
+                borderColor: '#6c5ce7',
+                backgroundColor: 'rgba(108, 92, 231, 0.1)',
+                fill: true,
+                tension: 0.3,
+                pointRadius: 4,
+                pointBackgroundColor: '#6c5ce7'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: {
+                    suggestedMin: 4, suggestedMax: 10,
+                    grid: { color: gridColor },
+                    ticks: { color: textColor, font: { family: 'Kanit' } }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { color: textColor, font: { family: 'Kanit' } }
+                }
+            }
+        }
     });
 }
 
@@ -1115,9 +1362,21 @@ function renderManagerChart() {
 // =====================================================
 function triggerNotificationEffects() {
     const bell = document.getElementById('bellIcon');
-    if (bell) { bell.classList.remove('bell-shake'); void bell.offsetWidth; bell.classList.add('bell-shake'); }
+    if (bell) {
+        bell.classList.remove('bell-shake');
+        void bell.offsetWidth;
+        bell.classList.add('bell-shake');
+    }
+
+    // 🌟 เล่นเสียงเฉพาะเมื่อมีการโต้ตอบกับหน้าจอแล้ว (ป้องกัน Browser บล็อก)
     const sound = document.getElementById('notifSound');
-    if (sound) { sound.currentTime = 0; sound.play().catch(e => console.log("Sound error:", e)); }
+    if (sound) {
+        sound.currentTime = 0;
+        // เช็คว่าไม่ได้ปิดเสียงแอปอยู่
+        if (localStorage.getItem('notif_muted') !== 'true') {
+            sound.play().catch(e => console.log("Sound play prevented by browser policy (needs user click first)"));
+        }
+    }
 }
 
 function processAnnounceData(data, silent = false) {
@@ -1166,11 +1425,29 @@ function processAnnounceData(data, silent = false) {
         else { renderNotifList(); }
 
         if (hasNewUpcoming) {
-            triggerNotificationEffects();
-            if (!silent) {
-                Swal.fire({ toast: true, position: 'top-end', icon: 'info', title: '📢 มีการแจ้งเตือนเรื่องราวใหม่!', showConfirmButton: false, timer: 3500 });
-            } else if (typeof showAppNotification === 'function') {
-                showAppNotification('📢 กิจกรรมใหม่!', 'มีเรื่องราวหรืองานใหม่เข้ามา แตะเพื่อเช็คกระดิ่งแจ้งเตือนดูสิ', 'activity', 'index.html');
+            // 🌟 กรองเฉพาะ ID ที่ยังไม่เคยแจ้งเตือน (Notified) ในเซสชันนี้
+            const unnotifiedIds = generalGasNotifs
+                .filter(n => (n.date >= todayStr || n.date === tomorrowStr) && !localStorage.getItem(`last_notified_${n.id}`))
+                .map(n => n.id);
+
+            if (unnotifiedIds.length > 0) {
+                // มาร์คว่าแจ้งเตือนแล้ว
+                unnotifiedIds.forEach(id => localStorage.setItem(`last_notified_${id}`, 'true'));
+
+                triggerNotificationEffects();
+
+                if (!silent) {
+                    Swal.fire({
+                        toast: true,
+                        position: 'top-end',
+                        icon: 'info',
+                        title: '📢 มีการแจ้งเตือนเรื่องราวใหม่!',
+                        showConfirmButton: false,
+                        timer: 3500
+                    });
+                } else if (typeof showAppNotification === 'function') {
+                    showAppNotification('📢 กิจกรรมใหม่!', 'มีเรื่องราวหรืองานใหม่เข้ามา แตะเพื่อเช็คกระดิ่งแจ้งเตือนดูสิ', 'activity', 'index.html');
+                }
             }
         }
     } catch (e) { console.error('🔔 processAnnounceData Error:', e); }
@@ -1266,8 +1543,27 @@ function updateAddAnnounceButton() {
     if (mgrTab) mgrTab.style.display = (level <= 2) ? 'flex' : 'none';
 }
 
+function scrollToTopAndRefresh() {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    const alertEl = document.getElementById('newPostAlert');
+    if (alertEl) alertEl.style.display = 'none';
+
+    // 🌪️ ใช้ Force Refresh เพื่อเคลียร์อาการค้าง (ถ้ามี)
+    if (typeof fetchFeed === 'function') fetchFeed(false, false, true);
+}
+
 function setupBackgroundSync() {
-    setInterval(() => { if (currentUser) { fetchAnnouncements(true); fetchFeed(false, true); } }, 120000);
+    // 🔄 รีเฟรชข้อมูลเบื้องหลังทุก 60 วินาที
+    setInterval(() => {
+        if (currentUser) {
+            fetchAnnouncements(true);
+            fetchFeed(false, true);
+            // ถ้าเป็น Admin/Manager ให้โหลดข้อมูล Dashboard เบื้องหลังด้วย
+            if (getUserLevel(currentUser) <= 2) {
+                fetchManagerData(true);
+            }
+        }
+    }, 60000);
 }
 
 async function requestNotificationPermission() {
@@ -1389,17 +1685,33 @@ function switchTab(pageId, el) {
     if (pageId === 'relation') {
         closeRelationDetail(); // Back to list when tab clicked
         renderRelationTab();
+        // 🌟 ดึงข้อมูล Feed มาตุนไว้ก่อน เพื่อให้กดดูประวัติความดีในทำเนียบได้ทันที
+        if (!window.globalFeedData || window.globalFeedData.length < 50) fetchFeed(false, true);
     }
 
     if (pageId === 'stories') {
         const navBtn = document.getElementById('nav-stories-btn');
-        navBtn?.querySelector('.nav-notify-badge')?.remove();
-        if (!document.getElementById('feedContainer')?.querySelector('.feed-card')) fetchFeed();
-        else if (globalFeedData?.length) safeSetItem('lastSeenStoryCount', globalFeedData.length);
+        navBtn?.querySelector('.nav-notify-dot')?.remove();
+        if (!document.getElementById('feedContainer')?.querySelector('.feed-card')) {
+            fetchFeed();
+        } else if (globalFeedData?.length > 0) {
+            const latestPostId = String(globalFeedData[0].uuid || globalFeedData[0].id);
+            safeSetItem('lastSeenPostId', latestPostId);
+        }
     }
 
     document.getElementById('header-user').style.display = (pageId === 'manager') ? 'none' : 'block';
-    if (pageId === 'manager') fetchManagerData();
+    if (pageId === 'manager') {
+        // ถ้ามีข้อมูลอยู่แล้ว ให้ใช้ข้อมูลเดิมไปก่อน (Instant Load) แล้วค่อยแอบอัปเดตเบื้องหลัง
+        if (globalAppUsers && globalAppUsers.length > 0) {
+            renderDashboard(globalAppUsers);
+            renderTRDChart(globalAppUsers);
+            renderManagerChart();
+            fetchManagerData(true); // แอบอัปเดตเงียบๆ
+        } else {
+            fetchManagerData(false); // โหลดครั้งแรกแบบมี Spinner
+        }
+    }
     if (pageId === 'badges') {
         document.getElementById('nav-badges-btn')?.classList.remove('nav-glow');
         renderBadges();
@@ -1410,23 +1722,37 @@ function switchTab(pageId, el) {
 function updateNavigationVisibility() {
     const mgrTab = document.getElementById('nav-manager-btn');
     const relTab = document.getElementById('nav-relation-btn');
-    const statsTab = document.querySelector('div[onclick*="stats"]');
+    const statsTab = document.getElementById('nav-stats-btn');
     const badgesTab = document.getElementById('nav-badges-btn');
-    const recordTab = document.querySelector('div[onclick*="record"]');
+    const recordTab = document.getElementById('nav-record-btn');
     const storiesTab = document.getElementById('nav-stories-btn');
+    const headerUser = document.getElementById('header-user');
 
     if (!currentUser) {
         // Not a member: Only stories
         [mgrTab, relTab, statsTab, badgesTab, recordTab].forEach(t => t && (t.style.display = 'none'));
         if (storiesTab) storiesTab.style.display = 'flex';
+        if (headerUser) headerUser.style.display = 'none';
         return;
     }
 
     const level = getUserLevel(currentUser);
     // isAlumni ถูกประกาศเป็น Global แล้วที่ต้นไฟล์
 
-    if (isAlumni && level > 2) {
+    if (level === 5) {
+        // 🆕 New Member (Level 5): Only Stories, Hide Profile Header
+        [mgrTab, relTab, statsTab, badgesTab, recordTab].forEach(t => t && (t.style.display = 'none'));
+        if (storiesTab) storiesTab.style.display = 'flex';
+        if (headerUser) headerUser.style.display = 'none';
+
+        // Auto-switch to stories if currently on a restricted tab
+        const activeTabEl = document.querySelector('.nav-item.active');
+        if (activeTabEl && activeTabEl.id !== 'nav-stories-btn') {
+            switchTab('stories', storiesTab);
+        }
+    } else if (isAlumni(currentUser.role) && level > 2) {
         // Alumni: Stories, Stats, Badges (Only if not a manager/admin)
+        if (headerUser) headerUser.style.display = 'block';
         [mgrTab, relTab, recordTab].forEach(t => t && (t.style.display = 'none'));
         [storiesTab, statsTab, badgesTab].forEach(t => t && (t.style.display = 'flex'));
 
@@ -1436,9 +1762,13 @@ function updateNavigationVisibility() {
             switchTab('stories', storiesTab);
         }
     } else {
-        // Active members
+        // Active members (Staff/Officer/NewsEditor/Manager/Admin)
+        if (headerUser) headerUser.style.display = 'block';
         [storiesTab, statsTab, badgesTab, relTab, recordTab].forEach(t => t && (t.style.display = 'flex'));
         if (mgrTab) mgrTab.style.display = (level <= 2) ? 'flex' : 'none';
+
+        // Final sanity check for record tab (Officer/Staff only)
+        if (recordTab) recordTab.style.display = (level <= 4) ? 'flex' : 'none';
     }
 
     // Update Add Announcement Button
@@ -1579,201 +1909,152 @@ function openRelationDetail(uid) {
     const virtueLabel = getDominantVirtueLabel(v);
     const virtueDesc = getVirtueDescription(virtueLabel.key);
 
-    // 🌟 1. ดึง ID ทุกรูปแบบ (เก็บแบบตรงตัวเป๊ะๆ ไม่แปลงพิมพ์เล็กพิมพ์ใหญ่)
-    const userIds = [
-        targetId,
-        String(user.lineId || '').trim(),
-        String(user.id || '').trim(),
-        String(user.userId || '').trim()
-    ].filter(id => id !== '');
-
-    // 🌟 ใช้คะแนนจาก Backend เป็นหลัก
     const postCount = parseInt(user.postsMade || user.totalCount || 0);
     const tagCount = parseInt(user.taggedIn || user.taggedCount || 0);
     const witnessCount = parseInt(user.witnessCount || 0);
 
-    let posts = [];
+    // 🌟 1. ดันข้อมูลจาก Cache (globalFeedData) ขึ้นแสดงทันที เพื่อความรวดเร็ว (Instant Load)
+    currentRelationVisibleCount = 10;
+    window.currentRelationPosts = (window.globalFeedData || []).filter(p => String(p.user_line_id || p.userId || '') === targetId);
 
-    // 🌟 2. ดึงข้อมูลและเทียบ ID (แบบ Exact Match)
-    if (globalFeedData && Array.isArray(globalFeedData)) {
-        posts = globalFeedData.filter(p => {
-            // ดึง ID ของผู้โพสต์ (แปลงเล็กให้หมดกันพลาด)
-            const ownerId = String(p.user_line_id || p.userId || p.UserID || '').trim().toLowerCase();
-            const isOwner = userIds.map(i => i.toLowerCase()).includes(ownerId);
+    // แสดงโครงร่างเบื้องต้น (ที่มีประวัติเบื้องต้นจาก Cache)
+    renderRelationHeader(user, virtueLabel, virtueDesc, postCount, tagCount, witnessCount);
+    if (currentRelationPosts.length > 0) renderRelationHistory();
 
-            // ตรวจสอบรายชื่อคนถูกแท็ก
-            let isTagged = false;
-            const taggedData = p.taggedFriends || p.TaggedFriends || '';
-            if (taggedData) {
-                const tags = String(taggedData).split(',').map(t => t.trim().toLowerCase());
-                if (tags.some(t => userIds.map(i => i.toLowerCase()).includes(t))) {
-                    isTagged = true;
-                }
-            }
-
-            // --- กรองความลับ (Status/privacy) ---
-            const isPrivate = String(p.privacy || p.status || p.Status || '').toLowerCase() === 'private';
-            const currentUserId = String(window.currentUser?.userId || window.currentUser?.lineId || '').trim();
-            if (isPrivate && !userIds.includes(currentUserId) && currentUserId !== ownerId) return false;
-
-            return isOwner || isTagged;
-        });
-    }
-
-    // 🌟 3. สร้าง HTML ไทม์ไลน์ (โชว์สูงสุด 5 โพสต์)
-    let historyHtml = `<div class="mt-4 px-2 pb-5">`;
-
-    if (posts.length > 0) {
-        historyHtml += `<h6 class="fw-bold mb-3" style="color:var(--primary-color);"><i class="fas fa-history me-2"></i>เส้นทางความดีล่าสุด</h6>`;
-
-        const sortedPosts = posts.sort((a, b) => new Date(b.Timestamp || b.timestamp) - new Date(a.Timestamp || a.timestamp));
-        historyHtml += `<div class="timeline-wrapper">`;
-
-        sortedPosts.forEach((p, index) => {
-            const rawDate = p.timestamp || p.Timestamp;
-            const date = rawDate ? new Date(rawDate) : new Date();
-            const dateStr = `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear() + 543}`;
-
-            const catName = p.virtue || p.Virtue || p.ActivityType || 'ทั่วไป';
-            const postText = p.note || p.Note || '';
-            const authorName = p.user_name || user.name || 'เพื่อนร่วมงาน';
-            const mediaHtml = getMediaContent(p.image || p.Image || p.img || '', postText);
-
-            const isExtra = index >= 5 ? 'd-none extra-post' : '';
-
-            historyHtml += `
-            <div class="glass-card feed-card p-3 mb-3 animate__animated animate__fadeIn ${isExtra}">
-                <div class="feed-header d-flex align-items-start">
-                    <img src="${p.user_img || p.Image || user.img || 'https://dummyimage.com/45x45/ddd/888&text=?'}" class="feed-avatar me-2 mt-1" loading="lazy" onerror="this.src='https://dummyimage.com/45x45/ddd/888&text=?'">
-                    <div class="flex-grow-1">
-                        <div class="d-flex justify-content-between">
-                            <h6 class="mb-0 fw-bold">${authorName}</h6>
-                            <small class="text-muted" style="font-size:0.7rem;">${dateStr}</small>
-                        </div>
-                        <small class="text-primary mb-1 d-block fw-bold">${catName}</small>
-                    </div>
-                </div>
-                <div class="mt-2 mb-2 p-2 bg-light rounded text-dark">${postText}</div>
-                <div class="mb-2">${mediaHtml}</div>
-                <div class="feed-actions border-top pt-2 d-flex align-items-center mt-2 justify-content-between">
-                    <div class="text-muted small"><i class="fas fa-heart me-1 text-danger"></i> ${(p.likes || []).length} คนชื่นชอบ</div>
-                    <span class="fs-5">${p.happy == 3 ? '😁' : (p.happy == 2 ? '😐' : (p.happy == 1 ? '😞' : '👍'))}</span>
-                </div>
-            </div>`;
-        });
-        if (sortedPosts.length > 5) {
-            historyHtml += `
-                <div class="text-center mt-3" id="loadMoreHistoryContainer">
-                    <button class="btn btn-sm rounded-pill px-4 shadow-sm" style="background: var(--primary-color); color: #fff; border:none;" 
-                        onclick="
-                            let hidden = document.querySelectorAll('.extra-post.d-none');
-                            for(let i=0; i<5 && i<hidden.length; i++) {
-                                hidden[i].classList.remove('d-none');
-                            }
-                            if(document.querySelectorAll('.extra-post.d-none').length === 0) {
-                                document.getElementById('loadMoreHistoryContainer').remove();
-                            }
-                        ">
-                        เรื่องราวเพิ่มเติม <i class="fas fa-chevron-down ms-1"></i>
-                    </button>
-                </div>`;
+    // 🌟 2. ดึงข้อมูลจริงจาก Server แบบ Deep Fetch (รวมโพสต์เก่าๆ ที่อาจไม่เคยเห็น)
+    fetchFeed(false, true, true, targetId).then(res => {
+        if (res && res.feed) {
+            window.currentRelationPosts = res.feed;
+            renderRelationHistory();
         }
-        historyHtml += `</div>`;
-    } else {
-        historyHtml += `<h6 class="fw-bold mb-3" style="color:var(--primary-color);"><i class="fas fa-history me-2"></i>เส้นทางความดีล่าสุด</h6>`;
-        historyHtml += `<div class="text-center py-5 text-muted glass-card" style="border-style: dashed;">ยังไม่มีรายการความดีในทำเนียบ</div>`;
-    }
-    historyHtml += `</div>`;
+    }).catch(err => {
+        console.warn("Deep fetch failed, using local only:", err);
+    });
 
-    // 🌟 4. ประกอบร่าง HTML ลงหน้าจอ
-    const contentArea = document.getElementById('relationDetailContent');
-    if (contentArea) {
-        contentArea.innerHTML = `
-            <div class="glass-card mb-3 text-center pt-4">
-                <div class="heart-badge-wrapper mb-2">
-                    <img src="${user.img || 'https://dummyimage.com/100x100/ddd/888&text=?'}" class="rounded-pill border shadow" style="width:100px;height:100px;object-fit:cover; border:4px solid #fff !important;">
-                    <div class="heart-badge heart-badge-lg"><i class="fas fa-heart"></i></div>
-                </div>
-                <h4 class="fw-bold mt-2 mb-1">${user.name}</h4>
-                <div class="badge bg-warning text-dark rounded-pill mb-4 px-3">${user.role}</div>
-                
-                <div class="row g-2 mb-3 px-2">
-                    <div class="col-6">
-                        <div class="staff-stat-card py-3">
-                            <small class="text-muted">สถานะบุคลากร</small>
-                            <div class="fs-5 fw-bold text-warning"><i class="fas fa-crown me-1"></i>Hall of Fame</div>
-                        </div>
-                    </div>
-                    <div class="col-6">
-                        <div class="staff-stat-card py-3">
-                            <small class="text-muted">คะแนนสะสม</small>
-                            <div class="fs-4 fw-bold text-primary">${(user.score || 0).toLocaleString()} XP</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="row g-2 mb-3 px-2">
-                    <div class="col-4">
-                        <div class="staff-stat-card py-2">
-                            <div class="h5 mb-0 fw-bold text-primary">${postCount}</div>
-                            <small class="text-muted" style="font-size:0.65rem;">สร้างโพสต์</small>
-                        </div>
-                    </div>
-                    <div class="col-4">
-                        <div class="staff-stat-card py-2">
-                            <div class="h5 mb-0 fw-bold text-success">${tagCount}</div>
-                            <small class="text-muted" style="font-size:0.65rem;">ถูกแท็ก</small>
-                        </div>
-                    </div>
-                    <div class="col-4">
-                        <div class="staff-stat-card py-2">
-                            <div class="h5 mb-0 fw-bold text-warning">${witnessCount}</div>
-                            <small class="text-muted" style="font-size:0.65rem;">เป็นพยาน</small>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="p-3 mb-3 rounded-4 text-start mx-2" style="background: var(--glass-bg); border: 1px solid var(--border-color);">
-                    <div class="d-flex align-items-center mb-2">
-                        <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-2" style="width:30px;height:30px;">
-                            <i class="fas fa-medal" style="font-size:0.8rem;"></i>
-                        </div>
-                        <strong style="color: var(--primary-color);">อัตลักษณ์โดดเด่น: ${virtueLabel.label}</strong>
-                    </div>
-                    <p class="small mb-1 text-muted">${virtueDesc}</p>
-                    
-                    ${(user.topFriends && user.topFriends.length > 0) ? `
-                        <hr class="my-2 opacity-50">
-                        <div class="mt-2 text-start p-2 rounded" style="background: rgba(0,0,0,0.03);">
-                            <div class="small fw-bold mb-1 text-primary"><i class="fas fa-users-heart me-1"></i> ผู้ร่วมผูกพันสายใยสูงสุด (ตอนปฏิบัติงาน)</div>
-                            ${user.topFriends.slice(0, 2).map((f, i) => `
-                                <div class="d-flex align-items-center mb-1">
-                                    <span class="badge bg-secondary me-2" style="font-size:0.6rem;">${i + 1}</span>
-                                    <span class="small border-bottom border-secondary" style="color:var(--text-main); font-size:0.75rem;">${f.name} (ผูกพัน ${f.count} ครั้ง)</span>
-                                </div>
-                            `).join('')}
-                        </div>
-                    ` : ''}
-                </div>
-
-                <div class="mt-4 p-3 rounded-4 mx-2" style="background: var(--glass-bg); border: 1px solid var(--border-color);">
-                    <small class="fw-bold d-block mb-3 border-bottom pb-1 text-muted">ดัชนีความดีดั้งเดิม</small>
-                    <div style="height: 200px; position: relative;">
-                        <canvas id="relationRadarChart"></canvas>
-                    </div>
-                </div>
-            </div>
-            
-            ${historyHtml}
-        `;
-    }
-
+    // วาดกราฟ
     setTimeout(() => {
         const chartData = [v.volunteer || 0, v.sufficiency || 0, v.discipline || 0, v.integrity || 0, v.gratitude || 0];
         if (typeof drawPremiumRadar === 'function') {
             drawPremiumRadar('relationRadarChart', chartData, true, { showLabels: true });
         }
     }, 300);
+}
+
+function renderRelationHeader(user, virtueLabel, virtueDesc, postCount, tagCount, witnessCount) {
+    const contentArea = document.getElementById('relationDetailContent');
+    if (!contentArea) return;
+
+    contentArea.innerHTML = `
+        <div class="relation-detail-header p-4 text-center">
+            <div class="profile-img-wrap mb-4 shadow">
+                <img src="${user.img || 'https://dummyimage.com/100x100/ccc/888&text=?'}" class="profile-img-large" loading="lazy" onerror="this.src='https://dummyimage.com/100x100/ccc/888&text=?'">
+            </div>
+            <h4 class="fw-bold mb-1">${user.name}</h4>
+            <div class="badge bg-warning text-dark rounded-pill mb-4 px-3">${user.role}</div>
+            
+            <div class="row g-2 mb-3 px-2">
+                <div class="col-6">
+                    <div class="staff-stat-card py-3">
+                        <small class="text-muted">สถานะบุคลากร</small>
+                        <div class="fs-5 fw-bold text-warning"><i class="fas fa-crown me-1"></i>Hall of Fame</div>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="staff-stat-card py-3">
+                        <small class="text-muted">คะแนนสะสม</small>
+                        <div class="fs-4 fw-bold text-primary">${(user.score || 0).toLocaleString()} XP</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-2 mb-3 px-2">
+                <div class="col-4">
+                    <div class="staff-stat-card py-2">
+                        <div class="h5 mb-0 fw-bold text-primary">${postCount}</div>
+                        <small class="text-muted" style="font-size:0.65rem;">สร้างโพสต์</small>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="staff-stat-card py-2">
+                        <div class="h5 mb-0 fw-bold text-success">${tagCount}</div>
+                        <small class="text-muted" style="font-size:0.65rem;">ถูกแท็ก</small>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="staff-stat-card py-2">
+                        <div class="h5 mb-0 fw-bold text-warning">${witnessCount}</div>
+                        <small class="text-muted" style="font-size:0.65rem;">เป็นพยาน</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-3 mb-3 rounded-4 text-start mx-2" style="background: var(--glass-bg); border: 1px solid var(--border-color);">
+                <div class="d-flex align-items-center mb-2">
+                    <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-2" style="width:30px;height:30px;">
+                        <i class="fas fa-medal" style="font-size:0.8rem;"></i>
+                    </div>
+                    <strong style="color: var(--primary-color);">อัตลักษณ์โดดเด่น: ${virtueLabel.label}</strong>
+                </div>
+                <p class="small mb-1 text-muted">${virtueDesc}</p>
+            </div>
+
+            <div class="mt-4 p-3 rounded-4 mx-2" style="background: var(--glass-bg); border: 1px solid var(--border-color);">
+                <small class="fw-bold d-block mb-3 border-bottom pb-1 text-muted">ดัชนีความดีดั้งเดิม</small>
+                <div style="height: 200px; position: relative;">
+                    <canvas id="relationRadarChart"></canvas>
+                </div>
+            </div>
+
+            <!-- History Section -->
+            <div id="relationHistoryContainer" class="mt-4 px-2 pb-5 text-start">
+                <div class="d-flex align-items-center mb-3">
+                    <i class="fas fa-history text-muted me-2"></i>
+                    <strong class="text-muted">ประวัติการแบ่งปันเรื่องราว</strong>
+                </div>
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary mb-3"></div>
+                    <div class="small text-muted">กำลังดึงข้อมูลประวัติย้อนหลัง...</div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderRelationHistory() {
+    const container = document.getElementById('relationHistoryContainer');
+    if (!container) return;
+
+    if (!currentRelationPosts || currentRelationPosts.length === 0) {
+        container.innerHTML = `
+            <div class="d-flex align-items-center mb-3">
+                <i class="fas fa-history text-muted me-2"></i>
+                <strong class="text-muted">ประวัติการแบ่งปันเรื่องราว</strong>
+            </div>
+            <div class="text-center py-4 text-muted small bg-light rounded-4">
+                <i class="fas fa-info-circle mb-2 d-block"></i> ไม่พบประวัติการโพสต์ที่เปิดเผยต่อสาธารณะ
+            </div>
+        `;
+        return;
+    }
+
+    const html = generateFeedHtml(currentRelationPosts, {
+        visibleCount: currentRelationVisibleCount,
+        loadMoreOnClick: "loadMoreRelationHistory()",
+        isReadOnly: true // 🔥 เปิดโหมดอ่านอย่างเดียวในหน้าทำเนียบ
+    });
+
+    container.innerHTML = `
+        <div class="d-flex align-items-center mb-3">
+            <i class="fas fa-history text-muted me-2"></i>
+            <strong class="text-muted">ประวัติการแบ่งปันเรื่องราว (${currentRelationPosts.length})</strong>
+        </div>
+        ${html}
+    `;
+}
+
+function loadMoreRelationHistory() {
+    currentRelationVisibleCount += 10;
+    renderRelationHistory();
 }
 
 
@@ -2041,11 +2322,69 @@ async function submitData() {
         return res.json();
     }).then(data => {
         if (data.status === 'success') {
-            Swal.fire('สำเร็จ!', 'บันทึกความดีแล้ว', 'success').then(() => {
-                location.reload();
+            // 🌪️ ตรวจสอบระบบ Auto Rescue (ความห่วงใยอัตโนมัติ)
+            // ถ้าเลือกระดับความสุขเป็น 1 (เศร้า) ให้ถามว่าต้องการส่งสัญญาเรียกเพื่อนมาช่วยหรือไม่
+            if (parseInt(selectedMood) === 1) {
+                Swal.fire({
+                    title: '💓 พลังใจของคุณดูเหนื่อยล้า...',
+                    text: 'ต้องการส่งสัญญาณ "ขอพลังบวก" ให้เพื่อนร่วมงานทราบผ่านไลน์กลุ่มหรือไม่?',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#ff7675',
+                    confirmButtonText: '🚀 ส่งสัญญาณเรียกพวก!',
+                    cancelButtonText: 'ไม่เป็นไร ขอบคุณครับ'
+                }).then(res => {
+                    if (res.isConfirmed) {
+                        fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'trigger_auto_rescue', userId: currentUser.userId }) });
+                        Swal.fire('ส่งสัญญาณแล้ว', 'เพื่อนๆ กำลังจะมาให้กำลังใจคุณนะ!', 'success');
+                    }
+                });
+            }
+
+            Swal.fire({
+                icon: 'success',
+                title: 'บันทึกสำเร็จ!',
+                text: 'บันทึกความดีของคุณเรียบร้อยแล้ว',
+                timer: 2000,
+                showConfirmButton: false
+            }).then(() => {
+                // เคลียร์ค่าในฟอร์ม
+                const noteEl = document.getElementById('noteInput');
+                if (noteEl) noteEl.value = '';
+
+                const virtueEl = document.getElementById('virtueSelect');
+                if (virtueEl) virtueEl.value = '';
+
+                const mediaEl = document.getElementById('mediaLinkInput');
+                if (mediaEl) mediaEl.value = '';
+
+                currentImageFiles = [];
+                const fileCam = document.getElementById('fileCam');
+                if (fileCam) fileCam.value = '';
+
+                if (typeof renderThumbnails === 'function') renderThumbnails();
+
+                // 🌟 กลับไปหน้าเรื่องราว และโหลด Feed ใหม่
+                if (typeof switchTab === 'function') {
+                    const navStories = document.getElementById('nav-stories-btn');
+                    switchTab('stories', navStories);
+                }
+
+                // 🔄 โหลด Feed ใหม่ (หน่วงเวลานิดหน่วยเพื่อให้ GAS ประมวลผลเสร็จชัวร์ๆ)
+                setTimeout(() => {
+                    if (typeof fetchFeed === 'function') {
+                        // ปลดล็อก flag เผื่อมีค้าง
+                        isFetchingFeed = false;
+                        fetchFeed(false, true); // ✅ ใช้โหมด Silent เพื่อไม่ให้กระพริบ Skeleton
+                    }
+                    // อัปเดตข้อมูลผู้ใช้ (คะแนนและกราฟ)
+                    if (typeof checkUser === 'function' && currentUser) {
+                        checkUser(currentUser.userId, currentUser);
+                    }
+                }, 300);
             });
         } else {
-            throw new Error(data.message || 'Error recorded on server');
+            Swal.fire('ผิดพลาด', data.message || 'บันทึกไม่สำเร็จ', 'error');
         }
     }).catch(err => {
         console.error('❌ Save Error:', err);
@@ -2424,4 +2763,28 @@ function drawPersonalVirtueBarChart(virtueStats, canvasId = 'personalVirtueBarCh
     });
 }
 
-// ==========================================
+function getUserLevel(user) {
+    if (!user) return 5; // Default to Guest
+    const r = (user.role || '').toLowerCase();
+    if (r.includes('admin')) return 1;
+    if (r.includes('manager') || r.includes('executive') || r.includes('ผู้บริหาร') || r.includes('คลังจังหวัด')) return 2;
+    if (r.includes('newseditor') || r.includes('บรรณาธิการ')) return 3;
+    if (isGuest(user.role)) return 5;
+    return 4; // Staff
+}
+
+// --- 🚀 Scroll to Top Logic ---
+function scrollToTop() {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+window.addEventListener('scroll', () => {
+    const btn = document.getElementById('scrollToTopBtn');
+    if (!btn) return;
+
+    if (window.scrollY > 400) {
+        btn.classList.add('show');
+    } else {
+        btn.classList.remove('show');
+    }
+});
