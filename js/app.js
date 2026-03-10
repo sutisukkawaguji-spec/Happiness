@@ -1627,11 +1627,13 @@ function readNotif(id) {
     }
     localStorage.setItem(`notif_read_${id}`, 'true');
     renderNotifList();
+    closeNotifPanel(); // ✅ เมื่อกดอ่านแล้วให้ปิดหน้าต่างแจ้งเตือนลง
 }
 
 function markAllNotifRead() {
     localStorage.setItem('notif_cleared_at', Date.now().toString());
     renderNotifList();
+    closeNotifPanel(); // ✅ เมื่ออ่านทั้งหมดแล้วให้ปิดหน้าต่างแจ้งเตือนลง
 }
 
 function loadNotificationsFromConfig(config) {
