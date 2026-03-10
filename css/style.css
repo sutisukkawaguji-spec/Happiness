@@ -59,10 +59,10 @@
     filter: brightness(1.2) drop-shadow(0 0 5px rgba(255, 193, 7, 0.3));
 }
 
-[data-theme="dark"] canvas#managerLineChart,
+/* [data-theme="dark"] canvas#managerLineChart,
 [data-theme="dark"] canvas#trdBarChart {
     filter: invert(0.85) hue-rotate(180deg) brightness(1.1);
-}
+} */
 
 [data-theme="dark"] .friend-item,
 [data-theme="dark"] .friend-item.selected {
@@ -261,6 +261,36 @@ body {
     transition: color 0.25s, background 0.25s, transform 0.15s;
 }
 
+.new-post-alert {
+    background: var(--primary);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 50px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin: 10px auto;
+    width: max-content;
+    box-shadow: 0 4px 15px rgba(108, 92, 231, 0.4);
+    cursor: pointer;
+    z-index: 100;
+}
+
+[data-theme="dark"] .new-post-alert {
+    background: #514ea1;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.refresh-btn-manual {
+    background: var(--glass-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    transition: all 0.2s;
+}
+
+.refresh-btn-manual:active {
+    transform: rotate(45deg);
+}
+
 .nav-item.active {
     transform: scale(1.05);
 }
@@ -304,6 +334,45 @@ body {
     pointer-events: none;
     filter: grayscale(1);
     transition: all 0.3s;
+}
+
+/* --- Utility Classes --- */
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+
+.no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+.filter-box {
+    background: rgba(255, 255, 255, 0.4);
+    border-radius: 50px;
+    padding: 4px;
+    border: 1px solid var(--border-color);
+}
+
+[data-theme="dark"] .filter-box {
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.filter-btn {
+    border: none;
+    background: transparent;
+    padding: 6px 16px;
+    border-radius: 50px;
+    font-size: 0.85rem;
+    color: var(--text-color);
+    transition: 0.3s;
+    opacity: 0.7;
+}
+
+.filter-btn.active {
+    background: var(--primary);
+    color: white !important;
+    opacity: 1;
+    box-shadow: 0 4px 10px rgba(108, 92, 231, 0.3);
 }
 
 .witness-group {
@@ -352,7 +421,7 @@ body {
     border-radius: 50px;
     padding: 5px 10px;
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.15);
-    display: flex;
+    display: none;
     gap: 8px;
     z-index: 100;
     animation: popUp 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
@@ -367,6 +436,47 @@ body {
 
 .reaction-btn:hover {
     transform: scale(1.3);
+}
+
+.action-btn.liked {
+    background: rgba(231, 76, 60, 0.1);
+    color: #e74c3c !important;
+    border-radius: 20px;
+    padding: 2px 8px;
+}
+
+.action-btn.liked i,
+.action-btn.liked span {
+    color: #e74c3c !important;
+}
+
+/* Feed Manage Buttons */
+.feed-manage-btn {
+    background: rgba(0, 0, 0, 0.05);
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+}
+
+[data-theme="dark"] .feed-manage-btn {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.feed-manage-btn:hover {
+    background: rgba(0, 0, 0, 0.1);
+    transform: scale(1.1);
+}
+
+[data-theme="dark"] .feed-manage-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.feed-card .dropdown-item.text-danger:hover {
+    background-color: rgba(231, 76, 60, 0.1);
+    color: #e74c3c;
 }
 
 @keyframes popUp {
@@ -433,6 +543,29 @@ body {
     z-index: 5;
     object-fit: cover;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+/* Relation Detail Profile Image */
+.profile-img-wrap {
+    width: 110px;
+    height: 110px;
+    border-radius: 50%;
+    border: 4px solid #fff;
+    overflow: hidden;
+    position: relative;
+    background: #f0f0f0;
+    margin: 0 auto;
+    /* Centered */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.profile-img-large {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover;
+    display: block;
 }
 
 .aura-glow {
@@ -851,20 +984,22 @@ body {
 .image-grid-1 {
     grid-template-columns: 1fr !important;
     grid-template-rows: 1fr !important;
+    height: 400px !important;
+    /* ขยายรูปเดี่ยวให้ใหญ่จุใจ */
 }
 
 /* 📱 แบบ 2 รูป: แบ่งครึ่ง ซ้าย-ขวา เท่ากัน */
 .image-grid-2 {
     grid-template-columns: 1fr 1fr !important;
     grid-template-rows: 1fr !important;
-    height: 250px !important;
-    /* 2 รูปให้กรอบแคบลงมานิดนึง */
+    height: 300px !important;
 }
 
 /* 📱 แบบ 3 รูป: ซ้าย 1 (ใหญ่), ขวา 2 (เล็ก บน-ล่าง) */
 .image-grid-3 {
     grid-template-columns: 2fr 1fr !important;
     grid-template-rows: 1fr 1fr !important;
+    height: 350px !important;
 }
 
 .image-grid-3 .grid-img-wrapper:first-child {
@@ -875,12 +1010,14 @@ body {
 .image-grid-4 {
     grid-template-columns: 1fr 1fr !important;
     grid-template-rows: 1fr 1fr !important;
+    height: 380px !important;
 }
 
 /* 📱 แบบ 5 รูปขึ้นไป: แถวบน 2 ช่อง (แบ่งครึ่ง), แถวล่าง 3 ช่อง (แบ่งสาม) */
 .image-grid-5 {
     grid-template-columns: repeat(6, 1fr) !important;
     grid-template-rows: 1fr 1fr !important;
+    height: 400px !important;
 }
 
 .image-grid-5 .grid-img-wrapper:nth-child(1),
@@ -925,8 +1062,8 @@ body {
 ========================================= */
 #viewerTextOverlay {
     position: absolute;
-    /* 🌟 เปลี่ยนมาใช้ top ให้อยู่ข้างบนของหน้าจอ */
-    top: 10%;
+    /* 🌟 เปลี่ยนมาใช้ bottom เพื่อไม่ให้บังปุ่มปิดด้านบน */
+    bottom: 10%;
     left: 50%;
     transform: translateX(-50%);
     width: 90%;
@@ -1030,12 +1167,28 @@ body {
 
 .viewer-close {
     position: absolute;
-    top: 20px;
-    right: 20px;
+    top: 25px;
+    right: 25px;
     color: white;
-    font-size: 2rem;
+    font-size: 2.2rem;
     cursor: pointer;
-    z-index: 10;
+    z-index: 100005;
+    /* สูงกว่าทุกอย่าง */
+    background: rgba(0, 0, 0, 0.5);
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s;
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.viewer-close:hover {
+    background: rgba(231, 76, 60, 0.8);
+    transform: rotate(90deg);
 }
 
 .viewer-nav {
@@ -1146,6 +1299,103 @@ body {
     border-color: rgba(255, 255, 255, 0.08);
 }
 
+/* 🚀 Premium Scroll to Top Button */
+#scrollToTopBtn {
+    position: fixed;
+    bottom: 105px;
+    /* สูงกว่าเดิมเล็กน้อยเพื่อไม่ให้เบียด bottom nav */
+    right: 22px;
+    width: 52px;
+    height: 52px;
+    background: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%);
+    color: white;
+    border: none;
+    border-radius: 18px;
+    /* ปรับเป็นทรงสี่เหลี่ยมโค้งมนมน (Modern Icon Style) */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    cursor: pointer;
+    z-index: 99999;
+    /* สูงกว่าปุ่มอื่นๆ */
+    box-shadow: 0 8px 25px rgba(108, 92, 231, 0.4);
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(30px) rotate(15deg);
+    backdrop-filter: blur(10px);
+    overflow: visible;
+    /* ให้ Aura กระจายออกได้ */
+}
+
+/* 🌟 Aura หมุนรอบปุ่ม (Premium Effect) */
+#scrollToTopBtn::before {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    background: linear-gradient(45deg, #6c5ce7, #fd79a8, #00b894, #0984e3);
+    border-radius: 20px;
+    z-index: -1;
+    filter: blur(8px);
+    opacity: 0;
+    transition: opacity 0.3s;
+    animation: rotateAura 3s linear infinite;
+}
+
+#scrollToTopBtn.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0) rotate(0deg);
+    animation: floatingPulse 3s ease-in-out infinite;
+}
+
+@keyframes floatingPulse {
+
+    0%,
+    100% {
+        transform: translateY(0) rotate(0deg);
+    }
+
+    50% {
+        transform: translateY(-8px) rotate(-2deg);
+    }
+}
+
+#scrollToTopBtn.show::before {
+    opacity: 0.6;
+}
+
+#scrollToTopBtn:hover {
+    transform: scale(1.1) translateY(-5px);
+    box-shadow: 0 12px 30px rgba(108, 92, 231, 0.6);
+}
+
+#scrollToTopBtn:hover::before {
+    opacity: 0.9;
+    inset: -5px;
+    filter: blur(10px);
+}
+
+#scrollToTopBtn i {
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+@keyframes rotateAura {
+    0% {
+        filter: hue-rotate(0deg);
+    }
+
+    100% {
+        filter: hue-rotate(360deg);
+    }
+}
+
+[data-theme="dark"] #scrollToTopBtn {
+    background: linear-gradient(135deg, #8271ff 0%, #6c5ce7 100%);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5);
+}
+
 .bottom-nav {
     position: fixed;
     bottom: 20px;
@@ -1187,6 +1437,39 @@ body {
     color: var(--primary);
     background: rgba(108, 92, 231, 0.1);
     border-radius: 16px;
+}
+
+/* 🔔 Red Dot Notification */
+.nav-item {
+    position: relative;
+}
+
+.nav-notify-dot {
+    position: absolute;
+    top: 5px;
+    right: 20%;
+    width: 10px;
+    height: 10px;
+    background-color: #ff4757;
+    border: 2px solid white;
+    border-radius: 50%;
+    z-index: 10;
+    box-shadow: 0 0 10px rgba(255, 71, 87, 0.5);
+    animation: scalePulse 2s infinite;
+}
+
+@keyframes scalePulse {
+    0% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.3);
+    }
+
+    100% {
+        transform: scale(1);
+    }
 }
 
 #loading {
@@ -2041,7 +2324,7 @@ body {
 }
 
 
-/* --- Fullscreen Image Viewer --- */
+/* --- Fullscreen Image Viewer Cleanup --- */
 #imageViewer {
     position: fixed;
     top: 0;
@@ -2049,23 +2332,15 @@ body {
     width: 100%;
     height: 100%;
     background: rgba(0, 0, 0, 0.95);
-    z-index: 10000;
+    z-index: 100000;
     display: none;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    backdrop-filter: blur(10px);
+    backdrop-filter: blur(15px);
 }
 
-.viewer-close {
-    position: absolute;
-    top: 20px;
-    right: 20px;
-    color: white;
-    font-size: 2rem;
-    cursor: pointer;
-    z-index: 10001;
-}
+/* .viewer-close handled above to avoid duplicate specificity issues */
 
 .viewer-content {
     width: 100%;
@@ -2385,7 +2660,9 @@ body {
 }
 
 [data-theme="dark"] .relation-sub-btn.active {
+    background: linear-gradient(135deg, #f1c40f 0%, #e67e22 100%) !important;
     color: #fff !important;
+    box-shadow: 0 4px 20px rgba(230, 126, 34, 0.5) !important;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
