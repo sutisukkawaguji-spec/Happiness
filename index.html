@@ -326,29 +326,42 @@
         </div>
 
         <div id="page-stories" class="page-section active">
-            <div class="d-flex justify-content-between align-items-center mb-3 px-2">
+            <div class="d-flex justify-content-between align-items-center mb-0 px-2">
                 <h5 class="fw-bold mb-0">เรื่องราวความดี</h5>
             </div>
 
+            <!-- New Post Alert (Hidden by default) -->
+            <div id="newPostAlert" class="new-post-alert text-center animate__animated animate__fadeInDown"
+                style="display:none;" onclick="scrollToTopAndRefresh()">
+                <i class="fas fa-arrow-up me-1"></i> มีโพสต์ใหม่เข้ามา กดเพื่อดู
+            </div>
 
 
-            <div class="filter-box mt-2 mb-3">
-                <button class="filter-btn active" onclick="setFeedFilter('all', this)">
-                    <i class="fas fa-globe"></i> ทั้งหมด
-                </button>
-                <button class="filter-btn" onclick="setFeedFilter('related', this)">
-                    <i class="fas fa-user-tag"></i> เรื่องของฉัน
-                </button>
-                <button id="btn-filter-request" class="filter-btn" onclick="setFeedFilter('request', this)">
-                    <i class="fas fa-clipboard-check"></i> รอ Verify
-                    <span id="pending-badge" class="badge bg-danger rounded-pill ms-1"
-                        style="display:none; font-size:0.65rem;">0</span>
+
+            <div class="filter-box mt-2 mb-3 d-flex align-items-center">
+                <div class="d-flex gap-1 flex-grow-1 overflow-auto no-scrollbar">
+                    <button class="filter-btn active" onclick="setFeedFilter('all', this)">
+                        <i class="fas fa-globe"></i> ทั้งหมด
+                    </button>
+                    <button class="filter-btn text-nowrap" onclick="setFeedFilter('related', this)">
+                        <i class="fas fa-user-tag"></i> เรื่องของฉัน
+                    </button>
+                    <button id="btn-filter-request" class="filter-btn text-nowrap"
+                        onclick="setFeedFilter('request', this)">
+                        <i class="fas fa-clipboard-check"></i> รอ Verify
+                        <span id="pending-badge" class="badge bg-danger rounded-pill ms-1"
+                            style="display:none; font-size:0.65rem;">0</span>
+                    </button>
+                </div>
+                <button class="btn btn-outline-secondary rounded-circle ms-2 border-0" onclick="scrollToTopAndRefresh()"
+                    title="รีเฟรช">
+                    <i class="fas fa-redo-alt" id="refresh-icon-spin"></i>
                 </button>
             </div>
 
-            <div class="px-2 mb-3 d-flex gap-2 text-nowrap" style="overflow-x: auto;">
+            <div class="px-2 mb-3 d-flex align-items-center gap-2 overflow-auto no-scrollbar">
                 <select id="filterCategory" class="form-select form-select-sm rounded-pill" style="min-width: 130px;"
-                    onchange="fetchFeed()">
+                    onchange="fetchFeed(false, false, true)">
                     <option value="">ทุกหมวดหมู่</option>
                     <option value="featured" style="color: #f39c12; font-weight: bold;">🌟 กิจกรรมเด่น</option>
                     <option value="volunteer" style="color:#00a8ff;">🤝 จิตอาสา</option>
@@ -358,8 +371,8 @@
                     <option value="gratitude" style="color:#e84393;">🙏 กตัญญู</option>
                 </select>
 
-                <select id="filterYear" class="form-select form-select-sm rounded-pill" style="min-width: 100px;"
-                    onchange="fetchFeed()">
+                <select id="filterYear" class="form-select form-select-sm rounded-pill" style="min-width: 80px;"
+                    onchange="fetchFeed(false, false, true)">
                     <option value="">ทุกปี</option>
                     <option value="2025">2025</option>
                     <option value="2026">2026</option>
@@ -381,16 +394,11 @@
         <div id="page-stats" class="page-section">
             <div class="glass-card text-center">
                 <h5 class="fw-bold">สมดุลพลังของคุณ</h5>
-                <div class="radar-wrapper">
-                    <div class="radar-icon ri-top" title="จิตอาสา"><i class="fas fa-hand-holding-heart"></i></div>
-                    <div class="radar-icon ri-tr" title="พอเพียง"><i class="fas fa-leaf"></i></div>
-                    <div class="radar-icon ri-br" title="วินัย"><i class="fas fa-ruler-combined"></i></div>
-                    <div class="radar-icon ri-bl" title="สุจริต"><i class="fas fa-gem"></i></div>
-                    <div class="radar-icon ri-tl" title="กตัญญู"><i class="fas fa-hands-praying"></i></div>
+                <div class="radar-wrapper" style="height: 350px; position: relative;">
                     <canvas id="userRadarChart"></canvas>
                 </div>
 
-                <div id="statAnalysis" class="mt-2 p-3 rounded-4 border shadow-sm" style="transition: all 0.5s ease;">
+                <div id="statAnalysis" class="mt-4 p-3 rounded-4 border shadow-sm" style="transition: all 0.5s ease;">
                     <h5 id="statTitle" class="fw-bold mb-2">...</h5>
                     <p id="statDesc" class="small text-dark mb-0" style="opacity: 0.8;">...</p>
                 </div>
@@ -526,10 +534,25 @@
             </div>
 
 
-            <h6 class="fw-bold border-bottom pb-2 d-flex justify-content-between mt-4 px-2">
+            <div class="px-2 mb-3">
+                <div class="input-group input-group-sm shadow-sm rounded-pill overflow-hidden border">
+                    <span class="input-group-text bg-white border-0"><i class="fas fa-search text-muted"></i></span>
+                    <input type="text" id="staffFilterInput" class="form-control border-0 px-2"
+                        placeholder="ค้นหารายชื่อบุคลากร..." onkeyup="filterStaffList()">
+                </div>
+            </div>
+
+            <h6 class="fw-bold border-bottom pb-2 d-flex justify-content-between mt-2 px-2">
                 สถานะบุคลากร <small class="text-muted" style="font-size:0.6rem">🔴วิกฤต 🟠ระวัง 🟢ปกติ</small>
             </h6>
-            <div id="staffListArea" class="px-2"></div>
+            <div id="staffListArea" class="px-2 mb-4"></div>
+
+            <div id="guestSectionArea" style="display:none;">
+                <h6 class="fw-bold border-bottom pb-2 mt-4 px-2 text-muted">
+                    <i class="fas fa-user-clock me-2"></i>รายชื่อรอแต่งตั้งสิทธิ์ (Guest)
+                </h6>
+                <div id="guestListArea" class="px-2"></div>
+            </div>
 
         </div>
     </div>
@@ -547,12 +570,17 @@
         <div class="viewer-counter"><span id="viewerCurrent">1</span> / <span id="viewerTotal">1</span></div>
     </div>
 
+    <!-- 🚀 ปุ่มกลับไปบนสุด (Scroll to Top) -->
+    <button id="scrollToTopBtn" onclick="scrollToTop()" title="กลับไปบนสุด">
+        <i class="fas fa-chevron-up"></i>
+    </button>
+
     <div class="bottom-nav">
-        <div class="nav-item" onclick="switchTab('record', this)" style="display: none;"><i
+        <div class="nav-item" id="nav-record-btn" onclick="switchTab('record', this)" style="display: none;"><i
                 class="fas fa-plus-circle"></i><span>บันทึก</span></div>
         <div class="nav-item active" id="nav-stories-btn" onclick="switchTab('stories', this)"><i
                 class="fas fa-images"></i><span>เรื่องราว</span></div>
-        <div class="nav-item" onclick="switchTab('stats', this)" style="display: none;"><i
+        <div class="nav-item" id="nav-stats-btn" onclick="switchTab('stats', this)" style="display: none;"><i
                 class="fas fa-chart-pie"></i><span>สถิติ</span>
         </div>
         <div class="nav-item" id="nav-badges-btn" onclick="switchTab('badges', this)" style="display: none;"><i
@@ -576,6 +604,7 @@
     ให้ copy โค้ดจากแต่ละไฟล์กลับมาใส่ใน <script> เดิม 1 ก้อน
     ============================================================
     -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="js/config.js"></script>
     <script src="js/auth.js"></script>
     <script src="js/feed.js"></script>
