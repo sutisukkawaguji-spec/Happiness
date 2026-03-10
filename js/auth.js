@@ -47,51 +47,51 @@ async function main() {
             currentUser = savedSession;
             finishLoginProcess(); // โหลด UI ทันที
             
-            // 🌟 รัน LIFF.init เงียบๆ ในพื้นหลัง เพื่อต่ออายุ Token (เผื่อเรียกใช้ฟังก์ชัน LIFF ภายหลัง)
+            // รัน LIFF.init เงียบๆ ในพื้นหลัง
             liff.init({ liffId: LIFF_ID }).catch(e => console.log('Silent LIFF init failed:', e));
 
-            // 🌟 2. อัปเดตข้อมูลเบื้องหลังแบบเงียบๆ (Background Sync) 
-            // เพื่อดึงคะแนนล่าสุดและประกาศใหม่ๆ มาแสดงโดยไม่ให้หน้าเว็บค้าง
+            // อัปเดตข้อมูลเบื้องหลังแบบเงียบๆ (Background Sync) 
             fetch(GAS_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                 body: JSON.stringify({ action: 'check_user', userId: currentUser.userId, img: currentUser.img })
             })
-                .then(async res => {
-                    const text = await res.text();
-                    return JSON.parse(text);
-                })
-                .then(async data => {
-                    if (data.exists) {
-                        // อัปเดตเฉพาะตัวเลขและสถานะที่อาจจะเปลี่ยนไป
-                        currentUser.score = data.user.score || currentUser.score;
-                        currentUser.level = data.user.level || currentUser.level;
-                        currentUser.happyScore = parseFloat(data.user.happyScore) || parseFloat(data.user.happy) || currentUser.happyScore;
-                        currentUser.virtueStats = data.user.virtueStats || currentUser.virtueStats;
-                        currentUser.role = data.user.role || currentUser.role;
+            .then(async res => JSON.parse(await res.text()))
+            .then(async data => {
+                if (data.exists) {
+                    currentUser.score = data.user.score || currentUser.score;
+                    currentUser.level = data.user.level || currentUser.level;
+                    currentUser.happyScore = parseFloat(data.user.happyScore) || parseFloat(data.user.happy) || currentUser.happyScore;
+                    currentUser.virtueStats = data.user.virtueStats || currentUser.virtueStats;
+                    currentUser.role = data.user.role || currentUser.role;
 
-                        // เซฟทับข้อมูลเก่าในเครื่องให้เป็นปัจจุบัน
-                        saveUserSession(currentUser);
+                    saveUserSession(currentUser);
 
-                        // รีเฟรชหน้าโปรไฟล์ให้ตัวเลขคะแนนเด้งเป็นของใหม่
-                        if (typeof renderProfile === 'function') renderProfile();
+                    if (typeof renderProfile === 'function') renderProfile();
 
-                        // อัปเดตประกาศและการแจ้งเตือนล่าสุด
-                        if (data.config) {
-                            if (typeof renderAnnouncement === 'function') renderAnnouncement(data.config);
-                            if (typeof loadNotificationsFromConfig === 'function') loadNotificationsFromConfig(data.config);
-                            if (typeof notifyFromConfig === 'function') notifyFromConfig(data.config);
-                            if (typeof showLifecycleDialogs === 'function') await showLifecycleDialogs(data.config);
-                        }
-                        console.log('🔄 อัปเดตข้อมูลเบื้องหลังเสร็จสมบูรณ์');
+                    if (data.config) {
+                        if (typeof renderAnnouncement === 'function') renderAnnouncement(data.config);
+                        if (typeof loadNotificationsFromConfig === 'function') loadNotificationsFromConfig(data.config);
+                        if (typeof notifyFromConfig === 'function') notifyFromConfig(data.config);
+                        if (typeof showLifecycleDialogs === 'function') await showLifecycleDialogs(data.config);
                     }
-                }).catch(e => console.log('Background sync failed:', e));
+                    console.log('🔄 อัปเดตข้อมูลเบื้องหลังเสร็จสมบูรณ์');
+                }
+            }).catch(e => console.log('Background sync failed:', e));
 
-            return; // จบการทำงาน ไม่ต้องไปโหลด LIFF ต่อให้เสียเวลา
+            return; // จบการทำงาน
         }
 
         // --- 🌟 3. ถ้าไม่มีเซสชันในเครื่อง ค่อยเริ่มกระบวนการล็อกอิน LIFF ตามปกติ ---
         await liff.init({ liffId: LIFF_ID });
+
+        // 🔧 [แก้ไขแล้ว]: ทำความสะอาด URL ทันทีหลังจาก init เสร็จ ป้องกันบั๊กล็อกอินลูป
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('code') || urlParams.has('state') || urlParams.has('liff.state')) {
+            console.log('🧹 พบพารามิเตอร์ล็อกอิน ทำการซ่อน URL ให้สะอาด...');
+            // ลบ query string ทิ้งโดยไม่รีเฟรชหน้า
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
 
         // ตรวจสอบสถานะการล็อกอิน
         if (liff.isLoggedIn()) {
@@ -118,42 +118,15 @@ async function main() {
             return;
         }
 
+        // 🔧 [แก้ไขแล้ว]: ถ้ายืนยันว่าเปิดในแอป LINE จริงๆ มันควรจะ LoggedIn อัตโนมัติแล้ว 
+        // ไม่ควรสั่ง liff.login() ซ้อนเด็ดขาด ให้แจ้งเตือนแทน
         if (liff.isInClient()) {
-            liff.login({ stayLoggedIn: true }); // เพิ่มตัวเลือก stayLoggedIn ถ้า LIFF รองรับ
-            return;
+            console.warn('⚠️ เปิดในแอป LINE แต่สถานะไม่ได้ล็อกอิน (ผิดปกติ)');
+            // ไม่ต้องทำอะไร ให้หลุดไปแสดงปุ่มล็อกอินตามปกติ หรืออาจจะ reload หน้าเว็บ 1 ครั้ง
         }
 
-        // --- กรณีเปิดผ่านบราวเซอร์ภายนอก (External Browser) ---
-
-        // 1. เช็คว่ามี Query Params ที่เป็น callback จาก LIFF หรือไม่ (แก้ปัญหา Loop)
-        const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.has('code') || urlParams.has('state')) {
-            console.log('🔄 ถอดรหัส LIFF Token...');
-            setTimeout(() => {
-                if (liff.isLoggedIn()) {
-                    window.location.replace(window.location.pathname); // ทิ้ง params แล้วโหลดใหม่
-                } else {
-                    document.getElementById('loading').innerHTML = `
-                        <div class="text-center p-4">
-                            <h5 class="text-warning fw-bold">⚠️ เข้าสู่ระบบไม่สำเร็จ</h5>
-                            <p class="small text-muted">บราวเซอร์ของคุณอาจจะ<b>บล็อกคุกกี้ (Third-party Cookies)</b> ทำให้ล็อกอินผ่านหน้าเว็บไม่ได้<br><br>แนะนำให้เปิดลิงก์ผ่านแอป <b>LINE</b> โดยตรงครับ</p>
-                        </div>
-                    `;
-                }
-            }, 2500);
-            return;
-        }
-
-        // 2. ถ้าไม่มี session ใน LIFF แต่เคยล็อกอินแล้วและมี Cached ID
-        const cachedId = safeGetItem('liff_userId');
-        if (cachedId) {
-            const cachedName = safeGetItem('liff_displayName');
-            const cachedImg = safeGetItem('liff_pictureUrl');
-            await checkUser(cachedId, { userId: cachedId, displayName: cachedName || 'ผู้ใช้งาน', pictureUrl: cachedImg || '' });
-            return;
-        }
-
-        // 3. ถ้าไม่มี session เลย -> แสดงหน้าจอ Login (เก่งดี)
+        // --- กรณีเปิดผ่านบราวเซอร์ภายนอก (External Browser) หรือยังไม่มีเซสชัน ---
+        // 3. แสดงหน้าจอ Login (เก่งดี)
         document.getElementById('loading').innerHTML = `
             <div class="text-center p-4 login-card" style="max-width:380px; background:var(--glass-bg); border-radius:30px; border:1px solid var(--border-color); box-shadow:0 15px 35px rgba(0,0,0,0.1);">
                 <div class="mb-4">
@@ -207,7 +180,6 @@ async function main() {
             </div>`;
     }
 }
-
 // LINE Login handler
 function doLineLogin() {
     try {
@@ -445,3 +417,4 @@ async function showLifecycleDialogs(config) {
     if (typeof checkAndShowSurvey === 'function') await checkAndShowSurvey();
     if (typeof requestNotificationPermission === 'function') await requestNotificationPermission();
 }
+
