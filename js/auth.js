@@ -37,101 +37,124 @@ async function cacheUsers() {
     });
 }
 
-// Function to perform background sync (extracted from original main)
-function performBackgroundSync() {
-    fetch(GAS_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: 'check_user', userId: currentUser.userId, img: currentUser.img })
-    })
-        .then(async res => JSON.parse(await res.text()))
-        .then(async data => {
-            if (data.exists) {
-                currentUser = { ...currentUser, ...data.user, userId: currentUser.userId };
-                saveUserSession(currentUser);
-                if (typeof renderProfile === 'function') renderProfile();
-                if (data.config && typeof showLifecycleDialogs === 'function') await showLifecycleDialogs(data.config);
-                console.log('🔄 อัปเดตข้อมูลเบื้องหลังเสร็จสมบูรณ์');
-            }
-        }).catch(e => console.log('Background sync failed:', e));
-}
-
 // --- MAIN ENTRY POINT ---
 async function main() {
     try {
-        // 🌟 1. ลำดับความเร็วสูงสุด: เช็คเซสชัน หรือ รหัสที่จำไว้ (Bypass LIFF for speed)
-        let savedSession = getUserSession();
-        let rememberedId = safeGetItem('last_staff_id') || safeGetItem('liff_userId');
-
+        // 🌟 1. เช็คเซสชัน: โหลดข้อมูลจากเครื่องมาโชว์ทันที (เข้าแอปไว ไม่ติดหน้าโหลด)
+        const savedSession = getUserSession();
         if (savedSession) {
-            console.log('🎉 พบเซสชันเดิม เข้าหน้าแอปทันที...');
+            console.log('🎉 พบเซสชันเดิม โหลดหน้าแอปทันที!');
             currentUser = savedSession;
-            finishLoginProcess();
-            // รัน LIFF/Sync เงียบๆ
-            liff.init({ liffId: LIFF_ID }).catch(() => {});
-            performBackgroundSync();
-            return;
-        } 
-        
-        // 🌟 2. ถ้าไม่มีเซสชันแต่ "จำรหัสได้": ลองล็อกอินด้วยรหัสพนักงานอัตโนมัติ (Fast login)
-        if (rememberedId) {
-            console.log('💡 พบรหัสเดิม (' + rememberedId + ') กำลังล็อกอินอัตโนมัติ...');
-            // ไม่ต้องรอ LIFF init ให้เสียเวลา ลองเช็คกับ Server เลย
-            await checkUser(rememberedId, null);
-            // ถ้าสำเร็จ ฟังก์ชัน checkUser จะพาเข้าหน้าแอปเอง
-            // ถ้าไม่สำเร็จ (เช่น รหัสถูกลบ) มันจะหลุดไปด้านล่างเพื่อแสดงหน้า Login ใหม่
-            if (window.currentUser) {
-                liff.init({ liffId: LIFF_ID }).catch(() => {});
-                return;
-            }
+            finishLoginProcess(); // โหลด UI ทันที
+
+            // รัน LIFF.init เงียบๆ ในพื้นหลัง
+            liff.init({ liffId: LIFF_ID }).catch(e => console.log('Silent LIFF init failed:', e));
+
+            // อัปเดตข้อมูลเบื้องหลังแบบเงียบๆ (Background Sync) 
+            fetch(GAS_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({ action: 'check_user', userId: currentUser.userId, img: currentUser.img })
+            })
+                .then(async res => JSON.parse(await res.text()))
+                .then(async data => {
+                    if (data.exists) {
+                        currentUser.score = data.user.score || currentUser.score;
+                        currentUser.level = data.user.level || currentUser.level;
+                        currentUser.happyScore = parseFloat(data.user.happyScore) || parseFloat(data.user.happy) || currentUser.happyScore;
+                        currentUser.virtueStats = data.user.virtueStats || currentUser.virtueStats;
+                        currentUser.role = data.user.role || currentUser.role;
+
+                        saveUserSession(currentUser);
+
+                        if (typeof renderProfile === 'function') renderProfile();
+
+                        if (data.config) {
+                            if (typeof renderAnnouncement === 'function') renderAnnouncement(data.config);
+                            if (typeof loadNotificationsFromConfig === 'function') loadNotificationsFromConfig(data.config);
+                            if (typeof notifyFromConfig === 'function') notifyFromConfig(data.config);
+                            if (typeof showLifecycleDialogs === 'function') await showLifecycleDialogs(data.config);
+                        }
+                        console.log('🔄 อัปเดตข้อมูลเบื้องหลังเสร็จสมบูรณ์');
+                    }
+                }).catch(e => console.log('Background sync failed:', e));
+
+            return; // จบการทำงาน
         }
 
-        // --- 🌟 3. กรณีไม่มีข้อมูลใดๆ เลย ค่อยเริ่มกระบวนการ LIFF ปกติ ---
+        // --- 🌟 3. ถ้าไม่มีเซสชันในเครื่อง ค่อยเริ่มกระบวนการล็อกอิน LIFF ตามปกติ ---
         await liff.init({ liffId: LIFF_ID });
 
-        // ลบ Query String
+        // 🔧 [แก้ไขแล้ว]: ทำความสะอาด URL ทันทีหลังจาก init เสร็จ ป้องกันบั๊กล็อกอินลูป
         const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.has('code') || urlParams.has('state')) {
+        if (urlParams.has('code') || urlParams.has('state') || urlParams.has('liff.state')) {
+            console.log('🧹 พบพารามิเตอร์ล็อกอิน ทำการซ่อน URL ให้สะอาด...');
+            // ลบ query string ทิ้งโดยไม่รีเฟรชหน้า
             window.history.replaceState({}, document.title, window.location.pathname);
         }
 
+        // ตรวจสอบสถานะการล็อกอิน
         if (liff.isLoggedIn()) {
             const profile = await liff.getProfile();
+            // เก็บข้อมูลดิบไว้เป็นแบ็กอัป
             safeSetItem('liff_userId', profile.userId);
             safeSetItem('liff_displayName', profile.displayName);
+            safeSetItem('liff_pictureUrl', profile.pictureUrl || '');
+
+            // ตรวจสอบกับเซิร์ฟเวอร์และสร้างเซสชัน
             await checkUser(profile.userId, profile);
             return;
         }
 
-        if (liff.isInClient()) {
-            doLineLogin();
+        // กรณีอยู่ในแอป LINE และยังไม่ล็อกอิน ให้พาไปล็อกอินอัตโนมัติ (แต่เช็คแบ็กอัปก่อน)
+        const backupId = safeGetItem('liff_userId');
+        if (backupId) {
+            console.log('💡 ใช้ข้อมูล Backup ID เพื่อเข้าใช้งาน...');
+            await checkUser(backupId, {
+                userId: backupId,
+                displayName: safeGetItem('liff_displayName') || 'User',
+                pictureUrl: safeGetItem('liff_pictureUrl') || ''
+            });
             return;
         }
 
-        // แสดงหน้าจอ Login ทางเลือก สำหรับ Browser ภายนอก
+        // 🔧 [แก้ไขแล้ว]: ถ้ายืนยันว่าเปิดในแอป LINE จริงๆ มันควรจะ LoggedIn อัตโนมัติแล้ว 
+        // ไม่ควรสั่ง liff.login() ซ้อนเด็ดขาด ให้แจ้งเตือนแทน
+        if (liff.isInClient()) {
+            console.warn('⚠️ เปิดในแอป LINE แต่สถานะไม่ได้ล็อกอิน (ผิดปกติ)');
+            // ไม่ต้องทำอะไร ให้หลุดไปแสดงปุ่มล็อกอินตามปกติ หรืออาจจะ reload หน้าเว็บ 1 ครั้ง
+        }
+
+        // --- กรณีเปิดผ่านบราวเซอร์ภายนอก (External Browser) หรือยังไม่มีเซสชัน ---
+        // 3. แสดงหน้าจอ Login แบบ LINE Official Style ( знакомый และ Professional)
         document.getElementById('loading').innerHTML = `
             <div class="login-page-wrapper animate__animated animate__fadeIn" style="position:fixed; top:0; left:0; width:100%; height:100%; background:#ffffff; display:flex; align-items:center; justify-content:center; z-index:10001; font-family:'Kanit', sans-serif;">
                 <div class="login-card-line" style="width:90%; max-width:380px; text-align:center;">
+                    
+                    <!-- LINE Logo Branding -->
                     <div class="mb-5">
                         <img src="https://upload.wikimedia.org/wikipedia/commons/4/41/LINE_logo.svg" style="width:80px; height:80px; margin-bottom:20px;">
-                        <h4 class="fw-bold" style="color:#000;">เข้าสู่ระบบ ดี มีสุข</h4>
-                        <p class="text-muted small">เชื่อมต่อข้อมูลผ่านบัญชี LINE ของคุณ</p>
+                        <h4 class="fw-bold" style="color:#000; letter-spacing:-0.5px;">เข้าสู่ระบบด้วย LINE</h4>
+                        <p class="text-muted small">ระบบ "ดี มีสุข" จะเชื่อมต่อข้อมูลผ่านบัญชี LINE ของคุณ</p>
                     </div>
 
+                    <!-- Main Login Buttons -->
                     <div class="mb-4">
                         <button onclick="doLineLogin()" class="btn w-100 mb-3 d-flex align-items-center justify-content-center" style="background:#06C755; color:#fff; height:54px; border-radius:4px; font-weight:600; border:none; font-size:1.05rem;">
-                             เข้าสู่ระบบด้วย LINE
+                             เข้าสู่ระบบ / แสกน QR Code
                         </button>
                     </div>
 
                     <div class="d-flex align-items-center my-4">
+                        <hr class="flex-grow-1" style="opacity:0.1;">
+                        <span class="mx-3 text-muted" style="font-size:0.7rem; font-weight:bold;">หรือเข้าใช้งานด้วย</span>
+                        <hr class="flex-grow-1" style="opacity:0.1;">
+                    </div>
+
                     <!-- Staff ID Secondary Option -->
                     <div class="mb-3">
                          <div class="input-group mb-2" style="height:48px;">
-                            <input type="text" id="staffIdInput" class="form-control text-center" 
-                                   style="border-radius:4px; border:1px solid #ddd; background:#f9f9f9;" 
-                                   placeholder="รหัสพนักงาน หรือ User ID"
-                                   value="${safeGetItem('last_staff_id') || ''}">
+                            <input type="text" id="staffIdInput" class="form-control text-center" style="border-radius:4px; border:1px solid #ddd; background:#f9f9f9;" placeholder="รหัสพนักงาน หรือ User ID">
                         </div>
                         <button onclick="doStaffLogin()" class="btn btn-outline-secondary w-100 small" style="height:40px; border-radius:4px; font-size:0.85rem; border:1px solid #ddd; color:#666;">
                             ตกลง
@@ -265,7 +288,6 @@ function checkUser(userId, profile) {
 
                 // 🌟 2. เซฟผู้ใช้ลงเซสชัน
                 saveUserSession(currentUser);
-                safeSetItem('last_staff_id', targetUserId); // จดจำรหัสล่าสุดเอาไว้กรอกให้อัตโนมัติ
 
                 // 3. เรียกฟังก์ชันรันหน้าจอแอป
                 finishLoginProcess(data.config);
