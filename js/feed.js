@@ -127,7 +127,7 @@ const FEED_PAGE_SIZE = 10;
 
 // ----- Fetch & Render Feed -----
 // ----- Fetch & Render Feed -----
-function fetchFeed(append = false, silent = false, force = false, targetUserId = null) {
+function fetchFeed(append = false, silent = false, force = false, targetUserId = null, resetCount = true) {
     return new Promise((resolve) => {
         // 🛡️ ป้องกันการโหลดซ้อนกัน (รวมทั้งแบบ Silent ด้วย)
         if (isFetchingFeed && !force) return resolve();
@@ -159,7 +159,7 @@ function fetchFeed(append = false, silent = false, force = false, targetUserId =
             queryParams.push(`userId=${targetUserId}`);
         }
 
-        if (!append) {
+        if (!append && resetCount) {
             // เคลียร์สถานะการ Render เดิม
             currentVisibleCount = FEED_PAGE_SIZE;
             renderedPostIds.clear();
@@ -236,12 +236,16 @@ function fetchFeed(append = false, silent = false, force = false, targetUserId =
                     }
                 });
 
+                // 🌟 อัปเดตจำนวนทั้งหมดจาก Server
+                window.globalFeedTotal = data.totalCount || feed.length;
+
                 // 🌟 สำหรับหน้า Relation Detail เราจะคืนข้อมูลชุดนี้ไปแสดงผลเอง
                 if (targetUserId) {
-                    return resolve({ feed, userMap: data?.userMap });
+                    return resolve({ feed, userMap: data?.userMap, totalCount: data.totalCount });
                 }
 
                 globalFeedData = feed;
+
 
                 // --- 🔔 ระบบ Red Dot แจ้งเตือนเรื่องราวใหม่ (Red Dot Notification) ---
                 if (!targetUserId && feed.length > 0) {
@@ -342,7 +346,8 @@ function generateFeedHtml(posts, options = {}) {
     } = options;
 
     const visibleFeed = posts.slice(0, visibleCount);
-    const hasMore = posts.length > visibleCount;
+    // 🌟 เช็คว่ามีรายการมากกว่าพื้นที่จะโชว์ หรือ มีข้อมูลในฐานข้อมูลที่ยังไม่ได้โหลดมา
+    const hasMore = posts.length > visibleCount || (globalFeedData.length >= currentFeedLimit && (window.globalFeedTotal || 0) > globalFeedData.length);
 
     const virtueMap = { volunteer: '🤝 จิตอาสา', sufficiency: '🌱 พอเพียง', discipline: '📏 วินัย', integrity: '💎 สุจริต', gratitude: '🙏 กตัญญู' };
     const iconMap = { like: '👍', love: '❤️', wow: '😮', laugh: '😂', sad: '😢', pray: '🙏' };
@@ -484,7 +489,7 @@ function generateFeedHtml(posts, options = {}) {
                 <button class="btn btn-outline-primary rounded-pill px-5 shadow-sm bg-white" onclick="${loadMoreOnClick}">
                     <i class="fas fa-chevron-down me-2"></i> ดูเรื่องราวเพิ่มเติม
                 </button>
-                <div class="text-muted small mt-2">แสดง ${visibleFeed.length} จากทั้งหมด ${posts.length} ชุด</div>
+                <div class="text-muted small mt-2">แสดง ${visibleFeed.length} จากทั้งหมด ${window.globalFeedTotal || posts.length} รายการปัจจุบัน</div>
             </div>`;
     }
     return htmlBuffer;
@@ -507,6 +512,49 @@ function renderFeedUI(filteredFeed, append = false) {
 
 
 function loadMoreFeed() {
+    // 🌪️ ตรวจสอบว่าใน Cache ที่โหลดมา มีรายการที่ตรงเงื่อนไข Filter กี่รายการ
+    const myId = String(window.currentUser?.userId || "");
+    const filterType = currentFeedFilter;
+    const filterCategory = document.getElementById('filterCategory')?.value || '';
+    const filterYear = document.getElementById('filterYear')?.value || '';
+    
+    const postsInCache = (globalFeedData || []).filter(post => {
+        if (!post) return false;
+        const isMyPost = String(post.user_line_id || post.userId || "") === myId;
+        const isPrivate = post.privacy === 'private';
+        const verifyList = Array.isArray(post.verifies) ? post.verifies : [];
+        const alreadyVerified = verifyList.some(v => String(v.userId || v.lineId || v) === myId);
+        if (isPrivate && !isMyPost) return false;
+        if (filterType === 'related' && filterCategory !== 'featured') {
+            let taggedList = String(post.taggedFriends || '').split(',').map(id => id.trim());
+            if (!isMyPost && !taggedList.includes(myId)) return false;
+        }
+        if (filterType === 'request') {
+            let taggedList = String(post.taggedFriends || '').split(',').map(id => id.trim());
+            if (isMyPost || alreadyVerified || taggedList.includes(myId)) return false;
+        }
+        if (filterCategory === 'featured') { if (!post.isPinned) return false; }
+        else if (filterCategory && post.virtue !== filterCategory) return false;
+        if (filterYear) {
+            const py = post.timestamp ? new Date(post.timestamp).getFullYear() : '';
+            if (String(py) !== filterYear) return false;
+        }
+        return true;
+    });
+
+    // 🌪️ ถ้าจำนวนที่จะโชว์เพิ่ม มันไปสุดทางของ Cache แล้ว แต่ยังมีข้อมูลใน DB ที่ยังไม่ได้ดึงมา
+    // หรือถ้าใน Cache ไม่มีข้อมูลที่ตรงเงื่อนไขเลยแต่ยังไม่ถึงท้ายสุดของ DB
+    if ((currentVisibleCount + FEED_PAGE_SIZE > postsInCache.length || postsInCache.length === 0) && (window.globalFeedTotal || 0) > (globalFeedData || []).length) {
+        // แสดงสถานะโหลดบนปุ่ม
+        const btnWrapper = document.getElementById('loadMoreBtnWrapper');
+        if (btnWrapper) btnWrapper.innerHTML = '<button class="btn btn-outline-primary rounded-pill px-5 disabled bg-white shadow-sm"><i class="fas fa-spinner fa-spin me-2"></i>กำลังขุดหาเรื่องราว...</button>';
+        
+        currentFeedLimit += 50;
+        currentVisibleCount += FEED_PAGE_SIZE; 
+        fetchFeed(false, true, false, null, false); // append=false, silent=true, resetCount=false
+        return;
+    }
+
     currentVisibleCount += FEED_PAGE_SIZE;
 
     // 🌪️ ใช้ข้อมูลจาก Cache เดิมมารัน Local Pagination (ไม่ต้อง Fetch ใหม่)
@@ -940,7 +988,10 @@ function updateViewer() {
     const currentEl = document.getElementById('viewerCurrent');
     const totalEl = document.getElementById('viewerTotal');
 
-    if (imgEl) imgEl.src = viewerImages[viewerIndex];
+    if (imgEl) {
+        let displayImg = viewerImages[viewerIndex];
+        imgEl.src = viewerImages[viewerIndex];
+    }
     if (currentEl) currentEl.innerText = viewerIndex + 1;
     if (totalEl) totalEl.innerText = viewerImages.length;
 
