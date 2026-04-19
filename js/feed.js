@@ -806,7 +806,7 @@ function editPost(postId) {
                 <textarea id="swal-note" class="form-control rounded-3" rows="3" style="font-family:Kanit,sans-serif;font-size:0.9rem;">${currentNote}</textarea>
                 
                 <div class="mt-3">
-                    <label class="small fw-bold text-muted mb-2 d-block">จัดการรูปภาพ (สูงสุด 5 รูป):</label>
+                    <label class="small fw-bold text-muted mb-2 d-block">จัดการรูปภาพ (สูงสุด 20 รูป):</label>
                     <div id="edit-thumb-list" class="d-flex flex-wrap gap-2 mb-2" style="max-height:160px; overflow-y:auto; padding:5px;"></div>
                     <input type="file" id="edit-file-input" class="d-none" multiple accept="image/*" onchange="handleEditFileSelect(this)">
                     <button type="button" class="btn btn-sm btn-outline-primary rounded-pill w-100 py-2" onclick="document.getElementById('edit-file-input').click()">
@@ -866,8 +866,27 @@ function editPost(postId) {
             })
         }).then(res => res.json()).then(data => {
             if (data.status === 'success') {
-                Swal.fire({ icon: 'success', title: 'แก้ไขสำเร็จ', timer: 1500, showConfirmButton: false });
-                fetchFeed(false, true, true); // รีเฟรชฟีด
+                // 🚀 อัปเดตข้อมูลในเครื่อง (Local State Sync) ลดาการโหลดใหม่ทั้งหน้า
+                if (window.globalFeedData) {
+                    const postIdx = window.globalFeedData.findIndex(p => (p.uuid || p.id) == targetPostId);
+                    if (postIdx !== -1) {
+                        window.globalFeedData[postIdx].note = newNote;
+                        window.globalFeedData[postIdx].virtue = newVirtue;
+                        window.globalFeedData[postIdx].image = newImage;
+                        
+                        // 🔄 อัปเดต UI เฉพาะจุดแบบลื่นๆ
+                        updateSinglePostUI(targetPostId);
+                    }
+                }
+                
+                Swal.fire({ 
+                    icon: 'success', 
+                    title: 'บันทึกเรียบร้อย', 
+                    toast: true,
+                    position: 'top-end',
+                    timer: 2000, 
+                    showConfirmButton: false 
+                });
             } else {
                 Swal.fire('ข้อผิดพลาด', data.message, 'error');
             }
@@ -878,8 +897,8 @@ function editPost(postId) {
 // --- Helper Functions for Image Editing ---
 function handleEditFileSelect(input) {
     const files = Array.from(input.files);
-    if (window.tempEditItems.length + files.length > 5) {
-        Swal.showValidationMessage('เพิ่มรูปได้สูงสุด 5 รูปครับ');
+    if (window.tempEditItems.length + files.length > 20) {
+        Swal.showValidationMessage('เพิ่มรูปได้สูงสุด 20 รูปครับ');
         return;
     }
     window.tempEditItems = [...window.tempEditItems, ...files];
@@ -1115,6 +1134,38 @@ function togglePinPost(postId) {
         if (pinBtn) pinBtn.className = `btn btn-sm border-0 rounded-pill px-2 feed-manage-btn ${isPinned ? 'text-primary' : 'text-muted'}`;
         console.error("Pin failed:", e);
     });
+}
+
+/**
+ * 🔄 อัปเดตเฉพาะการ์ดโพสต์เดียว (Partial UI Refresh)
+ * เพื่อไม่ให้หน้าจอกระโดดไปด้านบน และให้ความไหลลื่นสูงสุด
+ */
+function updateSinglePostUI(postId) {
+    const post = window.globalFeedData.find(p => (p.uuid || p.id) == postId);
+    if (!post) return;
+
+    const postcardEl = document.getElementById(`post-${postId}`);
+    if (!postcardEl) return;
+
+    // จำลองการ Render เฉพาะส่วนเนื้อหา (Content)
+    const virtueMap = { volunteer: '🤝 จิตอาสา', sufficiency: '🌱 พอเพียง', discipline: '📏 วินัย', integrity: '💎 สุจริต', gratitude: '🙏 กตัญญู' };
+    
+    // 1. อัปเดตหัวข้อหมวดหมู่
+    const virtueEl = postcardEl.querySelector('.text-primary.mb-1.d-block.fw-bold');
+    if (virtueEl) virtueEl.innerText = virtueMap[post.virtue] || post.virtue || '';
+
+    // 2. อัปเดตข้อความเรื่องราว (Note)
+    const noteEl = postcardEl.querySelector('.mt-2.mb-2.p-2.bg-light.rounded.text-dark');
+    if (noteEl) noteEl.innerText = post.note || '';
+
+    // 3. อัปเดตรูปภาพ (ดึงจากกล่องถัดจากข้อความ)
+    if (noteEl && noteEl.nextElementSibling) {
+        noteEl.nextElementSibling.innerHTML = getMediaContent(post.image, post.note);
+    }
+
+    // 🌟 เพิ่ม Highlight ชั่วคราวเพื่อให้ผู้ใช้รู้ว่าจุดไหนเปลี่ยน
+    postcardEl.classList.add('partial-update-active');
+    setTimeout(() => postcardEl.classList.remove('partial-update-active'), 2000);
 }
 
 // ----- End of Feed Helpers -----
