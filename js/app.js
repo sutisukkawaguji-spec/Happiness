@@ -69,7 +69,7 @@ async function checkAndShowSurvey() {
         }
     }
 
-    await new Promise(r => setTimeout(r, 1500));
+    await new Promise(r => setTimeout(r, 300));
 
     const result = await Swal.fire({
         title: `📝 ประเมินความสุขเดือน${monthDisplay}`,
@@ -111,15 +111,18 @@ async function checkAndShowSurvey() {
 // =====================================================
 // 🌤️ ระบบแจ้งเตือนสภาพอากาศ (Weather Alert)
 // =====================================================
-async function checkAndShowWeatherAlert() {
+async function checkAndShowWeatherAlert(force = false) {
     if (!currentUser || !currentUser.userId) return;
+    
+    // 🌍 ถ้ากดเอง (Force) ให้เคลียร์ค่า Loading/Wait ก่อนเพื่อให้เด้งทันที
+    if (force) Swal.fire({ title: 'กำลังดึงข้อมูลอากาศ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 
     const storageKey = 'weather_last_alert';
     const now = new Date();
     const today = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
 
-    // 🔔 แจ้งเตือนแค่ "วันละครั้ง" เพื่อไม่ให้รบกวนผู้ใช้งาน
-    if (localStorage.getItem(storageKey) === today) {
+    // 🔔 แจ้งเตือนแค่ "วันละครั้ง" เพื่อไม่ให้รบกวนผู้ใช้งาน (ยกเว้นกดปุ่มเอง)
+    if (!force && localStorage.getItem(storageKey) === today) {
         console.log("🌤️ Weather alert already shown today.");
         return;
     }
@@ -1596,8 +1599,8 @@ function processAnnounceData(data, silent = false) {
         const otherNotifs = appNotifications.filter(n => n.source !== 'gas');
         appNotifications = [...generalGasNotifs, ...otherNotifs];
 
-        if (silent) { if (newlyDetected) renderNotifList(); }
-        else { renderNotifList(); }
+        // 🔥 Render เสมอเมื่อข้อมูลมาถึง เพื่อให้มั่นใจว่า UI อัปเดตล่าสุด
+        renderNotifList();
 
         if (hasNewUpcoming) {
             // 🌟 กรองเฉพาะ ID ที่ยังไม่เคยแจ้งเตือน (Notified) ในเซสชันนี้
@@ -1632,7 +1635,14 @@ function fetchAnnouncements(silent = false) {
     const url = GAS_URL + '?action=get_announcements&t=' + Date.now();
     fetch(url)
         .then(r => r.json())
-        .then(data => processAnnounceData(data, silent))
+        .then(data => {
+            if (data && data.status === 'error') {
+                console.warn('📢 Server returned error for announcements:', data.message);
+                renderNotifList(); // Render empty/error state
+                return;
+            }
+            processAnnounceData(data, silent === true);
+        })
         .catch(err => {
             console.warn('🔔 Fetch failed, trying JSONP...', err.message);
             window.__gasCb = (data) => processAnnounceData(data, silent);
