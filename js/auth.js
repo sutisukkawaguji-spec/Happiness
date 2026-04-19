@@ -87,7 +87,8 @@ async function main() {
                         currentUser = { ...currentUser, ...data.user, userId: currentUser.userId };
                         saveUserSession(currentUser);
                         if (typeof renderProfile === 'function') renderProfile();
-                        if (data.config && typeof showLifecycleDialogs === 'function') await showLifecycleDialogs(data.config);
+                        // ❌ ลบ showLifecycleDialogs ออกจากนี้ — เพราะ finishLoginProcess จัดการแล้ว
+                        // การเรียกซ้ำที่นี่ทำให้ Weather + Guide เด้งพร้อมกัน (Race Condition)
                         console.log('🔄 อัปเดตข้อมูลเบื้องหลังเสร็จสมบูรณ์');
                     }
                 }).catch(e => console.log('Background sync failed:', e));
@@ -356,7 +357,7 @@ function clearUserSession() {
 }
 
 // --- ฟังก์ชันจัดเตรียมหน้าจอ (แยกออกมาเพื่อให้โค้ดอ่านง่าย) ---
-function finishLoginProcess(configData = null) {
+async function finishLoginProcess(configData = null) {
     if (typeof renderProfile === 'function') renderProfile();
     if (typeof updateNavigationVisibility === 'function') updateNavigationVisibility();
     if (typeof fetchAnnouncements === 'function') fetchAnnouncements();
@@ -387,13 +388,7 @@ function finishLoginProcess(configData = null) {
         if (typeof loadNotificationsFromConfig === 'function') loadNotificationsFromConfig(configData);
         if (typeof notifyFromConfig === 'function') notifyFromConfig(configData);
     }
-    // 🌟 เรียก Lifecycle Dialogs เสมอ (ไม่ว่าจะ Login ใหม่หรือใช้ Session เก่า)
-    // ฟังก์ชันภายใน (Survey, Weather) มีการตรวจสอบเงื่อนไขของตัวเองอยู่แล้ว
-    showLifecycleDialogs(configData || {});
-
-    if (typeof updateAddAnnounceButton === 'function') updateAddAnnounceButton();
-
-    // 🌟 ก๊อปปี้โค้ดชุดนี้ไปวางตรงนี้เลยครับ (ก่อนปิดปีกกาฟังก์ชัน) 🌟
+    // ✅ ซ่อน Loading Screen ก่อน — แล้วค่อยแสดง Popup ต่างๆ ทีหลัง
     const loadingEl = document.getElementById('loading');
     if (loadingEl) {
         loadingEl.classList.add('hiding');
@@ -402,6 +397,14 @@ function finishLoginProcess(configData = null) {
             loadingEl.classList.remove('hiding');
         }, 400);
     }
+
+    // รอให้ Fade เสร็จก่อนแสดง Popup
+    await new Promise(r => setTimeout(r, 500));
+
+    // 🌟 เรียก Lifecycle Dialogs เสมอ (Survey, Weather, Guide)
+    await showLifecycleDialogs(configData || {});
+
+    if (typeof updateAddAnnounceButton === 'function') updateAddAnnounceButton();
 }
 
 async function showLifecycleDialogs(config) {
@@ -451,7 +454,23 @@ async function showLifecycleDialogs(config) {
         }
     }
 
-    if (typeof checkAndShowSurvey === 'function') await checkAndShowSurvey();
-    if (typeof checkAndShowWeatherAlert === 'function') await checkAndShowWeatherAlert();
-    if (typeof requestNotificationPermission === 'function') await requestNotificationPermission();
+    if (typeof checkAndShowSurvey === 'function') {
+        await checkAndShowSurvey();
+        await new Promise(r => setTimeout(r, 800)); // เว้นจังหวะนิดนึง
+    }
+
+    if (typeof checkAndShowWeatherAlert === 'function') {
+        await checkAndShowWeatherAlert();
+        await new Promise(r => setTimeout(r, 800)); // เว้นจังหวะนิดนึง
+    }
+
+    if (typeof requestNotificationPermission === 'function') {
+        await requestNotificationPermission();
+        await new Promise(r => setTimeout(r, 800)); // เว้นจังหวะนิดนึง
+    }
+
+    // ❓ ระบบผู้ช่วยสอนการใช้งาน (👩‍💼) — เรียกหลังทุกอย่างจบแล้ว
+    if (typeof GuideSystem !== 'undefined') {
+        await GuideSystem.startTour();
+    }
 }
