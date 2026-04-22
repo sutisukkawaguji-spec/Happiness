@@ -778,8 +778,9 @@ function renderDashboard(appUsers) {
             id: uid, name: u.name, img: u.img, role: role,
             score: parseInt(u.score) || 0, level: parseInt(u.level) || 1,
             avgHappy: happyRaw, virtueStats: u.virtueStats || {},
-            postsMade: parseInt(u.totalCount || 0), taggedIn: parseInt(u.taggedCount || 0),
-            witnessCount: parseInt(u.witnessCount || 0), topFriends: u.topFriends || []
+            postsMade: parseInt(u.totalCount || 0), taggedIn: parseInt(u.taggedIn || u.taggedCount || 0),
+            witnessCount: parseInt(u.witnessCount || 0), topFriends: u.topFriends || [],
+            firstActive: u.firstActive || null
         };
 
         // 🌟 กรองออก: ถ้าเป็น Guest หรือ ศิษย์เก่า ไม่ต้องนำมาคำนวณ KPI รวม
@@ -857,10 +858,13 @@ function renderDashboard(appUsers) {
 function renderStaffTable(map) {
     const sList = document.getElementById('staffListArea');
     const gList = document.getElementById('guestListArea');
+    const hList = document.getElementById('hofExecutiveListArea');
     const gSection = document.getElementById('guestSectionArea');
+    const hSection = document.getElementById('hofExecutiveSection');
     if (!sList) return;
     sList.innerHTML = '';
     if (gList) gList.innerHTML = '';
+    if (hList) hList.innerHTML = '';
 
     const getRolePriority = (r) => {
         const roleStr = String(r || '').toLowerCase();
@@ -884,12 +888,16 @@ function renderStaffTable(map) {
             return (b.score || 0) - (a.score || 0);
         }).forEach(f => renderStaffRow(f, sList));
     } else {
-        sList.innerHTML = `
-            <div class="text-center py-5 text-muted">
-                <i class="fas fa-user-friends fa-2x mb-3 d-block opacity-50"></i>
-                ไม่พบรายชื่อบุคลากรปัจจุบันในระบบ
-            </div>
-        `;
+        sList.innerHTML = `<div class="text-center py-5 text-muted"><i class="fas fa-user-friends fa-2x mb-3 d-block opacity-50"></i>ไม่พบรายชื่อบุคลากรปัจจุบันในระบบ</div>`;
+    }
+
+    // --- Render Executive Hall of Fame ---
+    const hofExecutives = allUsers.filter(u => isAlumni(u.role) && ['Manager', 'Admin', 'Executive', 'หัวหน้า', 'ผู้บริหาร', 'ผอ.', 'คลังจังหวัด'].some(r => (u.role || '').toLowerCase().includes(r.toLowerCase())));
+    if (hofExecutives.length > 0 && hSection) {
+        hSection.style.display = 'block';
+        hofExecutives.sort((a, b) => (b.score || 0) - (a.score || 0)).forEach(f => renderStaffRow(f, hList, true));
+    } else if (hSection) {
+        hSection.style.display = 'none';
     }
 
     // --- Render Guest Staff ---
@@ -1160,10 +1168,18 @@ function promoteToAlumni(uid) {
             const selectedCategory = result.value;
             const staffData = globalUserStatsMap[uid] || allUsersMap[uid];
             const currentScore = staffData ? (staffData.score || 0) : 0;
+            
+            // 🌟 ตรวจสอบสิทธิเดิม ถ้าเป็นผู้บริหาร ให้พ่วงคำว่า "ผู้บริหาร" ไว้หน้าชื่อทำเนียบด้วย
+            let finalLabel = selectedCategory;
+            const originalRole = staffData ? (staffData.role || '').toLowerCase() : '';
+            const execKeywords = ['manager', 'admin', 'executive', 'หัวหน้า', 'ผู้บริหาร', 'ผอ.', 'คลังจังหวัด'];
+            if (execKeywords.some(k => originalRole.includes(k))) {
+                finalLabel = 'ผู้บริหาร (' + selectedCategory + ')';
+            }
 
             // 🌪️ Optimistic UI
-            if (globalUserStatsMap[uid]) globalUserStatsMap[uid].role = selectedCategory;
-            if (allUsersMap[uid]) allUsersMap[uid].role = selectedCategory;
+            if (globalUserStatsMap[uid]) globalUserStatsMap[uid].role = finalLabel;
+            if (allUsersMap[uid]) allUsersMap[uid].role = finalLabel;
 
             Swal.fire({
                 title: 'กำลังส่งรายชื่อขึ้นทำเนียบ...',
@@ -1175,7 +1191,7 @@ function promoteToAlumni(uid) {
             fetch(GAS_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify({ action: 'promote_alumni', userId: uid, label: selectedCategory, score: currentScore })
+                body: JSON.stringify({ action: 'promote_alumni', userId: uid, label: finalLabel, score: currentScore })
             })
                 .then(async (res) => {
                     const text = await res.text();
@@ -1447,7 +1463,7 @@ function initUserRadar() {
                 legend: { display: false },
                 tooltip: {
                     callbacks: {
-                        label: (ctx) => ` ${ctx.label}: ${ctx.raw} คะแนน`
+                        label: (ctx) => ` ${ctx.label}: ${ctx.raw} จุด`
                     }
                 }
             }
@@ -1461,21 +1477,52 @@ function renderManagerChart() {
     const ctx = document.getElementById('managerLineChart');
     if (!ctx) return;
     if (window.myManagerChart) window.myManagerChart.destroy();
+    
     const range = document.getElementById('chartRangeSelector')?.value || '15d';
+    const indexValEl = document.getElementById('current-index-val');
+    const indexChangeEl = document.getElementById('index-change-val');
+    const indexBadgeEl = document.getElementById('index-status-badge');
+    const indexDateEl = document.getElementById('index-date-range');
+
     let labels = [], dataPoints = [];
     let raw = chartData || [];
 
+    // --- 📊 Update Index Summary (SET Style) ---
+    if (raw.length > 0) {
+        const currentVal = raw[raw.length - 1];
+        const prevVal = raw.length > 1 ? raw[raw.length - 2] : 1000;
+        const diff = (currentVal - prevVal).toFixed(2);
+        const percent = ((diff / prevVal) * 100).toFixed(2);
+        const sign = diff >= 0 ? '+' : '';
+        const colorClass = diff >= 0 ? 'text-success' : 'text-danger';
+        const caret = diff >= 0 ? 'fa-caret-up' : 'fa-caret-down';
+
+        if (indexValEl) indexValEl.innerText = Number(currentVal).toLocaleString(undefined, { minimumFractionDigits: 2 });
+        if (indexChangeEl) {
+            indexChangeEl.innerText = `${sign}${diff} (${sign}${percent}%)`;
+            indexChangeEl.className = `small fw-bold ${colorClass}`;
+        }
+        if (indexBadgeEl) {
+            indexBadgeEl.innerHTML = `<i class="fas ${caret} me-1"></i> ${diff >= 0 ? 'โมเมนตัมบวก' : 'โมเมนตัมลบ'}`;
+            indexBadgeEl.className = `badge rounded-pill bg-white ${colorClass} shadow-sm`;
+        }
+        if (indexDateEl) {
+            const now = new Date();
+            indexDateEl.innerText = `Update: ${now.toLocaleDateString('th-TH')} ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}`;
+        }
+    }
+
     if (range === '15d') {
         let items = raw.slice(-15);
-        for (let i = items.length - 1; i >= 0; i--) {
-            let d = new Date(); d.setDate(d.getDate() - i);
+        for (let i = 0; i < items.length; i++) {
+            let d = new Date(); d.setDate(d.getDate() - (items.length - 1 - i));
             labels.push(d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' }));
         }
         dataPoints = items;
     } else if (range === '30d') {
         let items = raw.slice(-30);
-        for (let i = items.length - 1; i >= 0; i--) {
-            let d = new Date(); d.setDate(d.getDate() - i);
+        for (let i = 0; i < items.length; i++) {
+            let d = new Date(); d.setDate(d.getDate() - (items.length - 1 - i));
             labels.push(d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' }));
         }
         dataPoints = items;
@@ -1490,8 +1537,13 @@ function renderManagerChart() {
     }
 
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark' || localStorage.getItem('theme') === 'dark';
-    const gridColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)';
-    const textColor = isDark ? '#eee' : '#666';
+    const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)';
+    const textColor = isDark ? '#a29bfe' : '#6c5ce7';
+    
+    // Determine gradient color based on trend
+    const isUp = dataPoints.length > 1 ? (dataPoints[dataPoints.length - 1] >= dataPoints[0]) : true;
+    const chartColor = isUp ? '#00b894' : '#ff7675';
+    const chartBg = isUp ? 'rgba(0, 184, 148, 0.1)' : 'rgba(255, 118, 117, 0.1)';
 
     window.myManagerChart = new Chart(ctx, {
         type: 'line',
@@ -1499,12 +1551,13 @@ function renderManagerChart() {
             labels,
             datasets: [{
                 data: dataPoints,
-                borderColor: '#6c5ce7',
-                backgroundColor: 'rgba(108, 92, 231, 0.1)',
+                borderColor: chartColor,
+                backgroundColor: chartBg,
                 fill: true,
-                tension: 0.3,
-                pointRadius: 4,
-                pointBackgroundColor: '#6c5ce7'
+                tension: 0.4,
+                pointRadius: 0,
+                pointHitRadius: 10,
+                borderWidth: 3
             }]
         },
         options: {
@@ -1513,13 +1566,16 @@ function renderManagerChart() {
             plugins: { legend: { display: false } },
             scales: {
                 y: {
-                    suggestedMin: 4, suggestedMax: 10,
-                    grid: { color: gridColor },
-                    ticks: { color: textColor, font: { family: 'Kanit' } }
+                    grid: { color: gridColor, drawBorder: false },
+                    ticks: { 
+                        color: textColor, 
+                        font: { family: 'Kanit', size: 10 },
+                        callback: function(value) { return value.toLocaleString(); }
+                    }
                 },
                 x: {
                     grid: { display: false },
-                    ticks: { color: textColor, font: { family: 'Kanit' } }
+                    ticks: { color: textColor, font: { family: 'Kanit', size: 10 } }
                 }
             }
         }
@@ -2052,8 +2108,13 @@ function renderRelationTab() {
     // กรองกลุ่มศิษย์เก่า/ผู้เกษียณ/ย้าย/ทำเนียบ (ผู้ร่วมผูกพันสายใยความสุข)
     const allAlumni = Object.values(globalUserStatsMap).filter(u => isAlumni(u.role));
 
-    const execAlumni = allAlumni.filter(u => ['Manager', 'Admin', 'Executive', 'หัวหน้า', 'ผู้บริหาร', 'ผอ.', 'คลังจังหวัด'].some(r => (u.role || '').toLowerCase().includes(r.toLowerCase())));
-    const staffAlumni = allAlumni.filter(u => !execAlumni.includes(u));
+    // 👨‍💼 กรองผู้บริหารในทำเนียบ (เช็คทั้ง Role เดิม และ Label ที่เราพ่วงคำว่าผู้บริหารเข้าไป)
+    const execKeywords = ['manager', 'admin', 'executive', 'หัวหน้า', 'ผู้บริหาร', 'ผอ.', 'คลังจังหวัด', 'director', 'ceo'];
+    const execAlumni = allAlumni.filter(u => {
+        const r = (u.role || '').toLowerCase();
+        return execKeywords.some(k => r.includes(k.toLowerCase()));
+    });
+    const staffAlumni = allAlumni.filter(u => !execAlumni.some(ex => ex.id === u.id));
 
     const activeList = currentRelationSubTab === 'executives' ? execAlumni : staffAlumni;
 
@@ -2079,12 +2140,15 @@ function renderRelationTab() {
 
             // ดึงเฉพาะปีมาโชว์ ถ้ามี
             const yearMatch = u.role.match(/ปี\s*(\d{1,4})/);
-            let roleDisplay = yearMatch ? `นท. ปี ${yearMatch[1]}` : u.role;
-
-            // เปลี่ยนชื่อนิยามศิษย์เก่า/ลาออก/ย้าย/เกษียณ/อนุสรณ์ เป็นชื่อที่เป็นมิตรขึ้น
-            const alumniRoles = ['ศิษย์เก่า', 'alumni', 'ลาออก', 'retired', 'memorial', 'อนุสรณ์', 'ย้าย', 'เกษียณ'];
-            if (alumniRoles.some(r => u.role.toLowerCase().includes(r.toLowerCase()))) {
-                if (!yearMatch) roleDisplay = 'ผู้ร่วมผูกพันสายใยความสุข';
+            let roleDisplay = u.role; 
+            
+            if (u.role.includes('ผู้บริหาร (')) {
+                const parts = u.role.match(/ผู้บริหาร\s*\((.*?)\)\s*(ปี\s*\d{1,4})?/);
+                if (parts) {
+                    roleDisplay = parts[1] + (parts[2] ? ' ' + parts[2] : '');
+                }
+            } else if (isAlumni(u.role) && !yearMatch) {
+                roleDisplay = 'ผู้ร่วมผูกพันสายใยความสุข';
             }
 
             html += `
@@ -2333,15 +2397,28 @@ function getVirtueDescription(virtueKey) {
 }
 
 function getActivityRange(uid) {
-    if (!globalFeedData || globalFeedData.length === 0) return 'ยังไม่มีประวัติกิจกรรม';
-    const userPosts = globalFeedData.filter(p => String(p.user_line_id) === String(uid));
-    if (userPosts.length === 0) return 'ยังไม่ได้บันทึกกิจกรรม';
+    const userStat = globalUserStatsMap[uid] || allUsersMap[uid];
+    let firstDate = null;
 
-    const sorted = userPosts.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-    const first = new Date(sorted[0].timestamp);
+    // 🌟 1. ลองใช้ข้อมูลที่ Backend ส่งมาให้ (แม่นยำที่สุด เพราะดูจากประวัติทั้งหมดในชีต)
+    if (userStat && userStat.firstActive) {
+        firstDate = new Date(userStat.firstActive);
+    } 
+    // 🌟 2. Fallback: ถ้าไม่มีข้อมูลจาก Backend ให้ลองหาจาก globalFeedData (ที่มีอยู่ใน Cache)
+    else if (globalFeedData && globalFeedData.length > 0) {
+        const userPosts = globalFeedData.filter(p => String(p.user_line_id) === String(uid));
+        if (userPosts.length > 0) {
+            const sorted = userPosts.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+            firstDate = new Date(sorted[0].timestamp);
+        }
+    }
+
+    if (!firstDate || isNaN(firstDate.getTime())) {
+        return (userStat && userStat.postsMade > 0) ? 'มีประวัติกิจกรรมแล้ว' : 'ยังไม่ได้บันทึกกิจกรรม';
+    }
 
     const fmt = (d) => `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear() + 543}`;
-    return `ประวัติกิจกรรม: ${fmt(first)} ถึงปัจจุบัน`;
+    return `ประวัติกิจกรรม: ${fmt(firstDate)} ถึงปัจจุบัน`;
 }
 
 function toggleNotifPanel() {
@@ -3052,6 +3129,45 @@ document.addEventListener('touchstart', unlockAudio, { once: false });
 function setViewportHeight() {
     let vh = window.innerHeight * 0.01;
     document.documentElement.style.setProperty('--vh', `${vh}px`);
+}
+
+// ==========================================
+// 📈 ระบบควบคุมกราฟ HMI (Momentum Index)
+// ==========================================
+function scrollHMI(direction) {
+    const wrapper = document.getElementById('hmiScrollWrapper');
+    if (!wrapper) return;
+    const scrollAmount = 300;
+    if (direction === 'left') {
+        wrapper.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
+    } else {
+        wrapper.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+    }
+}
+
+// ==========================================
+// 🏃 ระบบติดตามการเข้าใช้งาน (App Entry)
+// ==========================================
+async function trackAppVisit() {
+    if (!currentUser || !currentUser.userId) return;
+    
+    // ป้องกันการบันทึกซ้ำในเซสชันสั้นๆ (Throttle)
+    const lastVisit = sessionStorage.getItem('last_visit_tracked');
+    const now = Date.now();
+    if (lastVisit && (now - parseInt(lastVisit)) < 600000) return; // 10 นาที
+
+    try {
+        await fetch(GAS_URL, {
+            method: 'POST',
+            body: JSON.stringify({
+                action: 'track_visit',
+                userId: currentUser.userId,
+                userName: currentUser.name || ''
+            })
+        });
+        sessionStorage.setItem('last_visit_tracked', now.toString());
+        console.log("✅ บันทึกการเข้าใช้งานแล้ว");
+    } catch (e) { console.warn("Visit tracking failed", e); }
 }
 window.addEventListener('resize', setViewportHeight);
 setViewportHeight();
