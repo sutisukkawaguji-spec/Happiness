@@ -1,233 +1,554 @@
-/**
- * 👩‍💼 Happy Meter Guide System v4
- * Spotlight: SVG overlay with cutout — Tooltip ลอยไม่บัง ปุ่มกดได้แน่นอน
- */
+<!DOCTYPE html>
+<html lang="th">
 
-const GuideSystem = {
-    storageKey: 'happymeter_guide_v1',
-    _tip: null,
-    _svgOverlay: null,
-    _currentSpotlightEl: null,
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>คู่มือการใช้งาน Happy Meter</title>
 
-    async startTour(force = false) {
-        if (!force && localStorage.getItem(this.storageKey)) return;
-        this._buildUI();
-        const steps = this.buildSteps();
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-        let i = 0;
-        while (i < steps.length) {
-            const result = await this._runStep(steps[i], i, steps.length);
-            if (result === 'next') i++;
-            else if (result === 'prev') i = Math.max(0, i - 1);
-            else { // 'skip'
-                break;
-            }
-        }
-        this._destroy();
-        localStorage.setItem(this.storageKey, 'true');
-    },
-
-    buildSteps() {
-        const steps = [
-            { title: '👩‍💼 ยินดีต้อนรับค่ะ', msg: 'ขอพาทัวร์ฟีเจอร์หลักๆ ของ <b>ดี มีสุข</b> คร่าวๆ นะคะ', el: null, tab: null },
-            { title: '📝 บันทึกความสุขรายวัน', msg: 'เขียนเรื่องราวดีๆ แล้วกดบันทึกได้เลยค่ะ', el: '#noteInput', tab: 'record' },
-            { title: '😊 อารมณ์ความรู้สึก', msg: 'กดเลือกอิโมจิให้ตรงกับอารมณ์วันนี้ค่ะ', el: '.mood-container', tab: 'record' },
-            { title: '💡 นิยามกิจกรรม', msg: 'กดไอคอน <b>❓</b> เพื่อดูนิยามและตัวอย่างของแต่ละหมวดค่ะ', el: 'i[onclick="showVirtueInfo()"]', tab: 'record' },
-            { title: '📖 คู่มือการใช้งาน', msg: 'กดปุ่ม <b>"คู่มือ"</b> สีฟ้าเพื่อเปิดคู่มือฉบับเต็มได้ค่ะ', el: 'a[href*="guide.html"]', tab: 'record' },
-        ];
-
-        // 3 ปุ่มใต้รูปโปรไฟล์
-        steps.push({ title: '🌙 โหมดกลางคืน', msg: 'สลับระหว่างโหมดสว่างและโหมดมืด เพื่อความสบายตาในการใช้งานค่ะ', el: '#darkModeToggle', tab: null });
-        steps.push({ title: '🎵 เพลงประกอบ', msg: 'เปิด/ปิดเพลงบรรเลงเบาๆ เพื่อสร้างบรรยากาศในการบันทึกความสุขค่ะ', el: '#musicToggle', tab: null });
-        steps.push({ title: '🌤️ ข่าวภูมิอากาศ', msg: 'กดเพื่อดูรายงานสภาพอากาศและค่าฝุ่น PM2.5 ในพื้นที่ของคุณได้ทันทีค่ะ', el: '#weatherBtn', tab: null });
-
-        if (this._navVisible('nav-stories-btn'))
-            steps.push({ title: '✨ เรื่องราว (Feed)', msg: 'ดูและส่งต่อพลังบวกให้เพื่อนร่วมงานที่นี่ค่ะ', el: '#nav-stories-btn', tab: 'stories' });
-
-        if (this._navVisible('nav-relation-btn'))
-            steps.push({ title: '🗺️ ความผูกพัน', msg: 'ดูผังความสัมพันธ์ในองค์กรที่นี่ค่ะ', el: '#nav-relation-btn', tab: 'relation' });
-
-        if (this._navVisible('nav-manager-btn'))
-            steps.push({ title: '💼 สำหรับผู้บริหาร', msg: 'Dashboard วิเคราะห์สุขภาวะองค์กรสำหรับคุณโดยเฉพาะค่ะ', el: '#nav-manager-btn', tab: 'manager' });
-
-        steps.push({ title: '🎉 พร้อมใช้งานแล้วค่ะ!', msg: 'กดปุ่ม <b>"ทัวร์ใช้งาน"</b> ข้างปุ่มคู่มือ เพื่อดูทัวร์ซ้ำได้ทุกเมื่อนะคะ 🌸', el: 'button[onclick*="startTour"]', tab: 'record' });
-
-        return steps;
-    },
-
-    _navVisible(id) {
-        const el = document.getElementById(id);
-        return el && el.style.display !== 'none';
-    },
-
-    _buildUI() {
-        this._destroy(); // ล้างของเก่าก่อน
-
-        // SVG Overlay (วาด "รู" รอบ element ที่ต้องการโฟกัส)
-        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        svg.id = 'guideSvg';
-        svg.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;z-index:9000;pointer-events:none;transition:opacity 0.3s;';
-        // path รูปสี่เหลี่ยมทั้งหน้า (เริ่มต้นมืดหมด ยังไม่มีรู)
-        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        path.id = 'guideSvgPath';
-        path.setAttribute('fill', 'rgba(0,0,20,0.78)');
-        path.setAttribute('fill-rule', 'evenodd');
-        svg.appendChild(path);
-        document.body.appendChild(svg);
-        this._svgOverlay = svg;
-
-        // Tooltip card — fixed position, สูง z-index, pointer-events:auto
-        const tip = document.createElement('div');
-        tip.id = 'guideTip';
-        tip.style.cssText = `
-            position:fixed; z-index:10001; pointer-events:auto;
-            max-width:270px; min-width:210px;
-            background:var(--glass-bg, #fff); border-radius:14px;
-            padding:14px 16px 12px;
-            box-shadow:0 8px 32px rgba(0,0,0,0.3);
-            font-family:'Kanit',sans-serif;
-            color:var(--text-color, #333);
-            display:none; opacity:0;
-            transition:opacity 0.2s;
-        `;
-        document.body.appendChild(tip);
-        this._tip = tip;
-    },
-
-    _destroy() {
-        document.getElementById('guideSvg')?.remove();
-        document.getElementById('guideTip')?.remove();
-        this._svgOverlay = null;
-        this._tip = null;
-        this._currentSpotlightEl = null;
-    },
-
-    // อัปเดต SVG path ให้เว้น "รู" รอบ element ที่เลือก
-    _updateSpotlight(el) {
-        const path = document.getElementById('guideSvgPath');
-        if (!path) return;
-        const vw = window.innerWidth;
-        const vh = window.innerHeight;
-
-        if (!el) {
-            // มืดทั้งหน้า ไม่มีรู
-            path.setAttribute('d', `M0,0 H${vw} V${vh} H0 Z`);
-            return;
+    <style>
+        :root {
+            --bg-gradient: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
+            --glass-bg: rgba(255, 255, 255, 0.95);
+            --primary: #6c5ce7;
+            --accent: #fd79a8;
         }
 
-        const r = el.getBoundingClientRect();
-        const pad = 8; // padding รอบ element
-        const x = Math.max(0, r.left - pad);
-        const y = Math.max(0, r.top - pad);
-        const w = Math.min(vw, r.right + pad) - x;
-        const h = Math.min(vh, r.bottom + pad) - y;
-        const rx = 10; // corner radius
-
-        // "รู" สี่เหลี่ยมมุมโค้ง ตรงกลาง SVG มืด
-        path.setAttribute('d',
-            `M0,0 H${vw} V${vh} H0 Z ` +
-            `M${x+rx},${y} H${x+w-rx} Q${x+w},${y} ${x+w},${y+rx} ` +
-            `V${y+h-rx} Q${x+w},${y+h} ${x+w-rx},${y+h} ` +
-            `H${x+rx} Q${x},${y+h} ${x},${y+h-rx} ` +
-            `V${y+rx} Q${x},${y} ${x+rx},${y} Z`
-        );
-        this._currentSpotlightEl = el;
-    },
-
-    // วาง Tooltip ไม่บัง element
-    _positionTip(el) {
-        const tip = this._tip;
-        tip.style.display = 'block';
-        // รอให้ browser layout tip ก่อน
-        void tip.offsetHeight;
-
-        const margin = 12;
-        const tipW = tip.offsetWidth || 250;
-        const tipH = tip.offsetHeight || 120;
-        const vw = window.innerWidth;
-        const vh = window.innerHeight;
-
-        let top, left;
-
-        if (!el) {
-            top = (vh - tipH) / 2;
-            left = (vw - tipW) / 2;
-        } else {
-            const r = el.getBoundingClientRect();
-            const elMidY = r.top + r.height / 2;
-            top = elMidY < vh * 0.5
-                ? r.bottom + margin           // element บน → tip ล่าง
-                : r.top - tipH - margin;       // element ล่าง → tip บน
-            top = Math.max(margin, Math.min(vh - tipH - margin, top));
-            left = r.left + r.width / 2 - tipW / 2;
-            left = Math.max(margin, Math.min(vw - tipW - margin, left));
+        body {
+            background-image: var(--bg-gradient);
+            font-family: 'Kanit', sans-serif;
+            color: #444;
+            padding-bottom: 80px;
         }
 
-        tip.style.top = top + 'px';
-        tip.style.left = left + 'px';
-        tip.style.opacity = '1';
-    },
+        .header-section {
+            background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+            color: white;
+            padding: 40px 20px 60px 20px;
+            border-radius: 0 0 30px 30px;
+            text-align: center;
+            box-shadow: 0 10px 20px rgba(108, 92, 231, 0.2);
+            position: relative;
+            margin-bottom: -40px;
+        }
 
-    _runStep(step, index, total) {
-        return new Promise(async (resolve) => {
-            // reset opacity ก่อน
-            if (this._tip) { this._tip.style.opacity = '0'; this._tip.style.display = 'none'; }
+        /* Scrollable Tabs */
+        .nav-pills-wrapper {
+            overflow-x: auto;
+            white-space: nowrap;
+            padding-bottom: 10px;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            /* Firefox */
+        }
 
-            // สลับแท็บ
-            if (step.tab) {
-                const navBtn = document.getElementById(`nav-${step.tab}-btn`);
-                if (navBtn && typeof switchTab === 'function') switchTab(step.tab, navBtn);
-                await new Promise(r => setTimeout(r, 350));
-            }
+        .nav-pills-wrapper::-webkit-scrollbar {
+            display: none;
+        }
 
-            // หา element และ scroll
-            let targetEl = null;
-            if (step.el) {
-                targetEl = document.querySelector(step.el);
-                if (targetEl) {
-                    targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    await new Promise(r => setTimeout(r, 450));
-                }
-            }
+        /* Chrome/Safari */
 
-            // วาด spotlight
-            this._updateSpotlight(targetEl);
+        .nav-pills {
+            display: inline-flex;
+            flex-wrap: nowrap;
+        }
 
-            // สร้าง HTML tooltip
-            const isFirst = index === 0;
-            const isLast = index === total - 1;
-            const tip = this._tip;
+        .nav-pills .nav-link {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border-radius: 50px;
+            margin: 0 5px;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            white-space: nowrap;
+            font-size: 0.85rem;
+            padding: 8px 16px;
+        }
 
-            tip.innerHTML = `
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-                    <span style="font-size:1.5rem;">👩‍💼</span>
-                    <div>
-                        <div style="font-size:0.78rem;font-weight:700;color:var(--primary);">${step.title}</div>
-                        <div style="font-size:0.62rem;color:#bbb;">${index + 1} / ${total}</div>
+        .nav-pills .nav-link.active {
+            background: white;
+            color: var(--primary);
+            font-weight: bold;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .content-container {
+            padding: 0 15px;
+        }
+
+        .guide-card {
+            background: var(--glass-bg);
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+            border: 1px solid white;
+        }
+
+        /* Elements Styling */
+        .step-circle {
+            width: 35px;
+            height: 35px;
+            background: var(--primary);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 10px;
+            flex-shrink: 0;
+        }
+
+        .step-item {
+            display: flex;
+            align-items: start;
+            margin-bottom: 20px;
+        }
+
+        .step-desc {
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        .virtue-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            color: white;
+            margin-right: 15px;
+            flex-shrink: 0;
+        }
+
+        .example-list {
+            list-style: none;
+            padding-left: 0;
+            font-size: 0.85rem;
+            margin-top: 10px;
+        }
+
+        .example-list li {
+            margin-bottom: 5px;
+            position: relative;
+            padding-left: 20px;
+        }
+
+        .example-list li::before {
+            content: '\f00c';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            position: absolute;
+            left: 0;
+            color: #2ecc71;
+        }
+
+        /* Chart Simulation CSS */
+        .chart-bar-container {
+            display: flex;
+            align-items: flex-end;
+            height: 100px;
+            gap: 10px;
+            padding: 10px;
+            border-bottom: 2px solid #eee;
+            margin-bottom: 5px;
+        }
+
+        .chart-bar {
+            flex: 1;
+            border-radius: 5px 5px 0 0;
+            position: relative;
+            transition: height 1s;
+        }
+
+        .chart-bar span {
+            position: absolute;
+            top: -20px;
+            width: 100%;
+            text-align: center;
+            font-size: 0.7rem;
+            font-weight: bold;
+            color: #666;
+        }
+
+        .chart-label-container {
+            display: flex;
+            gap: 10px;
+        }
+
+        .chart-label {
+            flex: 1;
+            text-align: center;
+            font-size: 0.7rem;
+            color: #888;
+        }
+
+        /* Gradients */
+        .bg-gradient-volunteer {
+            background: linear-gradient(135deg, #00a8ff, #0097e6);
+        }
+
+        .bg-gradient-sufficiency {
+            background: linear-gradient(135deg, #44bd32, #4cd137);
+        }
+
+        .bg-gradient-discipline {
+            background: linear-gradient(135deg, #8c7ae6, #9c88ff);
+        }
+
+        .bg-gradient-integrity {
+            background: linear-gradient(135deg, #00cec9, #81ecec);
+        }
+
+        .bg-gradient-gratitude {
+            background: linear-gradient(135deg, #e84393, #fd79a8);
+        }
+
+        .score-table th,
+        .score-table td {
+            font-size: 0.85rem;
+            vertical-align: middle;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="header-section position-relative">
+        <a href="index.html"
+            class="btn btn-sm btn-light position-absolute top-0 start-0 m-3 z-3 rounded-circle shadow-sm"
+            style="width: 35px; height: 35px; display: flex; align-items: center; justify-content: center;">
+            <i class="fas fa-arrow-left px-1" style="color: var(--primary);"></i>
+        </a>
+        <h2 class="fw-bold mt-2"><i class="fas fa-book-open me-2"></i>คู่มือการใช้งาน</h2>
+        <p class="small opacity-75 mb-3">Happy Meter : Executive Intelligence</p>
+
+        <div class="nav-pills-wrapper">
+            <ul class="nav nav-pills" id="pills-tab" role="tablist">
+                <li class="nav-item"><button class="nav-link active" id="pills-about-tab" data-bs-toggle="pill"
+                        data-bs-target="#pills-about" type="button">เกี่ยวกับ</button></li>
+                <li class="nav-item"><button class="nav-link" id="pills-howto-tab" data-bs-toggle="pill"
+                        data-bs-target="#pills-howto" type="button">วิธีใช้</button></li>
+                <li class="nav-item"><button class="nav-link" id="pills-virtue-tab" data-bs-toggle="pill"
+                        data-bs-target="#pills-virtue" type="button">5 หมวด</button></li>
+                <li class="nav-item"><button class="nav-link" id="pills-symbol-tab" data-bs-toggle="pill"
+                        data-bs-target="#pills-symbol" type="button">รางวัล</button></li>
+                <li class="nav-item"><button class="nav-link" id="pills-admin-tab" data-bs-toggle="pill"
+                        data-bs-target="#pills-admin" type="button">ผู้บริหาร</button></li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="content-container mt-5">
+        <div class="tab-content" id="pills-tabContent">
+
+            <div class="tab-pane fade show active" id="pills-about">
+                <div class="guide-card">
+                    <h5 class="fw-bold text-primary mb-3"><i class="fas fa-bullseye me-2"></i>นิยามโครงการ</h5>
+                    <p class="text-muted" style="line-height: 1.8; font-size: 0.95rem;">
+                        <b>Happy Meter</b> คือ นวัตกรรมบริหารความสุขและขับเคลื่อนวัฒนธรรมองค์กรด้วยกลไกเกม
+                        (Gamification)
+                        ทำหน้าที่เป็น <b>"มาตรวัดความสุขดิจิทัล"</b> เพื่อให้บุคลากรในสำนักงานธนารักษ์พื้นที่หนองบัวลำภู
+                        ได้บันทึกความรู้สึกและสะสมแต้มความดี (TRD Core Values) ในรูปแบบที่สนุกและจับต้องได้
+                    </p>
+                </div>
+
+                <div class="guide-card">
+                    <h5 class="fw-bold text-success mb-3"><i class="fas fa-seedling me-2"></i>วัตถุประสงค์
+                        (ทำเพื่ออะไร?)</h5>
+                    <ul class="example-list">
+                        <li><b>เฝ้าระวังสุขภาพใจ:</b> ตรวจจับภาวะหมดไฟ (Burnout) เพื่อช่วยเหลือเพื่อนร่วมงานได้ทันท่วงที
+                        </li>
+                        <li><b>ขับเคลื่อนค่านิยม:</b> ปลูกฝัง TRD (สุจริต, วินัย, จิตอาสา) ให้เป็นพฤติกรรมประจำวัน</li>
+                        <li><b>สร้างทีมเวิร์ก:</b> กระตุ้นการทำกิจกรรมร่วมกันผ่านระบบ Team Tagging</li>
+                    </ul>
+                </div>
+
+                <div class="guide-card">
+                    <h5 class="fw-bold text-warning mb-3"><i class="fas fa-gift me-2"></i>ประโยชน์ที่ได้รับ</h5>
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="fs-1 me-3">👩‍💼</div>
+                        <div>
+                            <strong class="text-dark">บุคลากร</strong>
+                            <small class="d-block text-muted">ทำงานสนุกขึ้น มีเป้าหมายในการสะสมเลเวล
+                                และได้รับการยอมรับจากเพื่อนๆ</small>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <div class="fs-1 me-3">📊</div>
+                        <div>
+                            <strong class="text-dark">ผู้บริหาร</strong>
+                            <small class="d-block text-muted">เห็นภาพรวมความสุของค์กรแบบ Real-time
+                                และประเมินผลงานได้ชัดเจน</small>
+                        </div>
                     </div>
                 </div>
-                <div style="font-size:0.8rem;color:var(--text-color);line-height:1.6;margin-bottom:12px;">${step.msg}</div>
-                <div style="display:flex;gap:6px;justify-content:flex-end;align-items:center;">
-                    <button data-action="skip" style="font-size:0.7rem;padding:4px 10px;border:1px solid #ddd;background:transparent;border-radius:20px;cursor:pointer;color:#aaa;">ข้าม</button>
-                    ${!isFirst ? '<button data-action="prev" style="font-size:0.7rem;padding:4px 10px;border:1px solid #ddd;background:transparent;border-radius:20px;cursor:pointer;color:#666;">◀ ย้อน</button>' : ''}
-                    <button data-action="next" style="font-size:0.72rem;padding:5px 14px;border:none;background:var(--primary);color:#fff;border-radius:20px;cursor:pointer;font-weight:700;">
-                        ${isLast ? '✅ เสร็จ' : 'ถัดไป ▶'}
-                    </button>
-                </div>`;
+            </div>
 
-            // วาง tooltip
-            this._positionTip(targetEl);
+            <div class="tab-pane fade" id="pills-howto">
+                <div class="guide-card">
+                    <h5 class="fw-bold text-primary mb-4"><i class="fas fa-edit me-2"></i>วิธีบันทึกกิจกรรม</h5>
+                    <div class="step-item">
+                        <div class="step-circle">1</div>
+                        <div><span class="fw-bold">เลือกอารมณ์</span>
+                            <div class="step-desc text-muted">บอกความรู้สึกวันนี้ (😞 แย่, 😐 เฉยๆ, 😁 มีความสุข)</div>
+                        </div>
+                    </div>
+                    <div class="step-item">
+                        <div class="step-circle">2</div>
+                        <div><span class="fw-bold">เลือกหมวดความดี</span>
+                            <div class="step-desc text-muted">เลือก 1 ใน 5 หมวด (TRD) ที่ตรงกับสิ่งที่คุณทำ</div>
+                        </div>
+                    </div>
+                    <div class="step-item">
+                        <div class="step-circle">3</div>
+                        <div><span class="fw-bold">แนบรูป หรือ ลิงก์</span>
+                            <div class="step-desc text-muted">ใส่รูปได้สูงสุด 3 รูป หรือแปะลิงก์ YouTube/TikTok</div>
+                        </div>
+                    </div>
+                    <div class="step-item">
+                        <div class="step-circle">4</div>
+                        <div><span class="fw-bold">แท็กเพื่อน (Teamwork)</span>
+                            <div class="step-desc text-muted">ถ้าทำกิจกรรมร่วมกัน ให้แท็กเพื่อนเพื่อรับโบนัส</div>
+                        </div>
+                    </div>
+                </div>
 
-            // ใช้ event delegation บน tip
-            const handler = (e) => {
-                const action = e.target.dataset.action || e.target.closest('[data-action]')?.dataset.action;
-                if (!action) return;
-                tip.removeEventListener('click', handler);
-                resolve(action === 'next' ? 'next' : action === 'prev' ? 'prev' : 'skip');
-            };
-            tip.addEventListener('click', handler);
-        });
-    }
-};
+                <div class="guide-card">
+                    <h5 class="fw-bold text-warning mb-3"><i class="fas fa-star me-2"></i>เกณฑ์การให้คะแนน (Scoring)</h5>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-borderless">
+                            <thead>
+                                <tr class="text-muted small border-bottom">
+                                    <th>กิจกรรม</th>
+                                    <th class="text-end">คะแนน</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><i class="fas fa-pen-nib text-primary me-2"></i>บันทึกกิจกรรมใหม่</td>
+                                    <td class="text-end fw-bold">+10</td>
+                                </tr>
+                                <tr>
+                                    <td><i class="fas fa-user-plus text-info me-2"></i>ถูกเพื่อนแท็ก (ได้รับร่วมกัน)</td>
+                                    <td class="text-end fw-bold">+10</td>
+                                </tr>
+                                <tr>
+                                    <td><i class="fas fa-check-double text-success me-2"></i>กดเป็นพยานให้เพื่อน (Verify)</td>
+                                    <td class="text-end fw-bold">+3</td>
+                                </tr>
+                                <tr>
+                                    <td><i class="fas fa-heart text-danger me-2"></i>ถูกเพื่อนกดเป็นพยานให้</td>
+                                    <td class="text-end fw-bold">+1</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="small text-muted mt-2 mb-0">💡 คะแนนเหล่านี้จะนำไปใช้ในการอัปเกรด <b>เลเวล</b> และปลดล็อก <b>ตราเหรียญรางวัล</b></p>
+                </div>
+            </div>
 
+            <div class="tab-pane fade" id="pills-virtue">
+                <div class="guide-card">
+                    <div class="d-flex mb-3">
+                        <div class="virtue-icon bg-gradient-volunteer"><i class="fas fa-hands-helping"></i></div>
+                        <div>
+                            <h6 class="fw-bold text-primary mb-1">1. จิตอาสา (Volunteer)</h6>
+                            <p class="small text-muted mb-0">การเสียสละเพื่อประโยชน์ส่วนรวม</p>
+                        </div>
+                    </div>
+                    <hr class="opacity-25 my-2">
+                    <ul class="example-list">
+                        <li>ช่วยเหลือเพื่อนร่วมงาน/ผู้รับบริการ</li>
+                        <li>อาสาทำกิจกรรมพิเศษของสำนักงาน</li>
+                        <li>แบ่งปันความรู้/ทักษะ</li>
+                    </ul>
+                </div>
+                <div class="guide-card">
+                    <div class="d-flex mb-3">
+                        <div class="virtue-icon bg-gradient-sufficiency"><i class="fas fa-leaf"></i></div>
+                        <div>
+                            <h6 class="fw-bold text-success mb-1">2. พอเพียง (Sufficiency)</h6>
+                            <p class="small text-muted mb-0">การใช้วรัพยากรอย่างคุ้มค่า</p>
+                        </div>
+                    </div>
+                    <hr class="opacity-25 my-2">
+                    <ul class="example-list">
+                        <li>ใช้กระดาษทั้งสองหน้า / ประหยัดพลังงาน</li>
+                        <li>เตรียมอาหารมาทานเอง</li>
+                        <li>วางแผนการใช้จ่ายอย่างรอบคอบ</li>
+                    </ul>
+                </div>
+                <div class="guide-card">
+                    <div class="d-flex mb-3">
+                        <div class="virtue-icon bg-gradient-discipline"><i class="fas fa-user-clock"></i></div>
+                        <div>
+                            <h6 class="fw-bold" style="color:#8c7ae6">3. วินัย (Discipline)</h6>
+                            <p class="small text-muted mb-0">ความรับผิดชอบและกฎระเบียบ</p>
+                        </div>
+                    </div>
+                    <hr class="opacity-25 my-2">
+                    <ul class="example-list">
+                        <li>มาทำงานตรงเวลา / ส่งงานตามกำหนด</li>
+                        <li>แต่งกายสุภาพตามระเบียบ</li>
+                        <li>ปฏิบัติตามคำสั่งและข้อบังคับ</li>
+                    </ul>
+                </div>
+                <div class="guide-card">
+                    <div class="d-flex mb-3">
+                        <div class="virtue-icon bg-gradient-integrity"><i class="fas fa-shield-alt"></i></div>
+                        <div>
+                            <h6 class="fw-bold" style="color:#00cec9">4. สุจริต (Integrity)</h6>
+                            <p class="small text-muted mb-0">ความโปร่งใสและซื่อสัตย์</p>
+                        </div>
+                    </div>
+                    <hr class="opacity-25 my-2">
+                    <ul class="example-list">
+                        <li>ปฏิบัติหน้าที่อย่างตรงไปตรงมา</li>
+                        <li>ยึดถือ No Gift Policy</li>
+                        <li>เปิดเผยข้อมูลตามความเป็นจริง</li>
+                    </ul>
+                </div>
+                <div class="guide-card">
+                    <div class="d-flex mb-3">
+                        <div class="virtue-icon bg-gradient-gratitude"><i class="fas fa-praying-hands"></i></div>
+                        <div>
+                            <h6 class="fw-bold" style="color:#e84393">5. กตัญญู (Gratitude)</h6>
+                            <p class="small text-muted mb-0">การรู้คุณต่อองค์กรและผู้มีพระคุณ</p>
+                        </div>
+                    </div>
+                    <hr class="opacity-25 my-2">
+                    <ul class="example-list">
+                        <li>ช่วยดูแลรักษาทรัพย์สินสำนักงาน</li>
+                        <li>ทำหน้าที่ตนเองให้ดีที่สุดเพื่อองค์กร</li>
+                        <li>แสดงออกถึงความเคารพผู้ใหญ่</li>
+                    </ul>
+                </div>
+            </div>
 
+            <div class="tab-pane fade" id="pills-symbol">
+
+                <div class="guide-card">
+                    <h5 class="fw-bold mb-3" style="color: #6c5ce7;"><i class="fas fa-fire me-2"></i>ระบบออร่า (User
+                        Glow)</h5>
+                    <p class="small text-muted">แสงรอบตัวจะเปลี่ยนสีตาม <b>"ความดีที่ทำบ่อยที่สุด"</b></p>
+
+                    <div class="row text-center mt-3">
+                        <div class="col-6 mb-2"><span class="badge rounded-pill bg-gradient-volunteer w-100">สีฟ้า =
+                                จิตอาสา</span></div>
+                        <div class="col-6 mb-2"><span class="badge rounded-pill bg-gradient-sufficiency w-100">สีเขียว =
+                                พอเพียง</span></div>
+                        <div class="col-6 mb-2"><span class="badge rounded-pill bg-gradient-discipline w-100">สีม่วง =
+                                วินัย</span></div>
+                        <div class="col-6 mb-2"><span class="badge rounded-pill bg-gradient-integrity w-100">สีฟ้าอ่อน =
+                                สุจริต</span></div>
+                    </div>
+                    <div class="text-center"><span class="badge rounded-pill bg-gradient-gratitude px-4">สีชมพู =
+                            กตัญญู</span></div>
+                </div>
+
+                <div class="guide-card">
+                    <h5 class="fw-bold mb-3 text-warning"><i class="fas fa-medal me-2"></i>เหรียญรางวัล (Badges)</h5>
+                    <table class="table table-bordered score-table">
+                        <thead class="table-light">
+                            <tr>
+                                <th>ระดับ</th>
+                                <th>ชื่อยศ</th>
+                                <th>เงื่อนไข</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="text-center">🥉</td>
+                                <td>Newbie</td>
+                                <td>1 ครั้ง</td>
+                            </tr>
+                            <tr>
+                                <td class="text-center">🥈</td>
+                                <td>Rookie</td>
+                                <td>10 ครั้ง</td>
+                            </tr>
+                            <tr>
+                                <td class="text-center">🥇</td>
+                                <td>Pro</td>
+                                <td>50 ครั้ง</td>
+                            </tr>
+                            <tr>
+                                <td class="text-center">👑</td>
+                                <td>Legend</td>
+                                <td>100 ครั้ง</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="pills-admin">
+
+                <div class="guide-card">
+                    <h5 class="fw-bold text-primary mb-3"><i class="fas fa-chart-line me-2"></i>Happy Meter Index (HMI)</h5>
+                    <p class="small text-muted">ดัชนีโมเมนตัมขององค์กร (แนวคิดเดียวกับดัชนีตลาดหุ้น) เพื่อวัด <b>"ปริมาณการมีส่วนร่วม"</b> ไม่ใช่แค่ความรู้สึก</p>
+                    
+                    <div class="p-3 bg-light rounded border mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="badge bg-primary">ตัวอย่างตรรกะดัชนี</span>
+                            <span class="text-success fw-bold">+ Momentum</span>
+                        </div>
+                        <ul class="small text-muted ps-3 mb-0">
+                            <li>🟢 <b>การมีส่วนร่วม:</b> ทุกการโพสต์ (+2), การแท็ก (+3), การรับรอง (+1)</li>
+                            <li>🔴 <b>สัญญาณถดถอย:</b> พนักงานโซนสีแดง (-5), ไร้กิจกรรม/หยุดนิ่ง (-2)</li>
+                        </ul>
+                    </div>
+                    <p class="small text-muted">💡 ผู้บริหารสามารถใช้กราฟนี้ดู "ความตื่นตัว" ของวัฒนธรรมองค์กรได้แบบรายวัน</p>
+                </div>
+
+                <div class="guide-card">
+                    <h5 class="fw-bold text-success mb-3"><i class="fas fa-chart-bar me-2"></i>สมดุลค่านิยม (TRD
+                        Analysis)</h5>
+                    <p class="small text-muted">กราฟแท่งเปรียบเทียบสัดส่วนการทำความดีใน 3 ด้านหลัก (Transparent,
+                        Responsible, Dedicated)</p>
+
+                    <div class="chart-bar-container mt-3">
+                        <div class="chart-bar bg-primary opacity-75" style="height: 60%;"><span>60</span></div>
+                        <div class="chart-bar bg-warning opacity-75" style="height: 40%;"><span>40</span></div>
+                        <div class="chart-bar bg-danger opacity-75" style="height: 80%;"><span>80</span></div>
+                    </div>
+                    <div class="chart-label-container">
+                        <div class="chart-label">T (สุจริต)</div>
+                        <div class="chart-label">R (วินัย)</div>
+                        <div class="chart-label">D (ทุ่มเท)</div>
+                    </div>
+                </div>
+
+                <div class="guide-card">
+                    <h5 class="fw-bold text-danger mb-3"><i class="fas fa-users me-2"></i>สถานะบุคลากร</h5>
+                    <p class="small text-muted">ระบบไฟจราจรเฝ้าระวังสุขภาพใจ</p>
+                    <ul class="example-list">
+                        <li><span class="badge bg-success rounded-circle p-1 me-2"> </span><b>สีเขียว (Normal):</b>
+                            สุขภาพใจดี (Happy Score > 7)</li>
+                        <li><span class="badge bg-warning rounded-circle p-1 me-2"> </span><b>สีเหลือง (Warning):</b>
+                            เริ่มเครียด (Happy Score 5-7)</li>
+                        <li><span class="badge bg-danger rounded-circle p-1 me-2"> </span><b>สีแดง (Critical):</b>
+                            หมดไฟ/ต้องการความช่วยเหลือด่วน (Happy Score < 5)</li>
+                    </ul>
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
+    <div class="text-center mt-5 text-muted small">
+        <p>— Happy Meter Project —<br>สำนักงานธนารักษ์พื้นที่หนองบัวลำภู</p>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>
