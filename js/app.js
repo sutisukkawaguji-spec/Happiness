@@ -842,15 +842,29 @@ function renderDashboard(appUsers) {
     document.getElementById('kpi-posts').innerText = statsUsers.length + ' คน';
 
     let teamRate = 0;
+    let singleRate = 0;
     if (globalFeedData?.length) {
         let teamPosts = globalFeedData.filter(p => {
             const tags = Array.isArray(p.taggedFriends) ? p.taggedFriends : String(p.taggedFriends || "").split(',');
             return tags.filter(id => String(id).trim().length > 0).length > 0;
         }).length;
         teamRate = (teamPosts / globalFeedData.length * 100).toFixed(0);
+        singleRate = (100 - teamRate).toFixed(0);
     }
     document.getElementById('kpi-teamwork').innerText = teamRate + '%';
+    if (document.getElementById('kpi-single')) {
+        document.getElementById('kpi-single').innerText = singleRate + '%';
+    }
     document.getElementById('kpi-issues').innerText = issueCount + ' คน';
+
+    // 🤖 สร้างกล่องสรุปภาพรวมอัจฉริยะ
+    const avgHappyNum = userWithData > 0 ? (totalHappy / userWithData).toFixed(1) : 0;
+    const summaryBox = document.getElementById('execSummaryBox');
+    const summaryText = document.getElementById('execSummaryText');
+    if (summaryBox && summaryText) {
+        summaryBox.style.display = 'block';
+        summaryText.innerHTML = `📊 <b>สรุปภาพรวม:</b> ปัจจุบันองค์กรมีสมาชิก <b>${statsUsers.length}</b> คน ดัชนีความสุขเฉลี่ยอยู่ที่ <b>${avgHappyNum}</b> กิจกรรมส่วนใหญ่เป็นการทำ${teamRate >= 50 ? 'ร่วมกัน' : 'แบบเดี่ยว'} (<b>${teamRate >= 50 ? teamRate : singleRate}%</b>) โดยมีผู้ที่ต้องดูแลใกล้ชิด <b class="${issueCount > 0 ? 'text-danger' : 'text-success'}">${issueCount}</b> คน สำหรับดัชนี <b>HAPPY METER INDEX (HMI)</b> มีแนวโน้มสะท้อนถึงการมีส่วนร่วมที่สม่ำเสมอ`;
+    }
 
     renderStaffTable(globalUserStatsMap);
 }
@@ -1637,7 +1651,20 @@ function processAnnounceData(data, silent = false) {
                 if (isRead && !hasReminded) {
                     localStorage.removeItem(`notif_read_${a.id}`); // ทำให้กลับมาเป็น "ยังไม่ได้อ่าน"
                     localStorage.setItem(`notif_reminded_${a.id}`, 'true'); // มาร์คว่าเตือนรอบ 1 วันแล้ว
-                    hasNewUpcoming = true; // บังคับสั่นกระดิ่งใหม่
+                    hasNewUpcoming = true;
+                    if (pageId === 'badges' || pageId === 'manager') {
+                        if (pageId === 'manager') {
+                            // ผู้บริหาร: ดึงใหม่เสมอเพื่อให้ได้ claims ล่าสุด
+                            if (window.fetchRewards) window.fetchRewards();
+                        } else {
+                            // badges: ใช้ cache ถ้ามีแล้ว ดึงใหม่ถ้ายังไม่มี
+                            if (!window.globalRewardsData || window.globalRewardsData.length === 0) {
+                                if (window.fetchRewards) window.fetchRewards();
+                            } else {
+                                if (window.renderUserRewards) window.renderUserRewards();
+                            }
+                        }
+                    }
                 }
             }
 
@@ -1967,6 +1994,15 @@ function switchTab(pageId, el) {
     window.scrollTo({ top: 0, behavior: 'auto' });
 
     if (pageId === 'stats') setTimeout(initUserRadar, 100);
+    if (pageId === 'badges' || pageId === 'manager') {
+        if (pageId === 'manager') {
+            if (window.fetchRewards) window.fetchRewards();
+        } else if (!window.globalRewardsData || window.globalRewardsData.length === 0) {
+            if (window.fetchRewards) window.fetchRewards();
+        } else {
+            if (window.renderUserRewards) window.renderUserRewards();
+        }
+    }
     if (pageId === 'relation') {
         closeRelationDetail(); // Back to list when tab clicked
         renderRelationTab();
@@ -3169,5 +3205,787 @@ async function trackAppVisit() {
         console.log("✅ บันทึกการเข้าใช้งานแล้ว");
     } catch (e) { console.warn("Visit tracking failed", e); }
 }
+
+// ==========================================
+// 📄 ระบบสร้างรายงาน PDF (Monthly & Individual)
+// ==========================================
+
+function openReportModal() {
+    document.getElementById('reportModalBackdrop').style.display = 'block';
+    document.getElementById('reportModal').style.display = 'block';
+    
+    // สร้างตัวเลือกเดือน
+    const select = document.getElementById('reportMonthSelect');
+    select.innerHTML = '<option value="all">ข้อมูลทั้งหมด (All Time)</option>';
+    
+    if (window.globalFeedData && window.globalFeedData.length > 0) {
+        const months = new Set();
+        window.globalFeedData.forEach(p => {
+            if (p.timestamp) {
+                const d = new Date(p.timestamp);
+                if (!isNaN(d.getTime())) {
+                    const monthStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+                    months.add(monthStr);
+                }
+            }
+        });
+        
+        const sortedMonths = Array.from(months).sort().reverse(); // ใหม่ไปเก่า
+        sortedMonths.forEach(m => {
+            const [y, mm] = m.split('-');
+            const thaiMonths = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+            const label = thaiMonths[parseInt(mm)-1] + ' ' + (parseInt(y)+543);
+            select.innerHTML += `<option value="${m}">${label}</option>`;
+        });
+    }
+    
+    generateMonthlyReport();
+}
+
+function closeReportModal() {
+    document.getElementById('reportModalBackdrop').style.display = 'none';
+    document.getElementById('reportModal').style.display = 'none';
+}
+
+window.generateMonthlyReport = function() {
+    const month = document.getElementById('reportMonthSelect').value;
+    const content = document.getElementById('reportContentArea');
+    content.innerHTML = '<div class="text-center py-4 text-muted"><i class="fas fa-spinner fa-spin me-2"></i>กำลังวิเคราะห์ข้อมูลเชิงลึก...</div>';
+    
+    setTimeout(() => {
+        let filteredFeed = window.globalFeedData || [];
+        let previousFeed = window.globalFeedData || [];
+        let monthLabel = 'ข้อมูลทั้งหมดจนถึงปัจจุบัน';
+        let hasPrevious = false;
+        
+        if (month !== 'all') {
+            const [y, m] = month.split('-');
+            filteredFeed = filteredFeed.filter(p => {
+                if (!p.timestamp) return false;
+                const d = new Date(p.timestamp);
+                return d.getFullYear() == y && (d.getMonth() + 1) == m;
+            });
+            
+            // หาข้อมูลเดือนก่อนหน้าเพื่อเปรียบเทียบ
+            let prevM = parseInt(m) - 1;
+            let prevY = parseInt(y);
+            if (prevM === 0) { prevM = 12; prevY -= 1; }
+            previousFeed = (window.globalFeedData || []).filter(p => {
+                if (!p.timestamp) return false;
+                const d = new Date(p.timestamp);
+                return d.getFullYear() == prevY && (d.getMonth() + 1) == prevM;
+            });
+            hasPrevious = true;
+            
+            const thaiMonths = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+            monthLabel = `ประจำเดือน ${thaiMonths[parseInt(m)-1]} ${parseInt(y)+543}`;
+        } else {
+            hasPrevious = false;
+        }
+        
+        // --- คำนวณเดือนนี้ ---
+        const totalPosts = filteredFeed.length;
+        let teamwork = 0;
+        let virtueCounts = { volunteer: 0, sufficiency: 0, discipline: 0, integrity: 0, gratitude: 0 };
+        filteredFeed.forEach(p => {
+            const tags = Array.isArray(p.taggedFriends) ? p.taggedFriends : String(p.taggedFriends || "").split(',');
+            if (tags.filter(id => String(id).trim().length > 0).length > 0) teamwork++;
+            if (p.virtue && virtueCounts[p.virtue] !== undefined) virtueCounts[p.virtue]++;
+        });
+        const teamworkRate = totalPosts > 0 ? ((teamwork / totalPosts) * 100).toFixed(0) : 0;
+        
+        // --- คำนวณเดือนก่อนหน้า ---
+        const prevTotal = previousFeed.length;
+        let prevTeamwork = 0;
+        previousFeed.forEach(p => {
+            const tags = Array.isArray(p.taggedFriends) ? p.taggedFriends : String(p.taggedFriends || "").split(',');
+            if (tags.filter(id => String(id).trim().length > 0).length > 0) prevTeamwork++;
+        });
+        const prevTeamRate = prevTotal > 0 ? ((prevTeamwork / prevTotal) * 100).toFixed(0) : 0;
+        
+        const virtueNameMap = { volunteer:'จิตอาสา (D)', sufficiency:'พอเพียง (R)', discipline:'วินัย (R)', integrity:'สุจริต (T)', gratitude:'กตัญญู (D)' };
+        let sortedVirtues = Object.entries(virtueCounts).sort((a,b) => b[1]-a[1]);
+        const topVirtue = sortedVirtues[0];
+        const lowestVirtue = sortedVirtues[sortedVirtues.length - 1];
+        
+        let insightText = '';
+        if (totalPosts === 0) {
+            insightText = 'ไม่มีข้อมูลกิจกรรมในระบบสำหรับช่วงเวลานี้';
+        } else {
+            let trendVolText = '';
+            let trendTeamText = '';
+            
+            if (hasPrevious) {
+                const diffVol = totalPosts - prevTotal;
+                if (diffVol > 0) trendVolText = `<b>เพิ่มขึ้น ${diffVol} รายการ</b> จากเดือนที่แล้ว สะท้อนถึงโมเมนตัมระดับองค์กรเชิงบวก`;
+                else if (diffVol < 0) trendVolText = `<b>ลดลง ${Math.abs(diffVol)} รายการ</b> จากเดือนที่แล้ว ควรมีการกระตุ้นกิจกรรมเพิ่มเติม`;
+                else trendVolText = `มีจำนวนทรงตัวเท่ากับเดือนที่แล้ว`;
+                
+                const diffTeam = teamworkRate - prevTeamRate;
+                if (diffTeam > 0) trendTeamText = `และมีสัดส่วนการทำกิจกรรมร่วมกันสูงขึ้น <b>+${diffTeam}%</b> บ่งชี้ว่าบุคลากรมีการบูรณาการข้ามสายงานที่ดีขึ้น`;
+                else if (diffTeam < 0) trendTeamText = `แต่สัดส่วนการทำกิจกรรมร่วมกันลดลง <b>${diffTeam}%</b> ซึ่งอาจบ่งบอกถึงความรู้สึกโดดเดี่ยวในการทำงาน (Silo Effect)`;
+                else trendTeamText = `สัดส่วนการทำงานร่วมกันมีความคงที่`;
+            } else {
+                trendVolText = `มีการกระจายตัวอยู่ในหลายหมวดหมู่`;
+                trendTeamText = `โดยเน้นไปที่${teamworkRate > 50 ? 'การทำกิจกรรมร่วมกับผู้อื่น' : 'การทำกิจกรรมส่วนบุคคล'}เป็นหลัก`;
+            }
+            
+            insightText = `
+                <p>ใน ${monthLabel} องค์กรมีการขับเคลื่อนกิจกรรมความดีรวมทั้งสิ้น <b>${totalPosts} รายการ</b> 
+                โดย ${trendVolText} ${trendTeamText}</p>
+                
+                <p class="mt-2 mb-1 fw-bold text-dark"><i class="fas fa-balance-scale text-primary me-1"></i> มิติความสมดุล (TRD Core Values)</p>
+                <p>หมวดหมู่ที่มีการปฏิบัติมากที่สุดคือ <b>${virtueNameMap[topVirtue[0]]}</b> (${topVirtue[1]} รายการ) แสดงให้เห็นถึงค่านิยมหลักที่แข็งแกร่งในด้านนี้ 
+                ในขณะที่ <b>${virtueNameMap[lowestVirtue[0]]}</b> เป็นด้านที่มีการปฏิบัติน้อยที่สุด (${lowestVirtue[1]} รายการ) 
+                <span class="text-danger">ฝ่ายบริหารควรพิจารณาจัดกิจกรรมหรือให้รางวัลจูงใจ (Incentives) ในด้าน ${virtueNameMap[lowestVirtue[0]]} เพื่อสร้างสมดุลให้กับวัฒนธรรมองค์กร</span></p>
+                
+                <p class="mt-2 mb-1 fw-bold text-dark"><i class="fas fa-project-diagram text-primary me-1"></i> มิติความผูกพันและเครือข่าย</p>
+                <p>จากกิจกรรมทั้งหมด มีถึง <b>${teamworkRate}%</b> ที่เกิดการ Tag เพื่อนร่วมงาน ถือเป็นสัญญาณของจิตวิญญาณแห่งการทำงานเป็นทีม (Team Spirit) การมีส่วนร่วมระดับนี้จะช่วยลดปัญหาความขัดแย้งและเพิ่มบรรยากาศที่น่าทำงาน (Happy Workplace)</p>
+            `;
+        }
+        
+        const html = `
+            <div class="p-1" style="color:#333; font-family:'Kanit',sans-serif; text-align:left;">
+                <p class="text-center text-muted small border-bottom pb-2 mb-3">${monthLabel}</p>
+                
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <div class="bg-light p-2 rounded text-center" style="border:1px solid #e0e0e0;">
+                            <div class="small text-muted">กิจกรรมความดี</div>
+                            <h4 class="mb-0 text-primary fw-bold">${totalPosts}</h4>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="bg-light p-2 rounded text-center" style="border:1px solid #e0e0e0;">
+                            <div class="small text-muted">กิจกรรมร่วม</div>
+                            <h4 class="mb-0 text-info fw-bold">${teamworkRate}%</h4>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="rounded-3 p-3 shadow-sm bg-white" style="border-left:4px solid #6c5ce7; font-size: 0.85rem; line-height: 1.6;">
+                    ${insightText}
+                </div>
+            </div>
+        `;
+        content.innerHTML = html;
+    }, 500);
+};
+
 window.addEventListener('resize', setViewportHeight);
 setViewportHeight();
+
+// ==========================================
+// 🎁 ระบบจัดการและแสดงของรางวัล (Reward System)
+// ==========================================
+
+window.globalRewardsData = [];
+
+window.globalRewardsData = [];
+window.globalClaimsData = [];
+
+window.fetchRewards = async function() {
+    try {
+        const res = await fetch(GAS_URL + '?action=get_rewards');
+        const data = await res.json();
+        if (data.rewards) {
+            window.globalRewardsData = data.rewards;
+            window.globalClaimsData = data.claims || [];
+            renderExecutiveRewards();
+            renderUserRewards();
+        }
+    } catch (e) {
+        console.error("Failed to fetch rewards", e);
+    }
+};
+
+window.renderExecutiveRewards = function() {
+    const list = document.getElementById('executiveRewardList');
+    if (!list) return;
+    
+    if (!window.globalRewardsData || window.globalRewardsData.length === 0) {
+        list.innerHTML = '<div class="text-center text-muted small py-3">ยังไม่ได้ตั้งของรางวัล</div>';
+        return;
+    }
+    
+    let html = '';
+    window.globalRewardsData.forEach(r => {
+        let claimants = []; // actual claim records
+        let eligible = []; // can claim but haven't
+        
+        // 1. Find actual claimants from globalClaimsData
+        (window.globalClaimsData || []).forEach(cl => {
+            if (cl.rewardId === r.id) {
+                const statsMap = window.globalUserStatsMap || {};
+                let u = statsMap[cl.userId];
+                if (!u) { const found = Object.values(statsMap).find(x => String(x.id) === String(cl.userId)); if (found) u = found; }
+                if (!u) { const fu = (window.allUsersMap||{})[cl.userId]; u = fu ? {name:fu.name,userId:cl.userId,img:fu.img} : {name:cl.userName,userId:cl.userId,img:null}; }
+                claimants.push(u);
+            }
+        });
+
+        // 2. Find eligible but not yet claimed
+        if (window.globalUserStatsMap && window.globalFeedData) {
+            Object.keys(window.globalUserStatsMap).forEach(uid => {
+                const u = window.globalUserStatsMap[uid];
+                if (!u || !u.name) return;
+                
+                // Skip if already in claimants
+                if (claimants.find(c => String(c.userId || c.id) === String(uid))) return;
+
+                let isEligible = false;
+                if (r.mode == 1) {
+                    if ((u.score || 0) >= r.targetVal) isEligible = true;
+                } else if (r.mode == 2) {
+                    let gainedXP = 0;
+                    window.globalFeedData.forEach(p => {
+                        if (p.timestamp && (new Date(p.timestamp).getTime() > r.createdTs)) {
+                            if (String(p.user_line_id).trim() === String(uid).trim()) gainedXP += Number(p.score) || 0;
+                            if (p.verifies && Array.isArray(p.verifies)) {
+                                p.verifies.forEach(v => {
+                                    const vid = (typeof v === 'object') ? (v.userId || v.lineId) : v;
+                                    if (String(vid).trim() === String(uid).trim()) gainedXP += 3;
+                                });
+                            }
+                        }
+                    });
+                    if (gainedXP >= r.targetVal) isEligible = true;
+                }
+                if (isEligible) eligible.push(u);
+            });
+        }
+        
+        let achieversHtml = '';
+        if (claimants.length > 0 || eligible.length > 0) {
+            const combined = [...claimants, ...eligible];
+            const faceHtml = combined.slice(0, 5).map(a => `<img src="${a.img || 'https://dummyimage.com/30x30/ccc/fff'}" class="rounded-circle border" style="width:24px; height:24px; margin-right:-8px;" title="${a.name}">`).join('');
+            const moreCount = combined.length > 5 ? `<span class="badge bg-secondary ms-2" style="font-size:0.6rem;">+${combined.length - 5}</span>` : '';
+            
+            achieversHtml = `
+            <div class="mt-2 pt-2 border-top">
+                <button class="btn btn-sm btn-light w-100 text-start d-flex justify-content-between align-items-center rounded-3" onclick="document.getElementById('achievers_${r.id}').classList.toggle('d-none')">
+                    <span class="small fw-bold text-success"><i class="fas fa-users me-1"></i> ผู้ได้รับ/มีสิทธิ์ (${combined.length})</span>
+                    <div class="d-flex align-items-center">${faceHtml}${moreCount}</div>
+                </button>
+                <div id="achievers_${r.id}" class="d-none mt-2 p-2 bg-light rounded-3 small border" style="max-height: 180px; overflow-y: auto;">
+                    ${claimants.length > 0 ? `<div class="fw-bold mb-1 text-primary"><i class="fas fa-check-circle"></i> แจ้งรับรางวัลแล้ว:</div>` : ''}
+                    ${claimants.map(a => {
+                        const cl = window.globalClaimsData.find(c => c.rewardId === r.id && String(c.userId) === String(a.userId || a.id));
+                        const dateStr = cl && cl.timestamp ? new Date(cl.timestamp).toLocaleString('th-TH', { hour:'2-digit', minute:'2-digit', day:'numeric', month:'short' }) : '';
+                        return `<div class="d-flex align-items-center mb-1 ms-2 justify-content-between">
+                            <div class="d-flex align-items-center">
+                                <img src="${a.img || 'https://dummyimage.com/30x30/ccc/fff'}" class="rounded-circle me-2" style="width:20px; height:20px;"> 
+                                <span>${a.name}</span>
+                            </div>
+                            <span class="text-muted" style="font-size:0.65rem;">${dateStr}</span>
+                        </div>`;
+                    }).join('')}
+                    
+                    ${eligible.length > 0 ? `<div class="fw-bold mt-2 mb-1 text-muted"><i class="fas fa-clock"></i> ยังไม่ได้กดแจ้งรับ:</div>` : ''}
+                    ${eligible.map(a => `<div class="d-flex align-items-center mb-1 ms-2 opacity-75"><img src="${a.img || 'https://dummyimage.com/30x30/ccc/fff'}" class="rounded-circle me-2" style="width:20px; height:20px;"> <span>${a.name}</span></div>`).join('')}
+                </div>
+            </div>`;
+        } else {
+            achieversHtml = `<div class="mt-2 pt-2 border-top text-center small text-muted">ยังไม่มีผู้ได้รับรางวัล</div>`;
+        }
+
+        const modeBadge = r.mode == 1 ? '<span class="badge bg-success ms-1" style="font-size:0.6rem;">เป้าหมายรวม</span>' : '<span class="badge" style="background:#ff9f43; font-size:0.6rem; margin-left:4px;">ภารกิจพิเศษ</span>';
+        const imgStr = r.image ? `<img src="${r.image}" style="width:50px; height:50px; object-fit:cover; border-radius:10px;">` : `<div class="bg-light rounded d-flex align-items-center justify-content-center" style="width:50px; height:50px;"><i class="fas fa-gift text-muted"></i></div>`;
+        
+        html += `
+        <div class="d-flex flex-column p-2 rounded-3 shadow-sm bg-white border mb-2">
+            <div class="d-flex align-items-center" style="gap: 12px;">
+                ${imgStr}
+                <div class="flex-grow-1 min-w-0">
+                    <div class="fw-bold text-truncate" style="font-size: 0.9rem;">${r.name} ${modeBadge}</div>
+                    <div class="small text-muted">เป้าหมาย: <span class="text-primary fw-bold">${r.mode == 2 ? '+' : ''}${r.targetVal} XP</span></div>
+                </div>
+                <div class="d-flex flex-column gap-1">
+                    <button class="btn btn-sm btn-outline-primary rounded-circle" onclick="editReward('${r.id}')" style="width: 28px; height: 28px; padding: 0;" title="แก้ไข">
+                        <i class="fas fa-pen" style="font-size:0.7rem;"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger rounded-circle" onclick="deleteReward('${r.id}')" style="width: 28px; height: 28px; padding: 0;" title="ลบ">
+                        <i class="fas fa-trash-alt" style="font-size:0.7rem;"></i>
+                    </button>
+                </div>
+            </div>
+            ${achieversHtml}
+        </div>
+        `;
+    });
+    list.innerHTML = html;
+};
+
+window.renderUserRewards = function() {
+    const challengeList = document.getElementById('challengeRewardList');
+    const milestoneList = document.getElementById('milestoneRewardList');
+    const challengeZone = document.getElementById('rewardChallengeZone');
+    const milestoneZone = document.getElementById('rewardMilestoneZone');
+    const noRewardsMsg  = document.getElementById('noRewardsMessage');
+    if (!challengeList || !milestoneList) return;
+    const rewards = window.globalRewardsData || [];
+    if (rewards.length === 0) {
+        challengeZone.style.display = 'none';
+        milestoneZone.style.display = 'none';
+        if (noRewardsMsg) noRewardsMsg.style.display = 'block';
+        return;
+    }
+    if (noRewardsMsg) noRewardsMsg.style.display = 'none';
+    const challenges = rewards.filter(r => r.mode == 2);
+    const milestones  = rewards.filter(r => r.mode == 1);
+    let lifetimeXP = 0;
+    if (window.currentUser) {
+        if (window.globalUserStatsMap && window.globalUserStatsMap[window.currentUser.userId]) {
+            lifetimeXP = window.globalUserStatsMap[window.currentUser.userId].score || 0;
+        } else {
+            lifetimeXP = window.currentUser.score || 0;
+        }
+    }
+    /* inject CSS once */
+    if (!document.getElementById('rewardCardStyles')) {
+        const st = document.createElement('style');
+        st.id = 'rewardCardStyles';
+        st.textContent = [
+            '@keyframes rwGlow{from{box-shadow:0 0 15px rgba(255,159,67,.4),0 0 30px rgba(255,159,67,.2)}to{box-shadow:0 0 35px rgba(255,159,67,.9),0 0 70px rgba(255,159,67,.4)}}',
+            '@keyframes rwGlowGreen{from{box-shadow:0 0 15px rgba(40,167,69,.4)}to{box-shadow:0 0 35px rgba(40,167,69,.9),0 0 70px rgba(40,167,69,.4)}}',
+            '@keyframes rwBounce{from{transform:translateY(0)scale(1)}to{transform:translateY(-10px)scale(1.1)}}',
+            '@keyframes rwPulse{0%,100%{opacity:1}50%{opacity:.35}}',
+            '@keyframes rwShine{0%,100%{filter:brightness(1)}50%{filter:brightness(1.45)}}',
+            '.reward-gift-card { background: var(--glass-bg) !important; border: 1.5px solid var(--border-color) !important; color: var(--text-color) !important; }',
+            '.reward-inner-box { background: #fff; } [data-theme="dark"] .reward-inner-box { background: #2a2a40; }',
+            '.reward-overlay-card { background: #fff; color: #444; } [data-theme="dark"] .reward-overlay-card { background: #252538; color: #f0f0f0; }',
+            '.reward-progress-bg { background: #f4f4f4; } [data-theme="dark"] .reward-progress-bg { background: #1a1a2e; }'
+        ].join('');
+        document.head.appendChild(st);
+    }
+    function buildCard(r, xp, color, isChallenge) {
+        const target   = r.targetVal;
+        const pct      = Math.min(100, Math.round((xp / target) * 100));
+        const unlocked = xp >= target;
+        const claimed  = (window.globalClaimsData || []).some(
+            c => c.rewardId === r.id && String(c.userId) === String((window.currentUser||{}).userId));
+        const glow = color === '#28a745' ? 'rwGlowGreen' : 'rwGlow';
+        /* ---- box visuals ---- */
+        let box;
+        if (claimed) {
+            const inner = r.image
+                ? '<img src="' + r.image + '" style="width:100%;height:100%;object-fit:cover;">'
+                : '<i class="fas fa-gift fa-4x" style="color:' + color + ';"></i>';
+            box = '<div style="text-align:center;">'
+                + '<div class="reward-inner-box" style="width:150px;height:150px;border-radius:24px;overflow:hidden;margin:0 auto;'
+                + 'border:3px solid ' + color + ';box-shadow:0 0 20px ' + color + '60;'
+                + 'display:flex;align-items:center;justify-content:center;">'
+                + inner + '</div>'
+                + '<div class="mt-2 badge text-white fw-bold px-3 py-2 rounded-pill" style="background:' + color + ';font-size:.75rem;">'
+                + '<i class="fas fa-check me-1"></i> แจ้งรับแล้ว</div></div>';
+        } else if (unlocked) {
+            box = '<div onclick="openRewardBox(\'' + r.id + '\')" style="text-align:center;cursor:pointer;">'
+                + '<div class="reward-inner-box" style="width:150px;height:150px;border-radius:24px;margin:0 auto;'
+                + 'border:3px solid ' + color + ';'
+                + 'display:flex;align-items:center;justify-content:center;'
+                + ''
+                + 'animation:' + glow + ' 1.4s ease-in-out infinite alternate;">'
+                + '<i class="fas fa-gift" style="font-size:4rem;color:' + color + ';animation:rwBounce .9s ease-in-out infinite alternate;"></i>'
+                + '</div>'
+                + '<div class="mt-2 fw-bold" style="font-size:.82rem;color:' + color + ';animation:rwPulse 1.4s ease-in-out infinite;">'
+                + '<i class="fas fa-hand-point-up me-1"></i> แตะเพื่อเปิดกล่อง!</div></div>';
+        } else {
+            box = '<div style="text-align:center;cursor:not-allowed;">'
+                + '<div class="reward-inner-box" style="width:150px;height:150px;border-radius:24px;margin:0 auto;'
+                + 'border:2px dashed #d0d0d0;'
+                + 'display:flex;align-items:center;justify-content:center;position:relative;">'
+                + '<i class="fas fa-gift" style="font-size:4rem;color:#c0c0c0;"></i>'
+                + '<div style="position:absolute;top:-14px;right:-14px;width:32px;height:32px;border-radius:50%;'
+                + 'class="reward-inner-box" style="border:2px solid #ccc;display:flex;align-items:center;justify-content:center;">'
+                + '<i class="fas fa-lock" style="font-size:.75rem;color:#aaa;"></i></div></div>'
+                + '<div class="mt-2 small text-muted" style="font-size:.72rem;">ต้องการอีก ' + Math.max(0, target - xp) + ' XP</div></div>';
+        }
+        const dateStr = r.endDate
+            ? '<div class="small text-danger text-center mt-1" style="font-size:.68rem;"><i class="far fa-clock"></i> ' + new Date(r.endDate).toLocaleDateString('th-TH') + '</div>'
+            : '';
+        const bg     = unlocked && !claimed ? 'linear-gradient(145deg,' + color + '18,#fff)' : '#fff';
+        const border = unlocked && !claimed ? '2px solid ' + color : '1.5px solid #e8e8e8';
+        const shadow = unlocked && !claimed ? '0 6px 24px ' + color + '30' : '0 2px 8px rgba(0,0,0,.06)';
+        const displayName = claimed ? r.name : '🎁 รางวัลปริศนา';
+        return '<div class="reward-gift-card" style="border-radius:20px;padding:20px 10px 14px;text-align:center;transition:transform .2s;' + (unlocked && !claimed ? 'border:2px solid '+color+'!important;box-shadow:0 6px 24px '+color+'30!important;' : '') + '">'
+            + box
+            + '<div class="fw-bold mt-3 mb-1 px-1" style="font-size:.85rem;color:' + (unlocked ? color : '#666') + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + displayName + '</div>'
+            + '<div class="d-flex justify-content-between" style="color:#aaa;font-size:.65rem;margin-bottom:4px;">'
+            + '<span>' + (isChallenge ? 'ใหม่: ' : 'รวม: ') + xp + ' XP</span>'
+            + '<span>' + target + ' XP</span></div>'
+            + '<div style="height:8px;background:#ececec;border-radius:10px;overflow:hidden;">'
+            + '<div style="height:100%;width:' + pct + '%;background:' + (unlocked ? color : '#b0bec5') + ';border-radius:10px;'
+            + (unlocked && !claimed ? 'animation:rwShine 2s linear infinite;' : '') + 'transition:width .8s ease;"></div></div>'
+            + '<div style="font-size:.6rem;color:#bbb;margin-top:3px;">' + pct + '%</div>'
+            + dateStr + '</div>';
+    }
+    /* milestones */
+    if (milestones.length > 0) {
+        milestoneZone.style.display = 'block';
+        let h = '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;">';
+        milestones.forEach(r => { h += buildCard(r, lifetimeXP, '#28a745', false); });
+        milestoneList.innerHTML = h + '</div>';
+    } else { milestoneZone.style.display = 'none'; }
+    /* challenges */
+    if (challenges.length > 0) {
+        challengeZone.style.display = 'block';
+        let h = '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;">';
+        challenges.forEach(r => {
+            let gainedXP = 0;
+            if (window.currentUser && window.globalFeedData) {
+                window.globalFeedData.forEach(p => {
+                    if (p.timestamp && (new Date(p.timestamp).getTime() > r.createdTs)) {
+                        if (String(p.user_line_id).trim() === String(window.currentUser.userId).trim()) {
+                            gainedXP += Number(p.score) || 0;
+                        }
+                        if (p.verifies && Array.isArray(p.verifies)) {
+                            p.verifies.forEach(v => {
+                                const vid = (typeof v === 'object') ? (v.userId || v.lineId) : v;
+                                if (String(vid).trim() === String(window.currentUser.userId).trim()) gainedXP += 3;
+                            });
+                        }
+                    }
+                });
+            }
+            h += buildCard(r, gainedXP, '#ff9f43', true);
+        });
+        challengeList.innerHTML = h + '</div>';
+    } else { challengeZone.style.display = 'none'; }
+};
+
+/* ============================================================
+   openRewardBox — Full-screen reveal overlay for unlocked gift
+   ============================================================ */
+window.openRewardBox = function(id) {
+    const r = (window.globalRewardsData || []).find(x => x.id === id);
+    if (!r) return;
+
+    const isChallenge = r.mode == 2;
+    const accentColor = isChallenge ? '#ff9f43' : '#28a745';
+    const glow        = isChallenge ? 'rwGlow' : 'rwGlowGreen';
+
+    // Score info
+    let currentXP = 0;
+    if (isChallenge) {
+        if (window.currentUser && window.globalFeedData) {
+            window.globalFeedData.forEach(p => {
+                if (p.timestamp && (new Date(p.timestamp).getTime() > r.createdTs)) {
+                    if (String(p.user_line_id).trim() === String(window.currentUser.userId).trim())
+                        currentXP += Number(p.score) || 0;
+                    if (p.verifies && Array.isArray(p.verifies)) {
+                        p.verifies.forEach(v => {
+                            const vid = (typeof v === 'object') ? (v.userId || v.lineId) : v;
+                            if (String(vid).trim() === String(window.currentUser.userId).trim()) currentXP += 3;
+                        });
+                    }
+                }
+            });
+        }
+    } else {
+        if (window.globalUserStatsMap && window.currentUser && window.globalUserStatsMap[window.currentUser.userId]) {
+            currentXP = window.globalUserStatsMap[window.currentUser.userId].score || 0;
+        } else if (window.currentUser) {
+            currentXP = window.currentUser.score || 0;
+        }
+    }
+    const pct = Math.min(100, Math.round((currentXP / r.targetVal) * 100));
+
+    const imgHtml = r.image
+        ? `<img src="${r.image}" style="width:100%;height:100%;object-fit:cover;border-radius:20px;">`
+        : `<i class="fas fa-gift" style="font-size:6rem;color:${accentColor};animation:rwBounce .9s ease-in-out infinite alternate;"></i>`;
+
+    // Remove existing overlay if any
+    document.getElementById('rwOverlay')?.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'rwOverlay';
+    overlay.style.cssText = [
+        'position:fixed;top:0;left:0;width:100%;height:100%;z-index:99999;',
+        'background:rgba(0,0,0,0.72);backdrop-filter:blur(6px);',
+        'display:flex;align-items:center;justify-content:center;flex-direction:column;',
+        'animation:fadeIn .3s ease;'
+    ].join('');
+
+    overlay.innerHTML = `
+        <style>
+            @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+            @keyframes boxReveal{0%{transform:scale(.4) rotate(-8deg);opacity:0}60%{transform:scale(1.1) rotate(2deg)}100%{transform:scale(1) rotate(0deg);opacity:1}}
+        </style>
+
+        <!-- Close X -->
+        <button onclick="document.getElementById('rwOverlay').remove()"
+            style="position:fixed;top:18px;right:18px;width:40px;height:40px;border:none;background:rgba(255,255,255,.15);
+                   border-radius:50%;color:#fff;font-size:1.2rem;cursor:pointer;z-index:100000;
+                   display:flex;align-items:center;justify-content:center;">
+            <i class="fas fa-times"></i>
+        </button>
+
+        <!-- Card -->
+        <div class="reward-overlay-card" style="border-radius:28px;padding:30px 24px 24px;
+                    max-width:320px;width:88%;text-align:center;
+                    box-shadow:0 20px 80px rgba(0,0,0,.4);
+                    animation:boxReveal .5s cubic-bezier(.22,1,.36,1) both;">
+
+            <!-- Big gift box / image -->
+            <div style="width:200px;height:200px;margin:0 auto 18px;border-radius:20px;overflow:hidden;
+                        border:3px solid ${accentColor};
+                        box-shadow:0 0 40px ${accentColor}70;
+                        display:flex;align-items:center;justify-content:center;
+                        
+                        animation:${glow} 1.5s ease-in-out infinite alternate;">
+                ${imgHtml}
+            </div>
+
+            <!-- Name -->
+            <div style="font-size:1.2rem;font-weight:700;color:${accentColor};margin-bottom:6px;">${r.name}</div>
+            <div style="font-size:.78rem;color:#888;margin-bottom:18px;">
+                ${isChallenge ? 'ภารกิจพิเศษ' : 'รางวัลกิจกรรมทำความดี'}
+            </div>
+
+            <!-- Score bar -->
+            <div class="reward-progress-bg" style="border-radius:14px;padding:12px 14px;margin-bottom:18px;text-align:left;">
+                <div class="d-flex justify-content-between" style="font-size:.72rem;color:#888;margin-bottom:6px;">
+                    <span>คะแนน${isChallenge ? 'ใหม่' : 'สะสม'}</span>
+                    <span style="font-weight:700;color:${accentColor};">${currentXP} / ${r.targetVal} XP</span>
+                </div>
+                <div style="height:12px;background:#e0e0e0;border-radius:10px;overflow:hidden;">
+                    <div style="height:100%;width:${pct}%;background:${accentColor};border-radius:10px;
+                                animation:rwShine 2s linear infinite;transition:width .8s ease;"></div>
+                </div>
+                <div style="text-align:right;font-size:.62rem;color:#bbb;margin-top:4px;">${pct}%</div>
+            </div>
+
+            <!-- Claim button -->
+            <button onclick="document.getElementById('rwOverlay').remove(); claimReward('${r.id}');"
+                style="width:100%;padding:13px;border:none;border-radius:14px;font-size:1rem;font-weight:700;
+                       color:#fff;background:${accentColor};cursor:pointer;
+                       box-shadow:0 4px 14px ${accentColor}50;letter-spacing:.4px;">
+                <i class="fas fa-star me-2"></i> แจ้งรับรางวัล
+            </button>
+            <button onclick="document.getElementById('rwOverlay').remove();"
+                style="margin-top:10px;width:100%;padding:10px;border:1.5px solid #ddd;
+                       background:#fff;border-radius:12px;cursor:pointer;font-size:.85rem;color:#888;">
+                ปิด
+            </button>
+        </div>`;
+
+    document.body.appendChild(overlay);
+    // close on backdrop click
+    overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) overlay.remove();
+    });
+};
+
+window.openAddRewardModal = function() {
+    document.getElementById('rewardModalTitle').innerHTML = '<i class="fas fa-gift me-2"></i>เพิ่มของรางวัลใหม่';
+    document.getElementById('rewardName').value = '';
+    document.getElementById('rewardImage').value = '';
+    document.getElementById('rewardImageUrl').value = '';
+    document.getElementById('rewardImagePreview').style.display = 'none';
+    
+    document.getElementById('rewardMode').value = '1';
+    document.getElementById('rewardMode').disabled = false;
+    document.getElementById('rewardTargetVal').value = '';
+    document.getElementById('rewardTargetVal').disabled = false;
+    
+    document.getElementById('rewardEndDate').value = '';
+    document.getElementById('editRewardId').value = '';
+    toggleRewardModeFields();
+    
+    document.getElementById('rewardModalBackdrop').style.display = 'block';
+    document.getElementById('rewardModal').style.display = 'block';
+};
+
+window.editReward = function(id) {
+    const r = window.globalRewardsData.find(x => x.id === id);
+    if (!r) return;
+    document.getElementById('rewardModalTitle').innerHTML = '<i class="fas fa-pen me-2"></i>แก้ไขของรางวัล';
+    document.getElementById('rewardName').value = r.name;
+    document.getElementById('rewardImageUrl').value = r.image || '';
+    if (r.image) {
+        document.getElementById('rewardImagePreview').src = r.image;
+        document.getElementById('rewardImagePreviewContainer').style.display = 'block';
+    } else {
+        document.getElementById('rewardImagePreview').src = '';
+        document.getElementById('rewardImagePreviewContainer').style.display = 'none';
+    }
+    document.getElementById('rewardImage').value = '';
+    
+    document.getElementById('rewardMode').value = r.mode;
+    document.getElementById('rewardMode').disabled = true;
+    document.getElementById('rewardTargetVal').value = r.targetVal;
+    document.getElementById('rewardTargetVal').disabled = false;
+    
+    if (r.endDate) {
+        const d = new Date(r.endDate);
+        const tzoffset = (new Date()).getTimezoneOffset() * 60000;
+        document.getElementById('rewardEndDate').value = (new Date(d - tzoffset)).toISOString().split('T')[0];
+    } else {
+        document.getElementById('rewardEndDate').value = '';
+    }
+    
+    document.getElementById('editRewardId').value = r.id;
+    toggleRewardModeFields();
+    
+    document.getElementById('rewardModalBackdrop').style.display = 'block';
+    document.getElementById('rewardModal').style.display = 'block';
+};
+
+window.closeRewardModal = function() {
+    document.getElementById('rewardModalBackdrop').style.display = 'none';
+    document.getElementById('rewardModal').style.display = 'none';
+};
+
+window.toggleRewardModeFields = function() {
+    const mode = document.getElementById('rewardMode').value;
+    const label = document.getElementById('rewardTargetLabel');
+    const help = document.getElementById('rewardModeHelp');
+    
+    if (mode === '1') {
+        label.innerHTML = 'เป้าหมายคะแนนรวม (Lifetime XP)';
+        help.innerHTML = 'พนักงานทุกคนที่สะสมคะแนนจากอดีตถึงปัจจุบันจนถึงเป้าจะได้รับรางวัลนี้';
+    } else {
+        label.innerHTML = 'คะแนนใหม่ที่ต้องสะสมเพิ่ม (+XP)';
+        help.innerHTML = 'นับเฉพาะคะแนนที่ทำได้ใหม่หลังจากสร้างกิจกรรมนี้เป็นต้นไป (เริ่มนับ 0 ใหม่ทุกคน)';
+    }
+};
+
+document.getElementById('rewardImage')?.addEventListener('change', async function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+        document.getElementById('rewardImagePreview').src = evt.target.result;
+        document.getElementById('rewardImagePreviewContainer').style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+    
+    if (typeof uploadImageToCloudinary === 'function') {
+        Swal.fire({title: 'กำลังเตรียมรูปภาพ...', didOpen: () => Swal.showLoading(), allowOutsideClick: false});
+        try {
+            const url = await uploadImageToCloudinary(file);
+            document.getElementById('rewardImageUrl').value = url;
+            Swal.close();
+        } catch(err) {
+            Swal.fire('ข้อผิดพลาด', 'อัปโหลดรูปล้มเหลว', 'error');
+        }
+    }
+});
+
+window.removeRewardImage = function() {
+    document.getElementById('rewardImage').value = '';
+    document.getElementById('rewardImageUrl').value = '';
+    document.getElementById('rewardImagePreview').src = '';
+    document.getElementById('rewardImagePreviewContainer').style.display = 'none';
+};
+
+window.saveReward = async function() {
+    const name = document.getElementById('rewardName').value.trim();
+    const mode = document.getElementById('rewardMode').value;
+    const targetVal = document.getElementById('rewardTargetVal').value;
+    const endDate = document.getElementById('rewardEndDate').value;
+    const imageUrl = document.getElementById('rewardImageUrl').value;
+    const editId = document.getElementById('editRewardId').value;
+    
+    if (!name || !targetVal) {
+        Swal.fire('แจ้งเตือน', 'กรุณากรอกชื่อและคะแนนเป้าหมายให้ครบถ้วน', 'warning');
+        return;
+    }
+    
+    Swal.fire({title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading(), allowOutsideClick: false});
+    try {
+        const payload = {
+            action: editId ? 'edit_reward' : 'save_reward',
+            rewardId: editId,
+            name: name,
+            mode: mode,
+            targetVal: targetVal,
+            endDate: endDate,
+            image: imageUrl
+        };
+        const res = await fetch(GAS_URL, { method: 'POST', body: JSON.stringify(payload) });
+        const data = await res.json();
+        
+        if (data.status === 'success') {
+            Swal.fire('สำเร็จ', editId ? 'แก้ไขรางวัลเรียบร้อย' : 'เพิ่มรางวัลใหม่เรียบร้อยแล้ว', 'success');
+            closeRewardModal();
+            fetchRewards();
+        } else {
+            Swal.fire('ข้อผิดพลาด', data.message || 'บันทึกไม่สำเร็จ', 'error');
+        }
+    } catch(err) {
+        Swal.fire('ข้อผิดพลาด', 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์', 'error');
+    }
+};
+
+window.deleteReward = function(id) {
+    Swal.fire({
+        title: 'ยืนยันการลบ?',
+        text: 'รางวัลนี้จะถูกยกเลิกและลบออกจากระบบทันที',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'ใช่, ลบทิ้งเลย',
+        cancelButtonText: 'ยกเลิก'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            Swal.fire({title: 'กำลังลบ...', didOpen: () => Swal.showLoading()});
+            try {
+                const res = await fetch(GAS_URL, { method: 'POST', body: JSON.stringify({action: 'delete_reward', rewardId: id}) });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    Swal.fire('ลบสำเร็จ', '', 'success');
+                    fetchRewards();
+                } else {
+                    Swal.fire('ผิดพลาด', data.message || '', 'error');
+                }
+            } catch(e) {
+                Swal.fire('ผิดพลาด', 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้', 'error');
+            }
+        }
+    });
+};
+
+window.claimReward = function(id) {
+    if (!window.currentUser) return;
+    
+    Swal.fire({
+        title: 'ยืนยันการรับรางวัล 🎉',
+        text: 'คุณต้องการแจ้งความประสงค์เพื่อรับรางวัลชิ้นนี้ใช่หรือไม่?',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'ยืนยันแจ้งรับ',
+        cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#ff9f43'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            Swal.fire({ title: 'กำลังบันทึกข้อมูล...', didOpen: () => Swal.showLoading() });
+            try {
+                const payload = {
+                    action: 'claim_reward',
+                    rewardId: id,
+                    userId: window.currentUser.userId,
+                    userName: window.currentUser.name
+                };
+                const res = await fetch(GAS_URL, { method: 'POST', body: JSON.stringify(payload) });
+                const data = await res.json();
+                
+                if (data.status === 'success') {
+                    Swal.fire({
+                        title: 'สำเร็จ! 🥳',
+                        html: `แจ้งรับรางวัลเรียบร้อยแล้ว!<br><br><small class="text-muted">กรุณาติดต่อรับรางวัลกับทาง HR หรือผู้ดูแลระบบครับ</small>`,
+                        icon: 'success',
+                        confirmButtonColor: '#ff9f43'
+                    });
+                    fetchRewards(); // reload to show in dashboard
+                } else {
+                    Swal.fire('ผิดพลาด', data.message || 'บันทึกไม่สำเร็จ', 'error');
+                }
+            } catch (e) {
+                Swal.fire('ผิดพลาด', 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์', 'error');
+            }
+        }
+    });
+};
