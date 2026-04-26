@@ -25,6 +25,7 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
     <link rel="stylesheet" href="css/style.css">
     <audio id="notifSound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"
@@ -37,8 +38,9 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="ดี มีสุข">
-    <meta name="theme-color" content="#6c5ce7">
-
+    <style>
+        .swal2-container { z-index: 1000000 !important; }
+    </style>
 </head>
 
 <body>
@@ -412,104 +414,8 @@
                     <p id="statDesc" class="small text-dark mb-0" style="opacity: 0.8;">...</p>
                 </div>
             </div>
-        </div>
-        <div id="page-badges" class="page-section">
-            <div class="glass-card mb-4" style="min-height: 550px;">
-                <h5 class="fw-bold mb-3 d-flex justify-content-between align-items-center">
-                    <span><i class="fas fa-medal text-warning me-2"></i>คลังเหรียญสะสม</span>
-                </h5>
 
-                <div class="vault-display">
-                    <div class="badge-grid" id="badgeContainer"></div>
-                </div>
-
-            </div>
-        </div>
-
-        <div id="page-relation" class="page-section">
-            <!-- List View -->
-            <div id="relationListView" class="glass-card mb-3">
-                <h5 class="fw-bold mb-3 d-flex justify-content-between align-items-center">
-                    <span><i class="fas fa-id-badge text-primary me-2"></i>เส้นทางความผูกพัน</span>
-                </h5>
-
-                <div class="input-group input-group-sm mb-3 shadow-sm rounded-pill overflow-hidden border">
-                    <span class="input-group-text bg-white border-0"><i class="fas fa-search text-muted"></i></span>
-                    <input type="text" id="relationSearch" class="form-control border-0 px-2"
-                        placeholder="ค้นหาผู้ร่วมอุดมการณ์..." onkeyup="filterRelationStaff()">
-                </div>
-
-                <div id="relationContainer">
-                    <div class="text-center py-5 text-muted">
-                        <div class="spinner-border spinner-border-sm mb-2"></div><br>กำลังจัดเตรียมข้อมูล...
-                    </div>
-                </div>
-            </div>
-
-            <!-- Detail View (Initially Hidden) -->
-            <div id="relationDetailView" class="page-section" style="display:none; padding:0;">
-                <button class="btn btn-light btn-sm rounded-pill mb-3 shadow-sm border" onclick="closeRelationDetail()">
-                    <i class="fas fa-chevron-left me-1"></i> กลับหน้าผูกพัน
-                </button>
-                <div id="relationDetailContent"></div>
-            </div>
-        </div>
-        <div id="page-manager" class="page-section" style="min-height: 100vh;">
-            <div class="glass-card mb-3 pb-2 pt-3">
-                <div class="d-flex justify-content-between align-items-center mb-3 px-2">
-                    <h5 class="fw-bold mb-0"><i class="fas fa-chart-line text-primary me-2"></i>Executive Dashboard
-                    </h5>
-                </div>
-
-                <div class="row g-2 mb-4 px-2">
-                    <div class="col-6">
-                        <div class="card p-2 border-0 shadow-sm" style="border-radius:12px;">
-                            <div class="text-muted small">ดัชนีความสุขเฉลี่ย</div>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <h4 class="fw-bold mb-0 text-warning" id="kpi-happy">...</h4>
-                                <div class="bg-warning text-white rounded-circle d-flex align-items-center justify-content-center"
-                                    style="width:30px; height:30px;"><i class="fas fa-smile-beam"></i></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-6">
-                        <div class="card p-2 border-0 shadow-sm" style="border-radius:12px;">
-                            <div class="text-muted small">สมาชิกในระบบ</div>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <h4 class="fw-bold mb-0 text-primary" id="kpi-posts">...</h4>
-                                <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center"
-                                    style="width:30px; height:30px;"><i class="fas fa-users"></i></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-6">
-                        <div class="card p-2 border-0 shadow-sm" style="border-radius:12px;">
-                            <div class="text-muted small">กิจกรรมร่วม</div>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <h4 class="fw-bold mb-0 text-info" id="kpi-teamwork">...</h4>
-                                <div class="bg-info text-white rounded-circle d-flex align-items-center justify-content-center"
-                                    style="width:30px; height:30px;"><i class="fas fa-handshake"></i></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-6">
-                        <div class="card p-2 border-0 shadow-sm" style="border-radius:12px;">
-                            <div class="text-muted small">ต้องดูแล (คน)</div>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <h4 class="fw-bold mb-0 text-danger" id="kpi-issues">...</h4>
-                                <div class="bg-danger text-white rounded-circle d-flex align-items-center justify-content-center"
-                                    style="width:30px; height:30px;"><i class="fas fa-life-ring"></i></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="mb-4 pt-2 border-top px-2">
-                    <div class="d-flex justify-content-between align-items-center mb-2 mt-2">
-                        <h6 class="fw-bold mb-0">เมนูลัดผู้บริหาร</h6>
-                    </div>
-                </div>
-
+            <div class="glass-card mb-3 pb-2 pt-3 text-start">
                 <div class="d-flex justify-content-between align-items-center mb-2 mt-2 px-2">
                     <small class="fw-bold text-muted"><i class="fas fa-chart-line"></i> Momentum Index (SET Style)</small>
                     <select id="chartRangeSelector" class="form-select form-select-sm rounded-pill shadow-sm"
@@ -572,6 +478,137 @@
                 <small class="text-muted d-block text-end" style="font-size: 0.65rem;">*
                     เลื่อนแนวนอนเพื่อดูข้อมูลย้อนหลัง</small>
             </div>
+        </div>
+        <div id="page-badges" class="page-section">
+            <div class="glass-card mb-4" style="min-height: 550px;">
+                <h5 class="fw-bold mb-3 d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-medal text-warning me-2"></i>คลังเหรียญสะสม</span>
+                </h5>
+
+                <div class="vault-display mb-4">
+                    <div class="badge-grid" id="badgeContainer"></div>
+                </div>
+
+                <!-- 🎁 ระบบของขวัญสำหรับพนักงาน (User Rewards Progress) -->
+                <div class="mt-4 pt-3 border-top">
+                    <h5 class="fw-bold mb-3 d-flex justify-content-between align-items-center">
+                        <span><i class="fas fa-gift text-danger me-2"></i>กล่องของขวัญและภารกิจ</span>
+                    </h5>
+                    
+                    <!-- โซนภารกิจท้าทาย (Challenges) -->
+                    <div id="rewardChallengeZone" class="mb-4" style="display:none;">
+                        <h6 class="fw-bold text-primary mb-2"><i class="fas fa-fire me-1"></i> ภารกิจพิเศษ (Special Challenges)</h6>
+                        <div id="challengeRewardList" class="d-flex flex-column gap-3"></div>
+                    </div>
+
+                    <!-- โซนความสำเร็จ (Milestones) -->
+                    <div id="rewardMilestoneZone" class="mb-2" style="display:none;">
+                        <h6 class="fw-bold text-success mb-2"><i class="fas fa-award me-1"></i> รางวัลกิจกรรมทำความดี</h6>
+                        <div id="milestoneRewardList" class="d-flex flex-column gap-3"></div>
+                    </div>
+                    
+                    <div id="noRewardsMessage" class="text-center text-muted small py-3" style="display:none;">
+                        ยังไม่มีกิจกรรมแลกของรางวัลในขณะนี้
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <div id="page-relation" class="page-section">
+            <!-- List View -->
+            <div id="relationListView" class="glass-card mb-3">
+                <h5 class="fw-bold mb-3 d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-id-badge text-primary me-2"></i>เส้นทางความผูกพัน</span>
+                </h5>
+
+                <div class="input-group input-group-sm mb-3 shadow-sm rounded-pill overflow-hidden border">
+                    <span class="input-group-text bg-white border-0"><i class="fas fa-search text-muted"></i></span>
+                    <input type="text" id="relationSearch" class="form-control border-0 px-2"
+                        placeholder="ค้นหาผู้ร่วมอุดมการณ์..." onkeyup="filterRelationStaff()">
+                </div>
+
+                <div id="relationContainer">
+                    <div class="text-center py-5 text-muted">
+                        <div class="spinner-border spinner-border-sm mb-2"></div><br>กำลังจัดเตรียมข้อมูล...
+                    </div>
+                </div>
+            </div>
+
+            <!-- Detail View (Initially Hidden) -->
+            <div id="relationDetailView" class="page-section" style="display:none; padding:0;">
+                <button class="btn btn-light btn-sm rounded-pill mb-3 shadow-sm border" onclick="closeRelationDetail()">
+                    <i class="fas fa-chevron-left me-1"></i> กลับหน้าผูกพัน
+                </button>
+                <div id="relationDetailContent"></div>
+            </div>
+        </div>
+        <div id="page-manager" class="page-section" style="min-height: 100vh;">
+            <div class="glass-card mb-3 pb-2 pt-3">
+                <div class="d-flex justify-content-between align-items-center mb-3 px-2">
+                    <h5 class="fw-bold mb-0"><i class="fas fa-chart-line text-primary me-2"></i>Executive Dashboard
+                    </h5>
+                </div>
+
+                <div id="execSummaryBox" class="mx-2 mb-3 p-3 rounded-4 bg-light border-start border-4 border-info shadow-sm" style="display:none;">
+                    <div class="small fw-bold text-info mb-1"><i class="fas fa-robot me-1"></i> Executive Insights</div>
+                    <p id="execSummaryText" class="mb-0 text-dark" style="font-size: 0.85rem; line-height: 1.5;">กำลังวิเคราะห์ข้อมูล...</p>
+                </div>
+
+                <div class="row g-2 mb-4 px-2">
+                    <div class="col-6">
+                        <div class="card p-2 border-0 shadow-sm" style="border-radius:12px;">
+                            <div class="text-muted small">ดัชนีความสุขเฉลี่ย</div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h4 class="fw-bold mb-0 text-warning" id="kpi-happy">...</h4>
+                                <div class="bg-warning text-white rounded-circle d-flex align-items-center justify-content-center"
+                                    style="width:30px; height:30px;"><i class="fas fa-smile-beam"></i></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="card p-2 border-0 shadow-sm" style="border-radius:12px;">
+                            <div class="text-muted small">สมาชิกในระบบ</div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h4 class="fw-bold mb-0 text-primary" id="kpi-posts">...</h4>
+                                <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center"
+                                    style="width:30px; height:30px;"><i class="fas fa-users"></i></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="card p-2 border-0 shadow-sm" style="border-radius:12px;">
+                            <div class="text-muted small">กิจกรรม ร่วม/เดี่ยว</div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h4 class="fw-bold mb-0 text-info" style="font-size: 1.2rem;"><span id="kpi-teamwork">...</span> / <span id="kpi-single" class="text-secondary">...</span></h4>
+                                <div class="bg-info text-white rounded-circle d-flex align-items-center justify-content-center"
+                                    style="width:30px; height:30px;"><i class="fas fa-handshake"></i></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="card p-2 border-0 shadow-sm" style="border-radius:12px;">
+                            <div class="text-muted small">ต้องดูแล (คน)</div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h4 class="fw-bold mb-0 text-danger" id="kpi-issues">...</h4>
+                                <div class="bg-danger text-white rounded-circle d-flex align-items-center justify-content-center"
+                                    style="width:30px; height:30px;"><i class="fas fa-life-ring"></i></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-4 pt-2 border-top px-2">
+                    <div class="d-flex justify-content-between align-items-center mb-2 mt-2">
+                        <h6 class="fw-bold mb-0">เมนูลัดผู้บริหาร</h6>
+                    </div>
+                    <button class="btn btn-primary btn-sm rounded-pill px-3 shadow-sm mt-2" onclick="openReportModal()">
+                        <i class="fas fa-file-alt me-1"></i> รายงานสรุปองค์กร
+                    </button>
+                </div>
+
+
+            </div>
 
             <div class="mb-4 pt-3 border-top px-2">
                 <h6 class="fw-bold mb-3"><i class="fas fa-layer-group text-success me-2"></i>TRD Core Values
@@ -584,6 +621,19 @@
                 <small class="text-muted d-block mt-2 text-center" style="font-size: 0.7rem;">
                     *T=สุจริต | R=วินัย+พอเพียง | D=จิตอาสา+กตัญญู
                 </small>
+            </div>
+
+            <!-- ระบบจัดการของรางวัล (Executive Reward Management) -->
+            <div class="mb-4 pt-3 border-top px-2">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="fw-bold mb-0"><i class="fas fa-gift text-warning me-2"></i>จัดการของรางวัล (Rewards)</h6>
+                    <button class="btn btn-sm btn-outline-primary rounded-pill fw-bold" onclick="openAddRewardModal()">
+                        <i class="fas fa-plus"></i> เพิ่มรางวัล
+                    </button>
+                </div>
+                <div id="executiveRewardList" class="d-flex flex-column gap-2">
+                    <div class="text-center text-muted small py-3"><i class="fas fa-spinner fa-spin me-2"></i>กำลังโหลดรายการรางวัล...</div>
+                </div>
             </div>
 
 
@@ -629,6 +679,96 @@
         </div>
         <div class="viewer-counter"><span id="viewerCurrent">1</span> / <span id="viewerTotal">1</span></div>
     </div>
+
+    <!-- Modal รายงานภาพรวม -->
+    <div id="reportModalBackdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:19999;" onclick="closeReportModal()"></div>
+    <div id="reportModal" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+        width:92%;max-width:500px;background:var(--glass-bg);border:1px solid var(--border-color);
+        border-radius:20px;padding:24px;z-index:20000;box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height: 85vh; overflow-y: auto;">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="fw-bold mb-0 text-primary"><i class="fas fa-chart-bar me-2"></i>รายงานสรุปองค์กร</h6>
+            <button class="btn btn-sm btn-light rounded-circle" style="width: 30px; height: 30px; padding: 0; line-height: 1;" onclick="closeReportModal()">×</button>
+        </div>
+        
+        <div class="mb-3">
+            <label class="form-label small fw-bold">📅 เลือกรอบบิล (เดือน)</label>
+            <select id="reportMonthSelect" class="form-select form-select-sm rounded-3" onchange="generateMonthlyReport()">
+                <option value="all">ข้อมูลทั้งหมด (All Time)</option>
+                <!-- Options populated by JS -->
+            </select>
+        </div>
+        
+        <div id="reportContentArea" class="mt-3">
+            <div class="text-center py-4 text-muted"><i class="fas fa-spinner fa-spin me-2"></i>กำลังสร้างรายงาน...</div>
+        </div>
+        
+        <div class="mt-3 text-center">
+            <button class="btn btn-secondary btn-sm rounded-pill fw-bold px-4" onclick="closeReportModal()">ปิดหน้าต่าง</button>
+        </div>
+    </div>
+
+    <!-- Modal เพิ่ม/แก้ไข ของรางวัล -->
+    <div id="rewardModalBackdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:2000;" onclick="closeRewardModal()"></div>
+    <div id="rewardModal" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+        width:92%;max-width:500px;background:var(--glass-bg);border:1px solid var(--border-color);
+        border-radius:20px;padding:24px;z-index:2001;box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height: 85vh; overflow-y: auto;">
+        
+        <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
+            <h6 class="fw-bold mb-0 text-primary" id="rewardModalTitle"><i class="fas fa-gift me-2"></i>เพิ่มของรางวัลใหม่</h6>
+            <button class="btn btn-sm btn-light rounded-circle" style="width: 30px; height: 30px; padding: 0; line-height: 1;" onclick="closeRewardModal()">×</button>
+        </div>
+        
+        <div class="mb-3">
+            <label class="form-label small fw-bold">🎁 ชื่อของรางวัล</label>
+            <input type="text" id="rewardName" class="form-control form-control-sm rounded-3" placeholder="เช่น แก้วน้ำ Premium, บัตร Starbucks">
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label small fw-bold">📸 รูปภาพของรางวัล</label>
+            <input type="file" id="rewardImage" class="form-control form-control-sm rounded-3" accept="image/*">
+            <input type="hidden" id="rewardImageUrl">
+            <div id="rewardImagePreviewContainer" class="mt-2 text-center" style="display:none;">
+                <div class="position-relative d-inline-block">
+                    <img id="rewardImagePreview" src="" style="max-height: 120px; border-radius: 10px; border: 1px solid #ddd;">
+                    <button type="button" class="btn btn-sm btn-danger rounded-circle position-absolute shadow-sm" 
+                            style="top:-10px; right:-10px; width:24px; height:24px; padding:0; line-height:1;"
+                            onclick="removeRewardImage()" title="ลบรูปภาพ">
+                        <i class="fas fa-times" style="font-size:0.8rem;"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="mb-3 p-3 bg-light rounded-3 border">
+            <label class="form-label small fw-bold text-dark"><i class="fas fa-cog me-1"></i> ประเภทและเงื่อนไข (โหมด)</label>
+            <select id="rewardMode" class="form-select form-select-sm mb-2 rounded-3" onchange="toggleRewardModeFields()">
+                <option value="1">🏆 หมวดที่ 1: เป้าหมายตายตัว (ทุกคนนับจาก 0 ถึงเป้าหมาย)</option>
+                <option value="2">🔥 หมวดที่ 2: ภารกิจท้าทาย (นับเฉพาะคะแนนใหม่ที่ทำได้หลังเริ่มกิจกรรม)</option>
+            </select>
+            
+            <div id="rewardTargetLabel" class="form-label small fw-bold mt-2 mb-1">เป้าหมายคะแนนรวม (Lifetime XP)</div>
+            <div class="input-group input-group-sm">
+                <input type="number" id="rewardTargetVal" class="form-control" placeholder="ระบุคะแนนที่ต้องการ">
+                <span class="input-group-text">XP</span>
+            </div>
+            <small id="rewardModeHelp" class="text-muted d-block mt-1" style="font-size: 0.75rem;">
+                พนักงานทุกคนที่สะสม XP รวมถึงเป้าจะได้รับรางวัลนี้
+            </small>
+        </div>
+        
+        <div class="mb-4">
+            <label class="form-label small fw-bold">📅 วันที่สิ้นสุด (ถ้ามี)</label>
+            <input type="date" id="rewardEndDate" class="form-control form-control-sm rounded-3">
+            <small class="text-muted" style="font-size: 0.7rem;">ปล่อยว่างหากไม่มีวันหมดอายุ</small>
+        </div>
+        
+        <input type="hidden" id="editRewardId">
+        
+        <button id="saveRewardBtn" class="btn btn-primary w-100 rounded-pill fw-bold" onclick="saveReward()">
+            <i class="fas fa-save me-2"></i> บันทึกรางวัล
+        </button>
+    </div>
+
     <!-- 🚀 ปุ่มกลับไปบนสุด (Scroll to Top) -->
     <button id="scrollToTopBtn" onclick="scrollToTop()" title="กลับไปบนสุด">
         <i class="fas fa-chevron-up"></i>
