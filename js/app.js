@@ -1594,6 +1594,18 @@ function renderManagerChart() {
             }
         }
     });
+
+    // Update scroll buttons visibility
+    setTimeout(() => {
+        if (typeof window.updateChartScrollButtons === 'function') {
+            window.updateChartScrollButtons();
+            const wrapper = document.getElementById('hmiScrollWrapper');
+            if (wrapper && !wrapper.dataset.listener) {
+                wrapper.addEventListener('scroll', window.updateChartScrollButtons);
+                wrapper.dataset.listener = 'true';
+            }
+        }
+    }, 200);
 }
 
 // =====================================================
@@ -3170,16 +3182,32 @@ function setViewportHeight() {
 // ==========================================
 // 📈 ระบบควบคุมกราฟ HMI (Momentum Index)
 // ==========================================
-function scrollHMI(direction) {
+window.updateChartScrollButtons = function() {
+    const wrapper = document.getElementById('hmiScrollWrapper');
+    const leftBtn = document.getElementById('hmiScrollBtnLeft');
+    const rightBtn = document.getElementById('hmiScrollBtnRight');
+    if (!wrapper || !leftBtn || !rightBtn) return;
+
+    const scrollLeft = wrapper.scrollLeft;
+    const maxScroll = wrapper.scrollWidth - wrapper.clientWidth;
+
+    leftBtn.style.display = scrollLeft > 5 ? 'flex' : 'none';
+    rightBtn.style.display = scrollLeft < maxScroll - 5 ? 'flex' : 'none';
+};
+
+window.scrollHMI = function(direction) {
     const wrapper = document.getElementById('hmiScrollWrapper');
     if (!wrapper) return;
-    const scrollAmount = 300;
+    
+    // Use responsive scroll amount (70% of view width) or fixed 300px if very wide
+    const scrollAmount = Math.min(300, wrapper.clientWidth * 0.8);
+    
     if (direction === 'left') {
         wrapper.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
     } else {
         wrapper.scrollBy({ left: scrollAmount, behavior: 'smooth' });
     }
-}
+};
 
 // ==========================================
 // 🏃 ระบบติดตามการเข้าใช้งาน (App Entry)
@@ -3774,12 +3802,6 @@ window.openRewardBox = function(id) {
     overlay.addEventListener('click', function(e) {
         if (e.target === overlay) overlay.remove();
     });
-};
-
-window.openAddRewardModal = function() {
-    document.getElementById('rewardModalTitle').innerHTML = '<i class="fas fa-gift me-2"></i>เพิ่มของรางวัลใหม่';
-    document.getElementById('rewardName').value = '';
-    document.getElementById('rewardImage').value = '';
     document.getElementById('rewardImageUrl').value = '';
     document.getElementById('rewardImagePreview').style.display = 'none';
     
