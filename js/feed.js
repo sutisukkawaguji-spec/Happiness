@@ -804,8 +804,21 @@ function editPost(postId) {
     const currentVirtue = post.virtue || 'volunteer';
     const currentImages = post.image ? post.image.split(',').map(u => u.trim()).filter(Boolean) : [];
 
+    // 🌟 แยกรูปและลิงก์ออกจากกัน
+    let actualImages = [];
+    let currentLink = '';
+    currentImages.forEach(item => {
+        if (item.match(/\.(jpeg|jpg|gif|png|webp)($|\?)/i) || item.includes('googleusercontent') || item.includes('drive.google.com') || item.includes('cloudinary')) {
+            actualImages.push(item);
+        } else {
+            // ถ้าไม่ใช่รูป ถือว่าเป็นลิงก์สื่อ
+            if (!currentLink) currentLink = item;
+            else window.removedOriginalImages = window.removedOriginalImages ? window.removedOriginalImages.concat(item) : [item];
+        }
+    });
+
     // 🎨 สถานะชั่วคราวสำหรับรูปภาพในโหมดแก้ไข
-    window.tempEditItems = [...currentImages]; // [url1, url2, File1, File2, ...]
+    window.tempEditItems = [...actualImages]; // [url1, url2, File1, File2, ...]
     window.removedOriginalImages = []; // [url_removed1, url_removed2]
 
     let optionsHtml = '';
@@ -825,12 +838,17 @@ function editPost(postId) {
                 <textarea id="swal-note" class="form-control rounded-3" rows="3" style="font-family:Kanit,sans-serif;font-size:0.9rem;">${currentNote}</textarea>
                 
                 <div class="mt-3">
-                    <label class="small fw-bold text-muted mb-2 d-block">จัดการรูปภาพ (สูงสุด 20 รูป):</label>
+                    <label class="small fw-bold text-muted mb-2 d-block">จัดการรูปภาพและลิงก์สื่อ (สูงสุด 20 รายการ):</label>
                     <div id="edit-thumb-list" class="d-flex flex-wrap gap-2 mb-2" style="max-height:160px; overflow-y:auto; padding:5px;"></div>
                     <input type="file" id="edit-file-input" class="d-none" multiple accept="image/*" onchange="handleEditFileSelect(this)">
-                    <button type="button" class="btn btn-sm btn-outline-primary rounded-pill w-100 py-2" onclick="document.getElementById('edit-file-input').click()">
+                    <button type="button" class="btn btn-sm btn-outline-primary rounded-pill w-100 py-2 mb-2" onclick="document.getElementById('edit-file-input').click()">
                         <i class="fas fa-camera me-1"></i> เพิ่มหรือเปลี่ยนรูปภาพ
                     </button>
+                    <div class="input-group input-group-sm mb-2">
+                        <span class="input-group-text bg-white border-end-0"><i class="fas fa-link text-success"></i></span>
+                        <input type="text" id="edit-media-link" class="form-control border-start-0" placeholder="วางลิงก์ YouTube / TikTok / FB / หรือเว็บภายนอก" value="${currentLink}">
+                        <button class="btn btn-outline-secondary" type="button" onclick="document.getElementById('edit-media-link').value='';"><i class="fas fa-times"></i></button>
+                    </div>
                 </div>
             </div>
         `,
@@ -857,6 +875,12 @@ function editPost(postId) {
                     const uploadedUrl = await uploadImageToCloudinary(item);
                     if (uploadedUrl) finalUrls.push(uploadedUrl);
                 }
+            }
+
+            // 🌟 2. ดึงลิงก์สื่อที่แก้ไขใหม่มาต่อท้าย
+            const newLink = document.getElementById('edit-media-link').value.trim();
+            if (newLink) {
+                finalUrls.push(newLink);
             }
 
             return { 
@@ -982,8 +1006,6 @@ function removeEditItem(idx) {
     window.tempEditItems.splice(idx, 1);
     renderEditThumbs();
 }
-
-
 
 // ----- View Image -----
 let touchStartX = 0;
