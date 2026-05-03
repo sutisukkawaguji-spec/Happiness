@@ -4,7 +4,7 @@
 // ============================================================
 
 // --- 🌐 ENV SETTINGS ---
-const TEST_ENV = true; // 🔴 เปลี่ยนเป็น false เมื่อขึ้นระบบจริง
+const TEST_ENV = false; // 🔴 เปลี่ยนเป็น false เมื่อขึ้นระบบจริง
 const TEST_GAS_URL = 'https://script.google.com/macros/s/AKfycbxRvEyRoQaxOUWR_6pTslNmCrM7IiZTRYzDDUtPtDmrhGehUq6zQpfm9MKp_CYzVmrX/exec';
 const TEST_LIFF_ID = '2009329360-XeHfjaTY';
 const PROD_GAS_URL = 'https://script.google.com/macros/s/AKfycbxRvEyRoQaxOUWR_6pTslNmCrM7IiZTRYzDDUtPtDmrhGehUq6zQpfm9MKp_CYzVmrX/exec';
