@@ -10,8 +10,17 @@ const TEST_LIFF_ID = '2009329360-XeHfjaTY';
 const PROD_GAS_URL = 'YOUR_PROD_GAS_URL_HERE';
 const PROD_LIFF_ID = 'YOUR_PROD_LIFF_ID_HERE';
 
-const GAS_URL = TEST_ENV ? TEST_GAS_URL : PROD_GAS_URL;
-const LIFF_ID = TEST_ENV ? TEST_LIFF_ID : PROD_LIFF_ID;
+const GAS_URL = (TEST_ENV && TEST_GAS_URL) ? TEST_GAS_URL : (PROD_GAS_URL || TEST_GAS_URL);
+const LIFF_ID = (TEST_ENV && TEST_LIFF_ID) ? TEST_LIFF_ID : (PROD_LIFF_ID || TEST_LIFF_ID);
+
+// --- ☁️ SUPABASE SETTINGS ---
+// ⚠️ สำคัญ: นำ URL และ Key มาจาก Supabase Dashboard > Settings > API
+const SUPABASE_URL = 'https://vznbkqbmysinxtspsskl.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ6bmJrcWJteXNpbnh0c3Bzc2tsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwMjcyMTYsImV4cCI6MjA5MjYwMzIxNn0.mF7LRqXEg1KP1QL1seEx4wFlmx978WaS6u4jWETg_PQ';
+const supabaseClient = (typeof supabase !== 'undefined') ? supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+
+// 🌟 ย้ายมาอ่านข้อมูลจาก Supabase เป็นหลัก (เปลี่ยนเป็น false ถ้าต้องการใช้ GAS/Sheets เดิม)
+const READ_FROM_SUPABASE = true; 
 
 // --- 🛡️ SAFE localStorage Wrappers ---
 function safeSetItem(key, value) {
@@ -58,6 +67,7 @@ var CATEGORY_COLORS = {
 const ROLE_MAP = {
     'Admin': 1, 'ผู้ดูแลระบบ': 1, 'admin': 1,
     'Manager': 2, 'ผู้บริหาร': 2, 'manager': 2,
+    'Committee': 2, 'กรรมการ': 2, 'committee': 2,
     'NewsEditor': 3, 'บรรณาธิการข่าว': 3, 'newseditor': 3, 'officer': 3, 'เจ้าหน้าที่': 3,
     'Staff': 4, 'พนักงาน': 4, 'staff': 4,
     'Guest': 5, 'ผู้เยี่ยมชม': 5, 'guest': 5, 'ผู้เข้าใหม่': 5
@@ -77,6 +87,25 @@ function getUserLevel(user) {
     return 5; // Default to Guest if role exists but not matched
 }
 
+// 🌟 Helpers: ตรวจสอบสถานะและสิทธิ์
+const isAlumni = (r) => {
+    const roleStr = String(r || '').toLowerCase();
+    const keywords = ['ศิษย์เก่า', 'alumni', 'ลาออก', 'ย้าย', 'เกษียณ', 'อนุสรณ์', 'retired', 'memorial', 'ผู้ร่วมผูกพัน', 'ทำเนียบ', 'hall of fame'];
+    return keywords.some(k => roleStr.includes(k.toLowerCase()));
+};
+const isGuest = (r) => {
+    const roleStr = String(r || '').toLowerCase();
+    const guestKeywords = ['guest', 'ผู้เยี่ยมชม', 'ผู้เข้าใหม่', 'แขก'];
+    return guestKeywords.some(k => roleStr.includes(k.toLowerCase()));
+};
+const isCommittee = (r) => {
+    const roleStr = String(r || '').toLowerCase();
+    return roleStr.includes('committee') || roleStr.includes('กรรมการ');
+};
+const shouldIncludeInStats = (r) => {
+    return !isAlumni(r) && !isGuest(r) && !isCommittee(r);
+};
+
 const canManageSystem = () => getUserLevel(currentUser) <= 2; // Admin & Manager can manage others
 const canViewDashboard = () => getUserLevel(currentUser) <= 2;
 const canPostNews = () => getUserLevel(currentUser) <= 3;
@@ -85,7 +114,7 @@ const canPostStory = () => getUserLevel(currentUser) <= 4;
 // --- 🔧 FEED STATE ---
 let currentFeedFilter = 'all';
 let globalUserStatsMap = {};
-let currentFeedLimit = 50; // Increased to ensure Hall of Fame has history
+let currentFeedLimit = 10; // ดึงมาแค่ 10 รายการแรกก่อน (ตามคำขอ: ดึงเพิ่มเมื่อเปิดเท่านั้น)
 
 // --- Image Upload State ---
 let renderedPostIds = new Set();
@@ -182,4 +211,7 @@ const themeObserver = new MutationObserver((mutations) => {
     });
 });
 themeObserver.observe(document.documentElement, { attributes: true });
+
+
+
 
