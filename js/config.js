@@ -7,8 +7,8 @@
 const TEST_ENV = false; // 🔴 เปลี่ยนเป็น false เมื่อขึ้นระบบจริง
 const TEST_GAS_URL = 'https://script.google.com/macros/s/AKfycbxRvEyRoQaxOUWR_6pTslNmCrM7IiZTRYzDDUtPtDmrhGehUq6zQpfm9MKp_CYzVmrX/exec';
 const TEST_LIFF_ID = '2009329360-XeHfjaTY';
-const PROD_GAS_URL = 'YOUR_PROD_GAS_URL_HERE';
-const PROD_LIFF_ID = 'YOUR_PROD_LIFF_ID_HERE';
+const PROD_GAS_URL = 'https://script.google.com/macros/s/AKfycbxRvEyRoQaxOUWR_6pTslNmCrM7IiZTRYzDDUtPtDmrhGehUq6zQpfm9MKp_CYzVmrX/exec';
+const PROD_LIFF_ID = '2009329360-XeHfjaTY';
 
 const GAS_URL = (TEST_ENV && TEST_GAS_URL) ? TEST_GAS_URL : (PROD_GAS_URL || TEST_GAS_URL);
 const LIFF_ID = (TEST_ENV && TEST_LIFF_ID) ? TEST_LIFF_ID : (PROD_LIFF_ID || TEST_LIFF_ID);
