@@ -40,7 +40,7 @@ function getMediaContent(url, note = '') {
 
                 imgUrls.slice(0, displayCount).forEach((img, idx) => {
                     const isLast = idx === 4 && count > 5;
-                    
+
                     // ☁️ ใช้ลิงก์ตรงจาก Cloudinary ตามที่ USER ตั้งค่าไว้ใน Dashboard (ไม่ปรับแต่งเพิ่มผ่าน Code)
                     let displayImg = img;
                     gridHtml += `
@@ -242,6 +242,20 @@ function fetchFeed(append = false, silent = false, force = false, targetUserId =
                 // 🌟 อัปเดตจำนวนทั้งหมดจาก Server
                 window.globalFeedTotal = data.totalCount || feed.length;
 
+                // 🌟 [NEW] แสดงตัวเลขแจ้งเตือนถ้ามีโพสต์ใหม่
+                const lastSeen = parseInt(localStorage.getItem('last_seen_feed_count') || 0);
+                if (window.globalFeedTotal > lastSeen) {
+                    const diff = window.globalFeedTotal - lastSeen;
+                    const badge = document.getElementById('nav-stories-badge');
+                    const currentTab = document.querySelector('.nav-item.active')?.id;
+                    
+                    // แสดง Badge เฉพาะถ้าเราไม่ได้อยู่ที่หน้า "เรื่องราว"
+                    if (badge && currentTab !== 'nav-stories-btn') {
+                        badge.innerText = diff > 99 ? '99+' : diff;
+                        badge.style.display = 'block';
+                    }
+                }
+
                 // 🌟 สำหรับหน้า Relation Detail เราจะคืนข้อมูลชุดนี้ไปแสดงผลเอง
                 if (targetUserId) {
                     return resolve({ feed, userMap: data?.userMap, totalCount: data.totalCount });
@@ -326,23 +340,86 @@ function fetchFeed(append = false, silent = false, force = false, targetUserId =
             }
         };
 
-        // 🚀 เรียกดึงข้อมูล (Fetch or JSONP)
-        fetch(`${GAS_URL}?${queryParams.join('&')}`)
-            .then(res => res.text())
-            .then(text => {
-                if (text.startsWith('<')) throw new Error("CORS Blocked");
-                handleFeedData(JSON.parse(text));
-            })
-            .catch(err => {
-                console.log('Switching to JSONP...', err.message);
-                window.__gasFeedCb = (data) => handleFeedData(data);
-                const oldScript = document.getElementById('jsonp_feed');
-                if (oldScript) oldScript.remove();
-                const script = document.createElement('script');
-                script.id = 'jsonp_feed';
-                script.src = `${GAS_URL}?${queryParams.join('&')}&callback=__gasFeedCb`;
-                document.head.appendChild(script);
-            });
+        // 🚀 เรียกดึงข้อมูล (Fetch from Supabase if enabled)
+        if (READ_FROM_SUPABASE && supabaseClient) {
+            (async () => {
+                try {
+                    let query = supabaseClient.from('Activities').select('*', { count: 'exact' });
+
+                    if (targetUserId) {
+                        // 🌟 ค้นหาทั้งที่เป็นคนโพสต์เอง (UserId) หรือเป็นคนถูกแท็ก (Tagged)
+                        query = query.or(`UserId.eq.${targetUserId},Tagged.ilike.%${targetUserId}%`);
+                    }
+
+                    // Sort and Limit
+                    query = query.order('Date', { ascending: false }).order('Time', { ascending: false }).limit(limit);
+
+                    const { data, error, count } = await query;
+                    if (error) throw error;
+
+                    // Mapping Supabase data to expected Frontend format
+                    const mappedFeed = (data || [])
+                        .filter(p => p.UserId && p.Date && (p.Virtue || p.Note || p.Image)) // กรองเข้มงวด: ต้องมี UserId, วันที่ และเนื้อหาอย่างใดอย่างหนึ่ง
+                        .map(p => {
+                            const poster = allUsersMap[p.UserId] || { name: p.UserName || 'Unknown', img: '' };
+                            let interactions = { likes: [], verifies: [] };
+                            try {
+                                if (p.JSON) interactions = typeof p.JSON === 'string' ? JSON.parse(p.JSON) : p.JSON;
+                            } catch (e) { }
+
+                            return {
+                                id: p.id,
+                                uuid: p.UUID,
+                                timestamp: p.Date + 'T' + (p.Time || '00:00:00'),
+                                date: p.Date,
+                                time: p.Time,
+                                user_line_id: p.UserId,
+                                user_name: poster.name,
+                                user_img: poster.img,
+                                virtue: p.Virtue,
+                                note: p.Note,
+                                image: p.Image,
+                                happy: p.Happy,
+                                taggedFriends: p.Tagged,
+                                status: p.Status,
+                                privacy: p.Privacy,
+                                interactions: interactions,
+                                likes: interactions.likes || [],
+                                verifies: interactions.verifies || []
+                            };
+                        });
+
+                    handleFeedData({ status: 'success', feed: mappedFeed, totalCount: count || mappedFeed.length });
+                } catch (e) {
+                    console.error("❌ Supabase fetchFeed failed, falling back to GAS:", e);
+                    // Fallback to GAS if Supabase fails
+                    performGASFetch();
+                }
+            })();
+            return;
+        }
+
+        // 🚀 Fallback or Default: เรียกดึงข้อมูลจาก GAS
+        function performGASFetch() {
+            fetch(`${GAS_URL}?${queryParams.join('&')}`)
+                .then(res => res.text())
+                .then(text => {
+                    if (text.startsWith('<')) throw new Error("CORS Blocked");
+                    handleFeedData(JSON.parse(text));
+                })
+                .catch(err => {
+                    console.log('Switching to JSONP...', err.message);
+                    window.__gasFeedCb = (data) => handleFeedData(data);
+                    const oldScript = document.getElementById('jsonp_feed');
+                    if (oldScript) oldScript.remove();
+                    const script = document.createElement('script');
+                    script.id = 'jsonp_feed';
+                    script.src = `${GAS_URL}?${queryParams.join('&')}&callback=__gasFeedCb`;
+                    document.head.appendChild(script);
+                });
+        }
+
+        performGASFetch();
     });
 }
 
@@ -432,7 +509,7 @@ function generateFeedHtml(posts, options = {}) {
         htmlBuffer += `
         <div id="post-${actualId}" class="glass-card feed-card p-3 mb-3 animate__animated animate__fadeIn ${post.isPinned ? 'border-primary' : ''}">
             <div class="feed-header d-flex align-items-start">
-                <img src="${post.user_img || 'https://dummyimage.com/45x45/ddd/888&text=?'}" class="feed-avatar me-2 mt-1" loading="lazy">
+                <img src="${post.user_img || 'https://dummyimage.com/45x45/ddd/888&text=?'}" class="feed-avatar me-2 mt-1" loading="lazy" onerror="this.src='https://dummyimage.com/45x45/ddd/888&text=?'; this.onerror=null;">
                 <div class="flex-grow-1">
                     <div class="d-flex justify-content-between">
                         <div class="d-flex align-items-center">
@@ -492,15 +569,21 @@ function generateFeedHtml(posts, options = {}) {
         </div>`;
     });
 
-    if (hasMore) {
-        htmlBuffer += `
-            <div id="loadMoreBtnWrapper" class="text-center py-4">
-                <button class="btn btn-outline-primary rounded-pill px-5 shadow-sm bg-white" onclick="${loadMoreOnClick}">
-                    <i class="fas fa-chevron-down me-2"></i> ดูเรื่องราวเพิ่มเติม
-                </button>
-                <div class="text-muted small mt-2">แสดง ${visibleFeed.length} จากทั้งหมด ${window.globalFeedTotal || posts.length} รายการปัจจุบัน</div>
-            </div>`;
-    }
+    const totalCount = window.globalFeedTotal || posts.length;
+    const totalLabel = (typeof currentFeedFilter !== 'undefined' && currentFeedFilter === 'all') 
+        ? `โพสต์ทั้งหมด ${totalCount}` 
+        : `รายการที่กรองได้ ${posts.length}`;
+
+    htmlBuffer += `
+        <div id="loadMoreBtnWrapper" class="text-center py-4">
+            ${hasMore ? `
+            <button class="btn btn-outline-primary rounded-pill px-5 shadow-sm bg-white mb-2" onclick="${loadMoreOnClick}">
+                <i class="fas fa-chevron-down me-2"></i> ดูเรื่องราวเพิ่มเติม
+            </button>
+            ` : ''}
+            <div class="text-muted small">แสดง ${visibleFeed.length} จาก ${totalLabel} รายการ</div>
+        </div>`;
+
     return htmlBuffer;
 }
 
@@ -526,7 +609,7 @@ function loadMoreFeed() {
     const filterType = currentFeedFilter;
     const filterCategory = document.getElementById('filterCategory')?.value || '';
     const filterYear = document.getElementById('filterYear')?.value || '';
-    
+
     const postsInCache = (globalFeedData || []).filter(post => {
         if (!post) return false;
         const isMyPost = String(post.user_line_id || post.userId || "") === myId;
@@ -561,9 +644,9 @@ function loadMoreFeed() {
         // แสดงสถานะโหลดบนปุ่ม
         const btnWrapper = document.getElementById('loadMoreBtnWrapper');
         if (btnWrapper) btnWrapper.innerHTML = '<button class="btn btn-outline-primary rounded-pill px-5 disabled bg-white shadow-sm"><i class="fas fa-spinner fa-spin me-2"></i>กำลังขุดหาเรื่องราว...</button>';
-        
-        currentFeedLimit += 50;
-        currentVisibleCount += FEED_PAGE_SIZE; 
+
+        currentFeedLimit += FEED_PAGE_SIZE;
+        currentVisibleCount += FEED_PAGE_SIZE;
         fetchFeed(false, true, false, null, false); // append=false, silent=true, resetCount=false
         return;
     }
@@ -640,6 +723,13 @@ function closeReaction(postId) {
     setTimeout(() => { document.getElementById(`popup-${postId}`).style.display = 'none'; }, 500);
 }
 function submitReaction(postId, type) {
+    // 🛡️ [READ-ONLY] กฎกรรมการ: ห้ามให้ความรู้สึก
+    if (isCommittee(currentUser?.role)) {
+        Swal.fire('โหมดเยี่ยมชม', 'สิทธิ์กรรมการใช้สำหรับตรวจประเมินเท่านั้น ไม่สามารถกดหัวใจได้ค่ะ', 'info');
+        return;
+    }
+    if (!currentUser) return;
+
     const iconMap = { like: '👍', love: '❤️', wow: '😮', laugh: '😂', sad: '😢', pray: '🙏' };
     const iconEl = document.getElementById(`icon-${postId}`);
     const countEl = document.getElementById(`count-${postId}`);
@@ -653,11 +743,39 @@ function submitReaction(postId, type) {
         iconEl.innerText = iconMap[type];
     }
     document.getElementById(`popup-${postId}`).style.display = 'none';
+
+    // ☁️ [Supabase Sync]
+    if (READ_FROM_SUPABASE && supabaseClient) {
+        (async () => {
+            try {
+                const { data: postData } = await supabaseClient.from('Activities').select('JSON').eq('UUID', postId).single();
+                let interactions = postData?.JSON || { likes: [], verifies: [] };
+                if (typeof interactions === 'string') interactions = JSON.parse(interactions);
+
+                // ลบ Reaction เดิมของคนนี้ออกก่อน (ถ้ามี)
+                interactions.likes = (interactions.likes || []).filter(l => (l.userId || l.lineId) !== currentUser.userId);
+                // เพิ่มอันใหม่เข้าไป
+                interactions.likes.push({ userId: currentUser.userId, type: type });
+
+                await supabaseClient.from('Activities').update({ "JSON": interactions }).eq('UUID', postId);
+                console.log('☁️ Supabase: Reaction updated');
+            } catch (e) { console.error('☁️ Supabase Reaction Error:', e); }
+        })();
+        return;
+    }
+
     fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: 'like_post', postId, userId: currentUser.userId, reactionType: type }) });
 }
 
 // ----- Verify -----
 function verifyPost(postId, targetId, targetName, btnElement) {
+    // 🛡️ [READ-ONLY] กฎกรรมการ: ห้ามยืนยันความดี
+    if (isCommittee(currentUser?.role)) {
+        Swal.fire('โหมดเยี่ยมชม', 'สิทธิ์กรรมการใช้สำหรับตรวจประเมินเท่านั้น ไม่สามารถกดยืนยันความดีได้ค่ะ', 'info');
+        return;
+    }
+    if (!currentUser) return;
+
     if (!postId || !currentUser) return;
 
     if (btnElement) {
@@ -668,6 +786,134 @@ function verifyPost(postId, targetId, targetName, btnElement) {
         btnElement.classList.add('disabled');
         btnElement.style.pointerEvents = 'none';
 
+        // ☁️ [Supabase ONLY Mode]
+        if (READ_FROM_SUPABASE && supabaseClient) {
+            (async () => {
+                try {
+                    // 1. ดึงข้อมูลโพสต์ปัจจุบันจาก Supabase
+                    const { data: postData, error: fetchErr } = await supabaseClient
+                        .from('Activities')
+                        .select('*')
+                        .eq('UUID', postId)
+                        .single();
+
+                    if (!postData || fetchErr) throw new Error("ไม่พบข้อมูลโพสต์ในระบบ");
+
+                    let interactions = postData.JSON || { likes: [], verifies: [] };
+                    if (typeof interactions === 'string') interactions = JSON.parse(interactions);
+                    if (!interactions.verifies) interactions.verifies = [];
+
+                    // 2. ตรวจสอบโควตารายสัปดาห์ (Quota Check)
+                    // 🌟 กฎใหม่: ยืนยันได้ไม่เกิน 2 โพสต์/สัปดาห์ และคนเดิมไม่เกิน 2 ครั้ง
+                    const getStartOfWeek = () => {
+                        const now = new Date();
+                        const day = now.getDay() || 7; // Sunday is 7
+                        const monday = new Date(now);
+                        monday.setHours(-24 * (day - 1), 0, 0, 0);
+                        return monday.toISOString().split('T')[0];
+                    };
+
+                    const startOfWeek = getStartOfWeek();
+                    const { data: weeklyVerifies, error: quotaErr } = await supabaseClient
+                        .from('Activities')
+                        .select('UserId, JSON')
+                        .gte('Date', startOfWeek)
+                        .ilike('JSON', `%${currentUser.userId}%`);
+
+                    if (!quotaErr && weeklyVerifies) {
+                        let totalVerifiesThisWeek = 0;
+                        let verifiesForThisPerson = 0;
+                        const ownerId = String(postData.UserId || "").trim();
+
+                        weeklyVerifies.forEach(vPost => {
+                            let vJson = vPost.JSON;
+                            if (typeof vJson === 'string') try { vJson = JSON.parse(vJson); } catch(e){}
+                            const list = vJson.verifies || vJson.Verify || [];
+                            
+                            const iVerifiedThis = list.some(v => {
+                                const vid = (typeof v === 'object' ? (v.userId || v.lineId || "") : v).toString().trim();
+                                return vid === currentUser.userId;
+                            });
+
+                            if (iVerifiedThis) {
+                                totalVerifiesThisWeek++;
+                                if (String(vPost.UserId || "").trim() === ownerId) {
+                                    verifiesForThisPerson++;
+                                }
+                            }
+                        });
+
+                        if (totalVerifiesThisWeek >= 5) {
+                            finalizeVerifyUI(btnElement, 'quota_exceeded', 'คุณใช้สิทธิ์ยืนยันครบโควตา 5 ครั้งในสัปดาห์นี้แล้ว');
+                            return;
+                        }
+                        if (verifiesForThisPerson >= 1) {
+                            finalizeVerifyUI(btnElement, 'quota_exceeded', 'คุณกดยืนยันให้เพื่อนคนนี้ครบโควตา 1 ครั้งในสัปดาห์นี้แล้ว');
+                            return;
+                        }
+                    }
+
+                    // 3. ตรวจสอบว่าเคยยืนยันโพสต์นี้หรือยัง
+                    const alreadyIn = interactions.verifies.some(v => {
+                        const vid = (typeof v === 'object' ? (v.userId || v.lineId || "") : v).toString().trim();
+                        return vid === currentUser.userId;
+                    });
+                    
+                    if (alreadyIn) {
+                        finalizeVerifyUI(btnElement, 'already_verified', 'คุณเคยยืนยันโพสต์นี้แล้ว');
+                        return;
+                    }
+
+                    // 4. เตรียมข้อมูลพยาน
+                    interactions.verifies.push({
+                        userId: currentUser.userId,
+                        name: currentUser.name,
+                        img: currentUser.img
+                    });
+
+                    let updatePayload = { "JSON": interactions };
+                    let verifierPoints = 0;
+                    let ownerPoints = 0;
+
+                    // กฎการให้คะแนนพยาน: 2 คนแรกได้คนละ 1 แต้ม (🌟 ปรับลดเพื่อความสมดุล)
+                    if (interactions.verifies.length <= 2) {
+                        verifierPoints = 1;
+                    }
+
+                    // กฎการอนุมัติโพสต์: เมื่อพยานครบ 2 คน โพสต์จะ Approved (+10 แต้มทั้งทีม)
+                    if (interactions.verifies.length >= 2 && postData.Status === 'waiting_verify') {
+                        updatePayload.Status = 'approved';
+                        updatePayload.Score = 10;
+                        ownerPoints = 10 - (parseInt(postData.Score) || 0); 
+                    }
+
+                    // 5. บันทึกการอัปเดตลง Activities
+                    const { error: updateErr } = await supabaseClient.from('Activities').update(updatePayload).eq('UUID', postId);
+                    if (updateErr) throw updateErr;
+
+                    // 6. อัปเดตข้อมูลพยาน และคะแนน (Authoritative Sync)
+                    if (typeof syncUserScore === 'function') {
+                        syncUserScore(currentUser.userId); // รีเฟรชคะแนนพยาน (ตัวเรา)
+                        
+                        const teamIds = [postData.UserId, ...(postData.Tagged ? postData.Tagged.split(',').filter(Boolean) : [])];
+                        teamIds.forEach(tid => syncUserScore(tid.trim()));
+                    }
+
+                    console.log('☁️ Supabase: Verification triggered sync');
+                    finalizeVerifyUI(btnElement, 'success', 'ยืนยันสำเร็จ +1 คะแนน', postId);
+
+                } catch (e) {
+                    console.error('☁️ Supabase Verify Error:', e);
+                    btnElement.innerHTML = originalContent;
+                    btnElement.classList.remove('disabled');
+                    btnElement.style.pointerEvents = 'auto';
+                    Swal.fire('Error', 'ไม่สามารถยืนยันได้: ' + e.message, 'error');
+                }
+            })();
+            return;
+        }
+
+        // --- Fallback to GAS ---
         fetch(GAS_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -675,99 +921,85 @@ function verifyPost(postId, targetId, targetName, btnElement) {
         })
             .then(async (res) => {
                 const text = await res.text();
-                if (!res.ok || text.startsWith('<')) {
-                    // 🛡️ Rescue: If points were likely awarded but response failed
-                    console.warn("Server response issue, checking status...", text);
-                    throw new Error("Server communication failed");
-                }
-
                 const data = JSON.parse(text);
                 if (data.status === 'success' || data.status === 'already_verified') {
-                    // 🔒 ล็อกปุ่มทันที
-                    btnElement.innerHTML = '<i class="fas fa-check-circle me-1"></i> ยืนยันแล้ว';
-                    btnElement.className = 'btn btn-xs btn-success rounded-pill disabled';
-                    btnElement.style.pointerEvents = 'none';
-                    btnElement.setAttribute('disabled', 'true');
-                    btnElement.removeAttribute('onclick');
-
-                    Swal.fire({
-                        toast: true,
-                        position: 'top-end',
-                        showConfirmButton: false,
-                        timer: 2500,
-                        timerProgressBar: true,
-                        icon: data.status === 'success' ? 'success' : 'info',
-                        title: data.message || 'ยืนยันสำเร็จ'
-                    });
-
-                    // 💾 อัปเดตข้อมูลใน Cache
-                    const allPosts = [...(window.globalFeedData || []), ...(window.currentRelationPosts || [])];
-                    const post = allPosts.find(p => p && (String(p.uuid || p.id).trim() === String(postId).trim()));
-
-                    if (post) {
-                        if (!post.verifies) post.verifies = [];
-                        const alreadyInList = post.verifies.some(v => String(v.userId || v.lineId || v).trim() === String(currentUser.userId).trim());
-                        
-                        if (!alreadyInList) {
-                            post.verifies.push({
-                                userId: currentUser.userId,
-                                name: currentUser.name,
-                                img: currentUser.img
-                            });
-                        }
-
-                        // อัปเดตคะแนนเฉพาะกรณี success จริงๆ (ไม่ใช่ already_verified)
-                        if (data.status === 'success') {
-                            currentUser.score = (currentUser.score || 0) + 3;
-                            if (typeof renderProfile === 'function') renderProfile();
-                        }
-
-                        // 🔔 อัปเดต Badge และถ้าอยู่ในหน้า Request ให้ซ่อนการ์ด
-                        updatePendingBadge(window.globalFeedData);
-                        if (currentFeedFilter === 'request') {
-                            setTimeout(() => {
-                                const el = document.getElementById(`post-${postId}`);
-                                if (el) {
-                                    el.style.opacity = '0.3';
-                                    el.style.transform = 'scale(0.95)';
-                                    el.style.transition = 'all 0.5s ease';
-                                    setTimeout(() => {
-                                        el.style.display = 'none';
-                                    }, 500);
-                                }
-                            }, 1200);
-                        }
+                    finalizeVerifyUI(btnElement, data.status, data.message, postId);
+                    if (data.status === 'success') {
+                        currentUser.score = (currentUser.score || 0) + 3;
                     }
-                } else {
-                    throw new Error(data.message || 'Unknown error');
-                }
+                } else throw new Error(data.message);
             })
             .catch((e) => {
-                console.error("Verify Error:", e);
-                // 🛡️ ถ้าคะแนนน่าจะถูกให้ไปแล้ว (เช่น Network Error หลังส่ง) ให้เปลี่ยนสถานะปุ่มเลยเพื่อความสบายใจ
-                btnElement.innerHTML = '<i class="fas fa-check-circle me-1"></i> ยืนยันแล้ว';
-                btnElement.className = 'btn btn-xs btn-success rounded-pill disabled';
-                
-                Swal.fire({ 
-                    icon: 'warning', 
-                    title: 'ตรวจสอบสถานะ', 
-                    text: 'การเชื่อมต่อขัดข้องเล็กน้อย แต่คะแนนของคุณอาจได้รับการบันทึกแล้ว กรุณารีเฟรชหน้าจอเพื่อตรวจสอบครับ',
-                    footer: `<small class="text-muted">Error: ${e.message}</small>`
-                });
+                btnElement.innerHTML = originalContent;
+                btnElement.classList.remove('disabled');
+                btnElement.style.pointerEvents = 'auto';
+                Swal.fire('Error', 'การเชื่อมต่อขัดข้อง: ' + e.message, 'error');
             });
+    }
+}
+
+// Helper function to finalize UI after verification
+function finalizeVerifyUI(btnElement, status, message, postId) {
+    btnElement.innerHTML = '<i class="fas fa-check-circle me-1"></i> ยืนยันแล้ว';
+    btnElement.className = 'btn btn-xs btn-success rounded-pill disabled';
+    btnElement.style.pointerEvents = 'none';
+    btnElement.setAttribute('disabled', 'true');
+    btnElement.removeAttribute('onclick');
+
+    Swal.fire({
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 2500,
+        timerProgressBar: true,
+        icon: status === 'success' ? 'success' : 'info',
+        title: message
+    });
+
+    if (postId) {
+        // อัปเดตข้อมูลใน Cache
+        const allPosts = [...(window.globalFeedData || []), ...(window.currentRelationPosts || [])];
+        const post = allPosts.find(p => p && (String(p.uuid || p.id).trim() === String(postId).trim()));
+        if (post) {
+            if (!post.verifies) post.verifies = [];
+            const alreadyInList = post.verifies.some(v => String(v.userId || v.lineId || v).trim() === String(currentUser.userId).trim());
+            if (!alreadyInList) {
+                post.verifies.push({ userId: currentUser.userId, name: currentUser.name, img: currentUser.img });
+            }
+            updatePendingBadge(window.globalFeedData);
+            if (currentFeedFilter === 'request') {
+                const el = document.getElementById(`post-${postId}`);
+                if (el) {
+                    el.style.opacity = '0.3';
+                    setTimeout(() => el.style.display = 'none', 500);
+                }
+            }
+        }
+    }
+    if (typeof renderProfile === 'function') renderProfile();
+    // 🌟 [FIX] รีเฟรชสถิติและ Dashboard ทันทีเพื่อให้คะแนนเปลี่ยนตามที่ Verify
+    if (typeof fetchManagerData === 'function') {
+        fetchManagerData(true);
     }
 }
 
 // ----- Delete / Edit -----
 function deletePost(postId) {
+    // 🛡️ [READ-ONLY] กฎกรรมการ: ห้ามลบข้อมูล
+    if (isCommittee(currentUser?.role)) {
+        Swal.fire('โหมดเยี่ยมชม', 'สิทธิ์กรรมการใช้สำหรับตรวจประเมินเท่านั้น ไม่สามารถลบข้อมูลได้ค่ะ', 'info');
+        return;
+    }
+    if (!currentUser) return;
+
     Swal.fire({
         title: 'ลบโพสต์นี้?', text: 'คะแนนที่ได้จากโพสต์นี้จะถูกหักออกด้วย', icon: 'warning',
         showCancelButton: true, confirmButtonColor: '#e74c3c', cancelButtonColor: '#aaa',
         confirmButtonText: '🗑️ ลบเลย', cancelButtonText: 'ยกเลิก'
-    }).then(r => {
+    }).then(async r => {
         if (!r.isConfirmed) return;
 
-        // 🌪️ Optimistic UI: หายไปทันทีเพื่อความรวดเร็ว
+        // 🌪️ Optimistic UI
         const postEl = document.getElementById(`post-${postId}`);
         if (postEl) {
             postEl.style.opacity = '0.3';
@@ -776,43 +1008,62 @@ function deletePost(postId) {
             setTimeout(() => postEl.style.display = 'none', 300);
         }
 
-        Swal.fire({ toast: true, icon: 'info', title: 'กำลังลบโพสต์...', position: 'top', timer: 1500, showConfirmButton: false });
+        Swal.fire({ toast: true, icon: 'info', title: 'กำลังลบจาก Supabase...', position: 'top', timer: 1500, showConfirmButton: false });
 
-        fetch(GAS_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify({ action: 'delete_post', postId, userId: currentUser.userId })
-        })
-            .then(r => r.text()).then(text => {
-                if (text.startsWith('<')) throw new Error("Google Block: " + text.substring(0, 50));
-                const d = JSON.parse(text);
-                if (d.status === 'success') {
-                    Swal.fire({ toast: true, icon: 'success', title: `ลบโพสต์แล้วครับ`, position: 'top', timer: 2000, showConfirmButton: false });
+        // ☁️ [Supabase ONLY Test Mode]
+        if (supabaseClient) {
+            try {
+                const { error } = await supabaseClient
+                    .from('Activities')
+                    .delete()
+                    .eq('UUID', postId);
 
-                    // อัปเดต Cache ทั่วทั้งระบบทันที (ไม่ต้องโหลดใหม่ทั้งหมด)
-                    if (window.globalFeedData) {
-                        window.globalFeedData = window.globalFeedData.filter(p => p && String(p.id).trim() !== String(postId).trim() && String(p.uuid).trim() !== String(postId).trim());
-                    }
-                    if (window.currentRelationPosts) {
-                        window.currentRelationPosts = window.currentRelationPosts.filter(p => p && String(p.id).trim() !== String(postId).trim() && String(p.uuid).trim() !== String(postId).trim());
-                    }
+                // 🔍 [FIX] หาเจ้าของและผู้ที่ถูกแท็กก่อนลบ เพื่อไปรีเฟรชคะแนนให้ถูกต้อง
+                const post = (window.globalFeedData || []).find(p => (p.uuid || p.id) == postId);
+                const affectedIds = post ? [post.UserId, ...(post.Tagged ? String(post.Tagged).split(',').filter(Boolean) : [])] : [];
 
-                    // อัปเดตข้อมูลคะแนนใหม่เบื้องหลัง
-                    if (typeof checkUser === 'function') checkUser();
+                if (error) throw error;
 
-                    // ถ้าเป็นระดับ Manager ให้แอบรีเฟรช Dashboard ด้วย
-                    if (getUserLevel(currentUser) <= 2 && typeof fetchManagerData === 'function') {
-                        fetchManagerData(true);
-                    }
-                } else {
-                    if (postEl) postEl.style.display = ''; // คืนค่าถ้าพัง
-                    Swal.fire({ icon: 'error', title: 'ลบไม่สำเร็จ', text: d.message || '' });
+                console.log('☁️ Supabase Test Mode: Post deleted');
+
+                // 🗑️ [CLOUDINARY CLEANUP] ลบรูปออกจาก Cloudinary ผ่าน GAS
+                if (post && post.image) {
+                    fetch(GAS_URL, {
+                        method: 'POST',
+                        body: JSON.stringify({ action: 'delete_image', urls: post.image })
+                    }).then(() => console.log('🗑️ Cloudinary cleanup requested'));
                 }
-            }).catch(() => {
-                // ถ้า Catch (เน็ตหลุด) แต่คำสั่งอาจจะไปถึง GAS แล้ว ให้ถือว่าสำเร็จและเช็คใหม่
-                if (typeof checkUser === 'function') checkUser();
-                if (getUserLevel(currentUser) <= 2 && typeof fetchManagerData === 'function') fetchManagerData(true);
-            });
+                
+                // 🛡️ [FORCE SYNC] ล้างเวลาโพสต์ล่าสุดเพื่อให้การคำนวณใหม่มีผลทันที
+                localStorage.removeItem('last_post_time');
+
+                // อัปเดตคะแนนของผู้ที่เกี่ยวข้องทันที และรอให้เสร็จก่อนรีเฟรชภาพรวม
+                if (typeof syncUserScore === 'function' && affectedIds.length > 0) {
+                    const validIds = affectedIds.filter(id => id && typeof id === 'string');
+                    await Promise.all(validIds.map(id => syncUserScore(id.trim())));
+                }
+
+                Swal.fire({ toast: true, icon: 'success', title: `ลบโพสต์และปรับปรุงคะแนนเรียบร้อย`, position: 'top', timer: 2000, showConfirmButton: false });
+
+                // อัปเดต Cache และ UI
+                if (window.globalFeedData) {
+                    window.globalFeedData = window.globalFeedData.filter(p => p && String(p.id).trim() !== String(postId).trim() && String(p.uuid).trim() !== String(postId).trim());
+                }
+                renderFeedUI(window.globalFeedData);
+
+                // รีเฟรช Dashboard ภาพรวม
+                if (typeof fetchManagerData === 'function') {
+                    fetchManagerData(true);
+                }
+                return;
+
+            } catch (e) {
+                console.error('☁️ Supabase Delete Error:', e);
+                if (postEl) postEl.style.display = ''; // คืนค่าถ้าพลาด
+                Swal.fire('Error', 'ลบไม่สำเร็จ: ' + (e.message || e), 'error');
+                return;
+            }
+        }
     });
 }
 
@@ -894,7 +1145,7 @@ function editPost(postId) {
             if (!newNote.trim()) { Swal.showValidationMessage('กรุณากรอกข้อความ'); return false; }
 
             Swal.update({ title: 'กำลังอัปโหลดรูปภาพใหม่...', showConfirmButton: false });
-            
+
             // ☁️ 1. อัปโหลดรูปใหม่ (ถ้ามี)
             const finalUrls = [];
             for (let item of window.tempEditItems) {
@@ -912,58 +1163,97 @@ function editPost(postId) {
                 finalUrls.push(newLink);
             }
 
-            return { 
-                newNote: newNote.trim(), 
-                newVirtue, 
+            return {
+                newNote: newNote.trim(),
+                newVirtue,
                 newImage: finalUrls.join(','),
-                removedImages: window.removedOriginalImages 
+                removedImages: window.removedOriginalImages
             };
         }
     }).then(r => {
         if (!r.isConfirmed) return;
         const { newNote, newVirtue, newImage, removedImages } = r.value;
 
-        Swal.fire({ title: 'กำลังบันทึก...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        if (READ_FROM_SUPABASE && supabaseClient) {
+            (async () => {
+                try {
+                    const { error } = await supabaseClient.from('Activities').update({
+                        "Note": newNote,
+                        "Virtue": newVirtue,
+                        "Image": newImage
+                    }).eq('UUID', targetPostId);
+
+                    if (error) throw error;
+
+                    console.log('☁️ Supabase: Post updated');
+                    handleEditSuccess(targetPostId, newNote, newVirtue, newImage, removedImages);
+                } catch (e) {
+                    console.error('☁️ Supabase Edit Error:', e);
+                    Swal.fire('Error', 'ไม่สามารถบันทึกลง Supabase ได้: ' + e.message, 'error');
+                }
+            })();
+            return;
+        }
 
         fetch(GAS_URL, {
             method: 'POST',
-            body: JSON.stringify({ 
-                action: 'edit_post', 
-                postId: targetPostId, 
+            body: JSON.stringify({
+                action: 'edit_post',
+                postId: targetPostId,
                 userId: currentUser.userId,
-                newNote, 
+                newNote,
                 newVirtue,
                 newImage,
                 removedImages
             })
         }).then(res => res.json()).then(data => {
             if (data.status === 'success') {
-                // 🚀 อัปเดตข้อมูลในเครื่อง (Local State Sync) ลดาการโหลดใหม่ทั้งหน้า
-                if (window.globalFeedData) {
-                    const postIdx = window.globalFeedData.findIndex(p => (p.uuid || p.id) == targetPostId);
-                    if (postIdx !== -1) {
-                        window.globalFeedData[postIdx].note = newNote;
-                        window.globalFeedData[postIdx].virtue = newVirtue;
-                        window.globalFeedData[postIdx].image = newImage;
-                        
-                        // 🔄 อัปเดต UI เฉพาะจุดแบบลื่นๆ
-                        updateSinglePostUI(targetPostId);
-                    }
-                }
-                
-                Swal.fire({ 
-                    icon: 'success', 
-                    title: 'บันทึกเรียบร้อย', 
-                    toast: true,
-                    position: 'top-end',
-                    timer: 2000, 
-                    showConfirmButton: false 
-                });
+                handleEditSuccess(targetPostId, newNote, newVirtue, newImage, removedImages);
             } else {
                 Swal.fire('ข้อผิดพลาด', data.message, 'error');
             }
         });
     });
+}
+
+function handleEditSuccess(targetPostId, newNote, newVirtue, newImage, removedImages = []) {
+    // 🗑️ [CLOUDINARY CLEANUP] ลบรูปที่ถูกนำออกออกจาก Cloudinary
+    if (removedImages && removedImages.length > 0) {
+        fetch(GAS_URL, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'delete_image', urls: removedImages })
+        }).then(() => console.log('🗑️ Cloudinary cleanup for edited post requested'));
+    }
+
+    if (window.globalFeedData) {
+        const postIdx = window.globalFeedData.findIndex(p => (p.uuid || p.id) == targetPostId);
+        if (postIdx !== -1) {
+            const post = window.globalFeedData[postIdx];
+            post.note = newNote;
+            post.virtue = newVirtue;
+            post.image = newImage;
+            updateSinglePostUI(targetPostId);
+
+            // 🔍 [FIX] รีเฟรชคะแนนของผู้ที่เกี่ยวข้องทันที เพราะหมวดหมู่หรือสถานะอาจเปลี่ยน
+            const affectedIds = [post.UserId, ...(post.Tagged ? String(post.Tagged).split(',').filter(Boolean) : [])];
+            if (typeof syncUserScore === 'function') {
+                affectedIds.filter(id => id && typeof id === 'string').forEach(id => syncUserScore(id.trim()));
+            }
+        }
+    }
+    Swal.fire({
+        icon: 'success',
+        title: 'บันทึกเรียบร้อย',
+        toast: true,
+        position: 'top-end',
+        timer: 2000,
+        showConfirmButton: false
+    });
+
+    // 🌟 [BACKGROUND UPDATE] อัปเดตข้อมูลภาพรวมเบื้องหลังทันที
+    if (typeof fetchManagerData === 'function') {
+        fetchManagerData(true);
+    }
 }
 
 // --- Helper Functions for Image Editing ---
@@ -987,7 +1277,7 @@ function renderEditThumbs() {
         div.className = 'position-relative shadow-sm thumb-item';
         div.setAttribute('data-index', idx); // เก็บ index เดิมไว้
         div.style.cssText = 'width:70px; height:70px; border-radius:10px; overflow:hidden; background:#f0f0f0; border:1px solid #eee; cursor:grab;';
-        
+
         let src = '';
         if (typeof item === 'string') src = item;
         else src = URL.createObjectURL(item);
@@ -1014,7 +1304,7 @@ function renderEditThumbs() {
                     newOrder.push(window.tempEditItems[oldIndex]);
                 });
                 window.tempEditItems = newOrder;
-                
+
                 // ไม่ต้อง render ใหม่ (เพราะ DOM สลับให้เองแล้ว) 
                 // แต่ถ้าจะแก้ index สำหรับปุ่มลบ อาจจะต้องแอบแก้ attribute หรือ render ใหม่เบาๆ
                 items.forEach((el, newIdx) => {
@@ -1182,6 +1472,24 @@ function togglePinPost(postId) {
     // เพิ่ม/ลบสัญลักษณ์ [PINNED] โดยไม่ใช้ Newline เยอะๆ
     const newNote = post.isPinned ? `${currentNoteText} [PINNED]` : currentNoteText.replace(/\[PINNED\]/gi, '').trim();
 
+    // ☁️ [Supabase Sync]
+    if (READ_FROM_SUPABASE && supabaseClient) {
+        (async () => {
+            try {
+                const { error } = await supabaseClient.from('Activities').update({ "Note": newNote }).eq('UUID', postId);
+                if (error) throw error;
+                console.log('☁️ Supabase: Pin status updated');
+                Swal.fire({ toast: true, icon: 'success', title: post.isPinned ? 'ปักหมุดแล้ว' : 'เลิกปักหมุดแล้ว', position: 'top-end', timer: 1500, showConfirmButton: false });
+            } catch (e) {
+                console.error('☁️ Supabase Pin Error:', e);
+                // Rollback
+                post.isPinned = isPinned;
+                if (pinBtn) pinBtn.className = `btn btn-sm border-0 rounded-pill px-2 feed-manage-btn ${isPinned ? 'text-primary' : 'text-muted'}`;
+            }
+        })();
+        return;
+    }
+
     // ส่ง GAS ทำงานเบื้องหลัง (Background)
     fetch(GAS_URL, {
         method: 'POST',
@@ -1219,7 +1527,7 @@ function updateSinglePostUI(postId) {
 
     // จำลองการ Render เฉพาะส่วนเนื้อหา (Content)
     const virtueMap = { volunteer: '🤝 จิตอาสา', sufficiency: '🌱 พอเพียง', discipline: '📏 วินัย', integrity: '💎 สุจริต', gratitude: '🙏 กตัญญู' };
-    
+
     // 1. อัปเดตหัวข้อหมวดหมู่
     const virtueEl = postcardEl.querySelector('.text-primary.mb-1.d-block.fw-bold');
     if (virtueEl) virtueEl.innerText = virtueMap[post.virtue] || post.virtue || '';
@@ -1251,16 +1559,16 @@ function updatePendingBadge(feed) {
     const myId = String(currentUser.userId || currentUser.id || "");
     const pendingCount = feed.filter(post => {
         if (!post || !post.status) return false;
-        
+
         const isMyPost = String(post.user_line_id || post.userId || "") === myId;
         const isPrivate = post.privacy === 'private';
-        
+
         const verifyList = Array.isArray(post.verifies) ? post.verifies : (post.interactions?.verifies || []);
         const alreadyVerified = verifyList.some(v => {
             const vid = String(v.userId || v.lineId || v).trim();
             return vid === myId && vid !== "";
         });
-        
+
         const taggedList = String(post.taggedFriends || '').split(',').map(id => id.trim());
 
         // เงื่อนไขเดียวกับ Filter 'request': ต้องรอการยืนยัน, ไม่ใช่โพสต์เรา, เรายังไม่ยืนยัน, และเราไม่โดนแท็ก
@@ -1276,5 +1584,26 @@ function updatePendingBadge(feed) {
         setTimeout(() => badge.classList.remove('animate__animated', 'animate__bounceIn'), 1000);
     } else {
         badge.style.display = 'none';
+    }
+
+    // 🌟 [NEW] อัปเดต Badge ที่แถบเมนูด้านล่างด้วย (เพื่อให้เห็นแม้จะอยู่หน้าอื่น)
+    const navBadge = document.getElementById('nav-stories-badge');
+    if (navBadge) {
+        const lastSeen = parseInt(localStorage.getItem('last_seen_feed_count') || 0);
+        const newPosts = Math.max(0, (window.globalFeedTotal || 0) - lastSeen);
+        
+        // ยอดรวมแจ้งเตือน = โพสต์ใหม่ + โพสต์ที่รอเรายืนยัน
+        const totalAlerts = newPosts + pendingCount;
+        
+        if (totalAlerts > 0) {
+            navBadge.innerText = totalAlerts > 99 ? '99+' : totalAlerts;
+            navBadge.style.display = 'block';
+        } else {
+            // ถ้าไม่มีอะไรใหม่และไม่ได้อยู่หน้าเรื่องราว ให้ซ่อน Badge
+            const currentTab = document.querySelector('.nav-item.active')?.id;
+            if (currentTab !== 'nav-stories-btn') {
+                navBadge.style.display = 'none';
+            }
+        }
     }
 }
