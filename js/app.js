@@ -10,25 +10,6 @@ var currentRelationPosts = [];
 var currentRelationVisibleCount = 10;
 // currentImageFiles ประกาศแล้วใน config.js
 
-// 🌟 Helper: ตรวจสอบว่าเป็นกลุ่มศิษย์เก่า/เกษียณ หรือไม่
-const isAlumni = (r) => {
-    const roleStr = String(r || '').toLowerCase();
-    const keywords = ['ศิษย์เก่า', 'alumni', 'ลาออก', 'ย้าย', 'เกษียณ', 'อนุสรณ์', 'retired', 'memorial', 'ผู้ร่วมผูกพัน', 'ทำเนียบ', 'hall of fame'];
-    return keywords.some(k => roleStr.includes(k.toLowerCase()));
-};
-
-// 🌟 Helper: ตรวจสอบว่าเป็น Guest หรือไม่ (ยังไม่รับการแต่งตั้ง)
-const isGuest = (r) => {
-    const roleStr = String(r || '').toLowerCase();
-    const guestKeywords = ['guest', 'ผู้เยี่ยมชม', 'ผู้เข้าใหม่', 'แขก'];
-    return guestKeywords.some(k => roleStr.includes(k.toLowerCase()));
-};
-
-// 🌟 Helper: ตรวจสอบว่าควรนำมาคำนวณสถิติหรือไม่
-const shouldIncludeInStats = (r) => {
-    return !isAlumni(r) && !isGuest(r);
-};
-
 // 🌟 Helper: ฟอร์แมตตัวเลขคะแนน (เช่น 1000 -> 1k)
 const formatCompactNumber = (val) => {
     if (val >= 1000000) return (val / 1000000).toFixed(1) + 'M 🔥';
@@ -37,91 +18,14 @@ const formatCompactNumber = (val) => {
     return val || 0;
 };
 
-// =====================================================
-// 📝 ระบบแบบสอบถามประจำเดือน
-// =====================================================
-async function checkAndShowSurvey() {
-    if (!currentUser || !currentUser.userId) return;
 
-    const storageKey = `survey_${currentUser.userId}`;
-    let surveyData = JSON.parse(localStorage.getItem(storageKey) || '{}');
-
-    // 🔄 Sync กับหลังบ้าน (ดึงสถานะจริงมาทับ Local)
-    try {
-        const gasRes = await fetch(`${GAS_URL}?action=get_survey&userId=${currentUser.userId}`);
-        const gasData = await gasRes.json();
-        if (gasData.status === 'success' && gasData.data) {
-            const remoteData = JSON.parse(gasData.data);
-            if (remoteData.completedMonth) {
-                surveyData = remoteData;
-                localStorage.setItem(storageKey, JSON.stringify(surveyData));
-            }
-        }
-    } catch (e) { console.warn("Survey sync failed", e); }
-
-    const now = new Date();
-    const currentMonthKey = `${now.getFullYear()}-${now.getMonth() + 1}`;
-    const monthNames = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
-    const monthDisplay = `${monthNames[now.getMonth()]} ${now.getFullYear() + 543}`;
-
-    if (surveyData.completedMonth === currentMonthKey) return;
-
-    if (surveyData.snoozeUntil) {
-        const snoozeDate = new Date(surveyData.snoozeUntil);
-        const snoozeMonthKey = `${snoozeDate.getFullYear()}-${snoozeDate.getMonth() + 1}`;
-        if (snoozeMonthKey !== currentMonthKey) {
-            delete surveyData.snoozeUntil;
-            localStorage.setItem(storageKey, JSON.stringify(surveyData));
-        } else if (snoozeDate > now) {
-            return;
-        }
-    }
-
-    await new Promise(r => setTimeout(r, 300));
-
-    const result = await Swal.fire({
-        title: `📝 ประเมินความสุขเดือน${monthDisplay}`,
-        html: `
-            <div class="text-center">
-                <div style="font-size:3rem; margin-bottom:10px;">📊</div>
-                <p class="mb-2 fw-bold text-primary">เสียงของคุณมีความหมายกับเรา!</p>
-                <p class="text-muted small">ใช้เวลาเพียง 1 นาที เพื่อช่วยให้องค์กรน่าอยู่ขึ้น</p>
-            </div>
-        `,
-        allowOutsideClick: false,
-        showCancelButton: true,
-        showDenyButton: true,
-        confirmButtonColor: '#6c5ce7',
-        denyButtonColor: '#f39c12',
-        confirmButtonText: '<i class="fas fa-pencil-alt me-1"></i> ทำแบบประเมินเลย',
-        denyButtonText: '<i class="fas fa-clock me-1"></i> เตือนฉันสัปดาห์หน้า',
-        cancelButtonText: 'ปิด',
-    });
-
-    if (result.isConfirmed) {
-        // เมื่อกดไปทำ ให้บันทึกสถานะลงหลังบ้านทันที (หรือถ้ามีหน้าขอบคุณให้บันทึกตอนนั้นก็ได้)
-        // ในที่นี้สมมติว่ากดไปแล้วเท่ากับ "เริ่มทำ" ให้ flag ไว้เลยป้องกันการเด้งซ้ำ
-        surveyData.completedMonth = currentMonthKey;
-        localStorage.setItem(storageKey, JSON.stringify(surveyData));
-        fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'save_survey', userId: currentUser.userId, surveyStatus: JSON.stringify(surveyData) }) });
-
-        window.location.href = `survey.html?uid=${encodeURIComponent(currentUser.userId)}`;
-    } else if (result.isDenied) {
-        const snoozeDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-        surveyData.snoozeUntil = snoozeDate.toISOString();
-        localStorage.setItem(storageKey, JSON.stringify(surveyData));
-        // เซฟคิว Snooze ไปหลังบ้านด้วย
-        fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'save_survey', userId: currentUser.userId, surveyStatus: JSON.stringify(surveyData) }) });
-        await Swal.fire({ toast: true, icon: 'info', title: 'จะแจ้งเตือนอีกครั้งใน 7 วัน', position: 'top', timer: 2000, showConfirmButton: false });
-    }
-}
 
 // =====================================================
 // 🌤️ ระบบแจ้งเตือนสภาพอากาศ (Weather Alert)
 // =====================================================
 async function checkAndShowWeatherAlert(force = false) {
     if (!currentUser || !currentUser.userId) return;
-    
+
     // 🌍 ถ้ากดเอง (Force) ให้เคลียร์ค่า Loading/Wait ก่อนเพื่อให้เด้งทันที
     if (force) Swal.fire({ title: 'กำลังดึงข้อมูลอากาศ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 
@@ -234,8 +138,8 @@ async function checkAndShowWeatherAlert(force = false) {
 
             // 4. แสดงผล Popup
             await new Promise(r => setTimeout(r, 2000));
-            const sound = document.getElementById('notifSound');
-            if (sound) { sound.currentTime = 0; sound.play().catch(() => {}); }
+            // const sound = document.getElementById('notifSound');
+            // if (sound) { sound.currentTime = 0; sound.play().catch(() => { }); } // 🌟 [SILENCED] ปิดเสียงแจ้งเตือนตอนเข้าแอป
 
             await Swal.fire({
                 html: _buildWeatherPopup({ title, badgeColor, city, icon, temp, wind, pm25, pm25Html, description, message }),
@@ -285,16 +189,7 @@ function _buildWeatherPopup({ title, badgeColor, city, icon, temp, wind, pm25, p
         </div>`;
 }
 
-function markSurveyDone(userId) {
-    if (!userId) return;
-    const storageKey = `survey_${userId}`;
-    const now = new Date();
-    const currentMonthKey = `${now.getFullYear()}-${now.getMonth() + 1}`;
-    const data = JSON.parse(localStorage.getItem(storageKey) || '{}');
-    data.completedMonth = currentMonthKey;
-    delete data.snoozeUntil;
-    localStorage.setItem(storageKey, JSON.stringify(data));
-}
+
 
 // =====================================================
 // 👤 โปรไฟล์และสถิติส่วนตัว
@@ -305,26 +200,43 @@ function renderProfile() {
     document.getElementById('userName').innerText = currentUser.name;
     document.getElementById('userRole').innerHTML = `${currentUser.role || 'พนักงาน'} • <span class="text-primary fw-bold">Lv.${currentUser.level || 1}</span>`;
     document.getElementById('userImg').src = currentUser.img || 'https://dummyimage.com/90x90/cccccc/ffffff&text=User';
+    document.getElementById('userImg').onerror = function() { this.src = 'https://dummyimage.com/90x90/cccccc/ffffff&text=User'; this.onerror = null; };
 
     // หลอดความสุข
     const rawHappy = parseFloat(currentUser.happyScore) || 0;
-    const happyPercent = rawHappy > 0 ? Math.min((rawHappy / 10) * 100, 100) : 30;
+    let happyPercent = (rawHappy / 10) * 100;
+    if (!isFinite(happyPercent)) happyPercent = 0;
+    happyPercent = Math.min(Math.max(happyPercent, 0), 100);
+
     const barHappy = document.querySelector('.bar-happy');
+    const labelHappyCenter = document.getElementById('label-happy-center');
+
     if (barHappy) {
         barHappy.style.width = `${happyPercent.toFixed(0)}%`;
         barHappy.setAttribute('aria-valuenow', happyPercent.toFixed(0));
-        barHappy.innerText = rawHappy > 0 ? `${rawHappy.toFixed(1)}/10` : '';
+        if (labelHappyCenter) labelHappyCenter.innerText = `${rawHappy.toFixed(1)}/10`;
     }
 
     // หลอดความดี (XP)
-    const currentScore = currentUser.score || 0;
-    const xpInLevel = currentScore % 500;
-    const finalVirtuePct = (currentScore >= 500 && xpInLevel === 0) ? 100 : (xpInLevel / 500) * 100;
+    const currentScore = parseInt(currentUser.score) || 0;
+    const currentLevel = Math.floor(currentScore / 500) + 1;
+    const nextLevelXP = currentLevel * 500;
+    const prevLevelXP = (currentLevel - 1) * 500;
+    
+    // คำนวณ % ความคืบหน้าภายในเลเวลนี้
+    const progressInLevel = currentScore - prevLevelXP;
+    const finalVirtuePct = Math.min(100, Math.max(0, (progressInLevel / 500) * 100));
+
     const barVirtue = document.querySelector('.bar-virtue');
+    const labelVirtueCenter = document.getElementById('label-virtue-center');
     if (barVirtue) {
         barVirtue.style.width = `${finalVirtuePct.toFixed(0)}%`;
         barVirtue.setAttribute('aria-valuenow', finalVirtuePct.toFixed(0));
-        barVirtue.innerText = currentScore > 0 ? `${currentScore.toLocaleString()} XP` : '';
+        
+        // 🌟 [TOTAL XP MODE] กลับมาใช้คะแนนรวมจริงทั้งหมด (เช่น 661 / 1,000 XP) เพื่อไม่ให้สับสน
+        const displayScore = currentScore.toLocaleString();
+        const displayNext = nextLevelXP.toLocaleString();
+        if (labelVirtueCenter) labelVirtueCenter.innerText = `${displayScore} / ${displayNext} XP`;
     }
 
     // ✨ AURA LOGIC
@@ -368,7 +280,11 @@ function renderProfile() {
         statBox.style.borderLeftWidth = '5px';
     }
 
-    if (typeof initUserRadar === 'function') initUserRadar();
+    // 🌟 วาดกราฟแมงมุมเฉพาะเมื่อหน้าสถิติเปิดอยู่เท่านั้น เพื่อป้องกันกราฟกระจุกเป็นจุด (Zero-size canvas)
+    const statsPage = document.getElementById('page-stats');
+    if (statsPage && statsPage.classList.contains('active')) {
+        if (typeof initUserRadar === 'function') initUserRadar();
+    }
     if (typeof renderBadges === 'function') renderBadges();
 }
 
@@ -455,10 +371,39 @@ function fetchFriendsList() {
         if (count === 0) container.innerHTML = '<div class="col-12 text-center text-muted small py-3" style="color: var(--text-main) !important;">ยังไม่มีผู้ใช้อื่นในระบบ</div>';
     };
 
-    const url = `${GAS_URL}?action=get_users&t=${Date.now()}`;
+    if (READ_FROM_SUPABASE && supabaseClient) {
+        const cachedUsers = Object.values(allUsersMap);
+        if (cachedUsers.length > 0) {
+            handleData(cachedUsers);
+        } else {
+            supabaseClient.from('Users')
+                .select('*')
+                .then(({ data, error }) => {
+                    if (error) throw error;
+                    const mapped = data.map(u => ({
+                        lineId: u.LineID,
+                        name: u.Name,
+                        img: u.Image,
+                        role: u.Role,
+                        score: u.Score || 0,
+                        level: u.Level || 1
+                    }));
+                    handleData(mapped);
+                })
+                .catch(err => {
+                    console.warn('Supabase fetchFriendsList failed:', err);
+                    runGASFriendsList(handleData);
+                });
+        }
+    } else {
+        runGASFriendsList(handleData);
+    }
+}
 
+function runGASFriendsList(handleData) {
+    const url = `${GAS_URL}?action=get_users&t=` + Date.now();
     fetch(url)
-        .then(res => res.text()) // เปลี่ยนจาก res.json() เป็น text() เพื่อดัก Error ก่อน
+        .then(res => res.text())
         .then(text => {
             if (text.startsWith('<')) throw new Error("CORS / Google HTML block");
             handleData(JSON.parse(text));
@@ -530,6 +475,89 @@ function getCalculatedLevel(badgeKey, userStats, userScore, userTotal) {
     return calculatedLevel;
 }
 
+/**
+ * 🌟 [NEW] ฟังก์ชันกลางสำหรับนับ Badge แจ้งเตือนบนแท็บเหรียญ (Badge Tab)
+ * นับรวมทั้ง: 1. เหรียญเลเวลที่รออัปเกรด  2. ของรางวัลที่ปลดล็อคแล้วแต่ยังไม่กดรับ
+ */
+function updateNavBadgesBadge() {
+    const navBadge = document.getElementById('nav-badges-badge');
+    const badgeNavBtn = document.getElementById('nav-badges-btn');
+    if (!navBadge || !currentUser) return;
+
+    let totalCount = 0;
+
+    // 1. นับเหรียญเลเวลที่รออัปเกรด (New Badge Upgrades)
+    const stats = currentUser.virtueStats || {};
+    const score = currentUser.score || 0;
+    const total = currentUser.totalCount || 0;
+    const badgeStorageKey = `happyMeter_badges_${currentUser.userId}`;
+    const storedLevels = JSON.parse(localStorage.getItem(badgeStorageKey) || '{}');
+
+    if (typeof badgeConfig !== 'undefined') {
+        Object.keys(badgeConfig).forEach(key => {
+            const realLv = getCalculatedLevel(key, stats, score, total);
+            const seenLv = storedLevels[key] || 0;
+            if (realLv > seenLv) {
+                totalCount += (realLv - seenLv);
+            }
+        });
+    }
+
+    // 2. นับของรางวัลที่รอการเปิด (Unlocked Rewards but not Claimed)
+    if (window.globalRewardsData) {
+        let lifetimeXP = 0;
+        if (window.globalUserStatsMap && window.globalUserStatsMap[currentUser.userId]) {
+            lifetimeXP = window.globalUserStatsMap[currentUser.userId].score || 0;
+        } else {
+            lifetimeXP = currentUser.score || 0;
+        }
+
+        window.globalRewardsData.forEach(r => {
+            let gainedXP = 0;
+            if (r.mode == 2) { // Challenge
+                if (window.globalFeedData) {
+                    window.globalFeedData.forEach(p => {
+                        if (p.timestamp && (new Date(p.timestamp).getTime() > r.createdTs)) {
+                            if (String(p.user_line_id).trim() === String(currentUser.userId).trim()) gainedXP += Number(p.score) || 0;
+                            if (p.verifies && Array.isArray(p.verifies)) {
+                                p.verifies.forEach(v => {
+                                    const vid = (typeof v === 'object') ? (v.userId || v.lineId) : v;
+                                    if (String(vid).trim() === String(currentUser.userId).trim()) gainedXP += 3;
+                                });
+                            }
+                        }
+                    });
+                }
+            } else { // Milestone (Total XP)
+                gainedXP = lifetimeXP;
+            }
+
+            const unlocked = gainedXP >= r.targetVal;
+            const claimed = (window.globalClaimsData || []).some(
+                c => c.rewardId === r.id && String(c.userId) === String(currentUser.userId));
+            
+            if (unlocked && !claimed) {
+                totalCount++;
+            }
+        });
+    }
+
+    // อัปเดต UI
+    if (totalCount > 0) {
+        navBadge.innerText = totalCount > 99 ? '99+' : totalCount;
+        navBadge.style.display = 'block';
+        if (badgeNavBtn) {
+            badgeNavBtn.classList.add('nav-glow');
+            // 🌟 เพิ่ม Animation เล็กน้อยเมื่อมีการแจ้งเตือนใหม่
+            navBadge.classList.add('animate__animated', 'animate__bounceIn');
+            setTimeout(() => navBadge.classList.remove('animate__animated', 'animate__bounceIn'), 1000);
+        }
+    } else {
+        navBadge.style.display = 'none';
+        if (badgeNavBtn) badgeNavBtn.classList.remove('nav-glow');
+    }
+}
+
 function renderBadges() {
     const container = document.getElementById('badgeContainer');
     if (!container || !currentUser) return;
@@ -540,13 +568,11 @@ function renderBadges() {
     const total = currentUser.totalCount || 0;
     let storageKey = `happyMeter_badges_${currentUser.userId}`;
     let storedLevels = JSON.parse(localStorage.getItem(storageKey) || '{}');
-    let hasNewBadge = false;
 
     Object.keys(badgeConfig).forEach((key, index) => {
         const config = badgeConfig[key];
         const realLv = getCalculatedLevel(key, stats, score, total);
         const seenLv = storedLevels[key] || 0;
-        if (realLv > seenLv) hasNewBadge = true;
 
         let html = '';
         if (realLv === 0) {
@@ -564,17 +590,8 @@ function renderBadges() {
         container.innerHTML += html;
     });
 
-    const badgeNav = document.getElementById('nav-badges-btn');
-    if (badgeNav) {
-        if (hasNewBadge) {
-            badgeNav.classList.add('nav-glow');
-            const sound = document.getElementById('notifSound');
-            if (sound) {
-                sound.currentTime = 0;
-                sound.play().catch(e => console.log("Sound error:", e));
-            }
-        } else badgeNav.classList.remove('nav-glow');
-    }
+    // 🌟 [UI UPDATE] อัปเดตตัวเลขแจ้งเตือนบนแท็บ (Badge Count)
+    if (typeof updateNavBadgesBadge === 'function') updateNavBadgesBadge();
 }
 
 
@@ -618,47 +635,70 @@ function viewBadge(title, desc, icon) {
 // =====================================================
 // 📈 ระบบผู้บริหาร (Dashboard)
 // =====================================================
-function fetchManagerData(silent = false) {
+async function fetchManagerData(silent = false) {
     const sList = document.getElementById('staffListArea');
     const isManagerPage = document.getElementById('page-manager')?.classList.contains('active');
 
-    // ถ้าหน้าผู้บริหารเปิดอยู่และไม่มีข้อมูลเลย หรือไม่ใช่การโหลดแบบเงียบ (Silent) ให้แสดง Spinner
     if (!silent && sList && (!globalAppUsers || globalAppUsers.length === 0)) {
         sList.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div><br><small class="text-muted">กำลังโหลดข้อมูลผู้บริหาร...</small></div>';
     }
 
     const handleData = (data) => {
-        if (data.status === 'error') {
-            if (sList && !silent) sList.innerHTML = `<div class="text-danger text-center py-3">${data.message}</div>`;
+        if (!data || data.status === 'error') {
+            if (sList && !silent) sList.innerHTML = `<div class="text-danger text-center py-3">${data?.message || 'Unknown Error'}</div>`;
             return;
         }
         if (data.users && data.users.length > 0) {
             globalAppUsers = data.users;
-
-            // 🌟 ซิงค์ข้อมูลเข้า allUsersMap ด้วยเพื่อให้หน้าหมุดและอื่นๆ เข้าถึงข้อมูลล่าสุดได้
             data.users.forEach(u => {
                 const uid = u.lineId || u.userId || u.id;
-                if (uid) allUsersMap[uid] = u;
+                if (uid) {
+                    allUsersMap[uid] = u;
+                    if (currentUser && uid === currentUser.userId) {
+                        const serverScore = parseInt(u.score || u.Score) || 0;
+                        const localScore = parseInt(currentUser.score) || 0;
+                        const lastPostTime = parseInt(localStorage.getItem('last_post_time') || 0);
+                        const isOptimisticWindow = (Date.now() - lastPostTime < 45000);
+                        
+                        // 🌟 [AUTHORITATIVE SYNC] ให้ความสำคัญกับคะแนนบนเซิร์ฟเวอร์เสมอ 
+                        // ยกเว้นช่วง 45 วินาทีหลังจากโพสต์ เพื่อป้องกันคะแนนดีดกลับไปกลับมา
+                        if (serverScore > localScore || !isOptimisticWindow) {
+                            currentUser.score = serverScore;
+                        } else {
+                            console.log(`🛡️ Preserving optimistic score: ${localScore} (Server: ${serverScore})`);
+                        }
+                        currentUser.level = u.level;
+                        currentUser.happyScore = u.happyScore;
+                        currentUser.virtueStats = u.virtueStats;
+                        const serverTotal = parseInt(u.totalCount) || 0;
+                        const localTotal = parseInt(currentUser.totalCount) || 0;
+                        if (localTotal > serverTotal && (Date.now() - lastPostTime < 30000)) {
+                             // Keep local
+                        } else {
+                            currentUser.totalCount = serverTotal;
+                        }
+                        currentUser.taggedCount = u.taggedCount;
+                        currentUser.witnessCount = u.witnessCount;
+                        saveUserSession(currentUser);
+                        if (typeof renderProfile === 'function') renderProfile();
+                    }
+                }
             });
 
-            // ฟังก์ชันสำหรับเรนเดอร์ข้อมูล
             const proceedWithRender = () => {
-                // 🌟 อัปเดตข้อมูล Trend เสมอ เพราะต้องใช้ในหน้า Stats (Momentum Index) ของทุกคน
-                if (data.trend) chartData = data.trend;
-
-                // เรนเดอร์เฉพาะเมื่อผู้ใช้อยู่ที่หน้า Manager เท่านั้น หรือเป็นการโหลดแบบปกติ
-                if (isManagerPage || !silent) {
-                    renderDashboard(data.users);
+                if (data.trend && data.trend.length > 0) {
+                    chartData = data.trend;
+                }
+                renderDashboard(data.users);
+                if (isManagerPage) {
                     renderTRDChart(data.users);
                     renderManagerChart();
                 } else {
-                    // กรณีโหลดเบื้องหลัง (Silent) แต่ถ้ากำลังเปิดหน้า Stats อยู่ ให้วาดกราฟใหม่ด้วยเพื่อให้ข้อมูลเป็นปัจจุบัน
                     const isStatsPage = document.getElementById('page-stats')?.classList.contains('active');
                     if (isStatsPage) renderManagerChart();
                 }
             };
 
-            // ตรวจสอบข้อมูล Feed ก่อนเรนเดอร์ (เพื่อใช้คำนวณ KPI)
             if (!globalFeedData?.length && typeof fetchFeed === 'function') {
                 Promise.resolve(fetchFeed(false, true)).then(proceedWithRender);
             } else {
@@ -669,7 +709,214 @@ function fetchManagerData(silent = false) {
         }
     };
 
-    // ปรับปรุงการ Fetch ให้รองรับโหมด Silent
+    if (READ_FROM_SUPABASE && supabaseClient) {
+        try {
+            const { data: allActs, error: actErr } = await supabaseClient.from('Activities').select('*');
+            if (actErr) throw actErr;
+            const { data: rawUsers, error: userErr } = await supabaseClient.from('Users').select('*');
+            if (userErr) throw userErr;
+
+            const userStatsMap = {};
+            rawUsers.forEach(u => {
+                const uid = String(u.LineID || u.line_id || u.userId || '');
+                if (uid) {
+                    userStatsMap[uid] = { 
+                        score: 0, total: 0, tagged: 0, witness: 0, sumHappy: 0, count: 0, 
+                        virtue: { volunteer: 0, sufficiency: 0, discipline: 0, integrity: 0, gratitude: 0 } 
+                    };
+                }
+            });
+
+            allActs.forEach(p => {
+                const status = (p.Status || p.status || '').toLowerCase();
+                if (status === 'rejected') return;
+                const ownerId = String(p.UserId || p.user_line_id || "").trim();
+                const taggedStr = p.Tagged || p.tagged || p.tagged_friends || "";
+                const tagged = taggedStr ? String(taggedStr).split(',').map(s => s.trim()).filter(Boolean) : [];
+                const virtue = (p.Virtue || p.virtue || '').toLowerCase();
+                const score = (status === 'approved') ? (parseInt(p.Score || p.score) || 10) : 0;
+                
+                // 🌟 [MAPPING HELPER] แปลงชื่อหมวดให้เป็น Key มาตรฐาน
+                const getVirtueKey = (v) => {
+                    const str = String(v || "").trim().toLowerCase();
+                    if (str.includes('จิตอาสา') || str.includes('volunteer')) return 'volunteer';
+                    if (str.includes('พอเพียง') || str.includes('sufficiency')) return 'sufficiency';
+                    if (str.includes('วินัย') || str.includes('discipline')) return 'discipline';
+                    if (str.includes('สุจริต') || str.includes('integrity')) return 'integrity';
+                    if (str.includes('กตัญญู') || str.includes('gratitude')) return 'gratitude';
+                    return null;
+                };
+                const vKey = getVirtueKey(p.Virtue || p.virtue);
+
+                const addStats = (id, isOwner) => {
+                    if (!id) return;
+                    if (!userStatsMap[id]) userStatsMap[id] = { 
+                        score: 100, 
+                        total: 0, 
+                        tagged: 0, 
+                        witness: 0, 
+                        sumHappy: 0, 
+                        count: 0, 
+                        virtue: { volunteer: 20, sufficiency: 20, discipline: 20, integrity: 20, gratitude: 20 } 
+                    };
+                    if (isOwner) userStatsMap[id].total += 1;
+                    else userStatsMap[id].tagged += 1;
+                    userStatsMap[id].score += score;
+                    if (vKey && userStatsMap[id].virtue[vKey] !== undefined) {
+                        userStatsMap[id].virtue[vKey] += score;
+                    }
+                    
+                    // 🌟 [BONUS] ทั้งคนโพสต์และคนถูกแท็กจะได้ "สุจริต" +3 แต้มเสมอ
+                    if (score > 0) {
+                        userStatsMap[id].score += 3;
+                        userStatsMap[id].virtue.integrity += 3;
+                    }
+                    if (isOwner) {
+                        const happyLevel = parseInt(p.Happy || p.HappyLevel || p.happy_level || 0);
+                        if (happyLevel > 0) {
+                            userStatsMap[id].sumHappy += happyLevel;
+                            userStatsMap[id].count += 1;
+                        }
+                    }
+                };
+                addStats(ownerId, true);
+                tagged.forEach(tid => addStats(tid, false));
+
+                let rawJSON = p.JSON || p.Interactions || {};
+                if (typeof rawJSON === 'string') try { rawJSON = JSON.parse(rawJSON); } catch (e) { }
+                const verifies = rawJSON.verifies || rawJSON.Verify || [];
+                verifies.forEach((v, idx) => {
+                    if (!v) return;
+                    // 🌟 [LEGACY SUPPORT] รองรับทั้งแบบ Object {userId} และแบบ String ID ตรงๆ
+                    const vid = (typeof v === 'object' ? (v.userId || v.lineId || "") : v).toString().trim();
+                    
+                    if (vid && idx < 2) {
+                        if (!userStatsMap[vid]) userStatsMap[vid] = { 
+                            score: 100, 
+                            total: 0, 
+                            tagged: 0, 
+                            witness: 0, 
+                            sumHappy: 0, 
+                            count: 0, 
+                            virtue: { volunteer: 20, sufficiency: 20, discipline: 20, integrity: 20, gratitude: 20 } 
+                        };
+                        userStatsMap[vid].witness += 1;
+                        userStatsMap[vid].score += 1;
+                        userStatsMap[vid].virtue.volunteer += 1; // 🌟 พยานได้คะแนนหมวด "จิตอาสา" (+1 เพื่อความสมดุล)
+                    }
+                });
+            });
+
+            const mappedUsers = rawUsers.map(u => {
+                const uid = String(u.LineID || u.line_id || u.userId || '');
+                const stats = userStatsMap[uid] || { 
+                    score: 100, 
+                    total: 0, 
+                    tagged: 0, 
+                    witness: 0, 
+                    sumHappy: 0, 
+                    count: 0, 
+                    virtue: { volunteer: 20, sufficiency: 20, discipline: 20, integrity: 20, gratitude: 20 } 
+                };
+                // 🌟 ปรับปรุง: ไม่บวกซ้ำ เพราะเรากำหนดที่ addStats แล้ว
+                if (!userStatsMap[uid]) {
+                    // กรณีไม่มีประวัติเลย ให้เป็นค่าเริ่มต้น 100
+                } 
+                
+                const baseHappyScore = stats.sumHappy * 0.5;
+                
+                // 🌟 [TIME DECAY] หักคะแนนความสุขถ้าหายไปนาน (0.5 คะแนน ต่อ 3 วัน)
+                let penalty = 0;
+                if (u.LastDate) {
+                    const lastActive = new Date(u.LastDate + 'T' + (u.LastTime || '00:00:00'));
+                    if (!isNaN(lastActive.getTime())) {
+                        const diffDays = Math.floor((Date.now() - lastActive.getTime()) / (1000 * 60 * 60 * 24));
+                        penalty = Math.floor(diffDays / 3) * 0.5;
+                    }
+                }
+
+                const finalHappy = Math.min(10, Math.max(0, baseHappyScore - penalty));
+                
+                // 🌟 [LIVE CALCULATION] ใช้คะแนนที่รวมจากประวัติโพสต์จริง (Aggregation) เป็นหลัก 
+                // เพื่อให้คะแนนลดลงได้ทันทีเมื่อมีการลบโพสต์
+                const finalScore = stats.score; 
+                const finalLevel = Math.floor(finalScore / 500) + 1;
+                
+                const userData = {
+                    lineId: uid, userId: uid, id: uid, name: u.Name || u.name, img: u.Image || u.image, role: u.Role || u.role,
+                    score: finalScore, level: finalLevel, happyScore: finalHappy, virtueStats: stats.virtue,
+                    totalCount: stats.total, taggedCount: stats.tagged, witnessCount: stats.witness,
+                    topFriends: [], firstActive: u.FirstActive || u.first_active || null, status: u.Status || u.status || 'active'
+                };
+                
+                globalUserStatsMap[uid] = userData;
+                if (currentUser && uid === currentUser.userId) {
+                    Object.assign(currentUser, userData);
+                    if (typeof renderProfile === 'function') renderProfile();
+                }
+                return userData;
+            });
+
+            // --- 📈 [SET STYLE] Momentum Index Calculation ---
+            const dayInteractions = {};
+            let minDateStr = new Date().toISOString().split('T')[0];
+
+            allActs.forEach(a => {
+                let dStr = a.Date;
+                if (!dStr) return;
+                
+                const time = a.Time || "00:00:00";
+                if (time >= "22:00:00") {
+                    const d = new Date(dStr);
+                    d.setDate(d.getDate() + 1);
+                    dStr = d.toISOString().split('T')[0];
+                }
+
+                if (dStr < minDateStr) minDateStr = dStr;
+                if (!dayInteractions[dStr]) dayInteractions[dStr] = { totalHappy: 0, tags: 0, verifies: 0, sads: 0 };
+                
+                const happy = parseInt(a.Happy || a.HappyLevel || 0);
+                dayInteractions[dStr].totalHappy += happy;
+                dayInteractions[dStr].tags += (a.Tagged || "").split(',').filter(Boolean).length;
+                let rawJSON = a.JSON || {};
+                if (typeof rawJSON === 'string') try { rawJSON = JSON.parse(rawJSON); } catch (e) { }
+                dayInteractions[dStr].verifies += (rawJSON.verifies || []).length;
+                if (happy === 1) dayInteractions[dStr].sads += 1;
+            });
+
+            const allTrendData = [];
+            let indexValue = 0;
+            const activeCount = rawUsers.length;
+            let basePenalty = Math.max(1, Math.round(activeCount * 0.20 * 100) / 100);
+
+            const startDate = new Date(minDateStr);
+            const iterDate = new Date(startDate);
+            const today = new Date(); today.setHours(0,0,0,0);
+            
+            while (iterDate <= today) {
+                const dStr = iterDate.toISOString().split('T')[0];
+                const stats = dayInteractions[dStr];
+                let delta = stats ? (stats.totalHappy * 2.5 + stats.tags * 1.5 + stats.verifies * 0.5 - stats.sads * 10) : -basePenalty;
+                indexValue = Math.max(0, indexValue + delta);
+                allTrendData.push({ date: dStr, val: Math.round(indexValue * 100) / 100 });
+                iterDate.setDate(iterDate.getDate() + 1);
+            }
+
+            const trendData = allTrendData;
+
+            handleData({ status: 'success', users: mappedUsers, trend: trendData });
+        } catch (err) {
+            console.error("Supabase fetchManagerData failed:", err);
+            runGASFetchManagerData(handleData);
+        }
+    } else {
+        runGASFetchManagerData(handleData);
+    }
+}
+
+
+
+function runGASFetchManagerData(handleData) {
     fetch(`${GAS_URL}?action=get_dashboard&t=` + Date.now())
         .then(res => res.text())
         .then(text => {
@@ -687,34 +934,23 @@ function fetchManagerData(silent = false) {
         });
 }
 
+
+
 function renderTRDChart(users) {
-    let scoreT = 0, scoreR = 0, scoreD = 0;
+    let stats = { volunteer: 0, sufficiency: 0, discipline: 0, integrity: 0, gratitude: 0 };
+    
     users.forEach(u => {
         const v = u.virtueStats || {};
-        scoreT += (parseFloat(v['integrity']) || 0);
-        scoreR += (parseFloat(v['discipline']) || 0) + (parseFloat(v['sufficiency']) || 0);
-        scoreD += (parseFloat(v['volunteer']) || 0) + (parseFloat(v['gratitude']) || 0);
+        const getV = (key) => parseFloat(v[key] || v[key.charAt(0).toUpperCase() + key.slice(1)] || 0);
+        
+        stats.volunteer += getV('volunteer');
+        stats.sufficiency += getV('sufficiency');
+        stats.discipline += getV('discipline');
+        stats.integrity += getV('integrity');
+        stats.gratitude += getV('gratitude');
     });
 
     const formatScore = (num) => Number.isInteger(num) ? num : num.toFixed(1);
-
-    const cards = document.getElementById('trdScoreCards');
-    if (cards) {
-        cards.innerHTML = `
-            <div class="col-4 border-end">
-                <h3 class="fw-bold text-primary mb-0">${formatScore(scoreT)}</h3>
-                <small class="text-muted fw-bold">Transparent</small>
-            </div>
-            <div class="col-4 border-end">
-                <h3 class="fw-bold text-warning mb-0">${formatScore(scoreR)}</h3>
-                <small class="text-muted fw-bold">Responsible</small>
-            </div>
-            <div class="col-4">
-                <h3 class="fw-bold text-danger mb-0">${formatScore(scoreD)}</h3>
-                <small class="text-muted fw-bold">Dedicated</small>
-            </div>
-        `;
-    }
 
     const ctx = document.getElementById('trdBarChart');
     if (!ctx) return;
@@ -727,52 +963,79 @@ function renderTRDChart(users) {
     window.myTrdChart = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: ['T', 'R', 'D'],
+            labels: ['จิตอาสา', 'พอเพียง', 'วินัย', 'สุจริต', 'กตัญญู'],
             datasets: [{
-                label: 'คะแนนรวมกลุ่ม',
+                label: 'คะแนนรวมหมวดความดี',
                 data: [
-                    parseFloat(scoreT.toFixed(1)),
-                    parseFloat(scoreR.toFixed(1)),
-                    parseFloat(scoreD.toFixed(1))
+                    stats.volunteer,
+                    stats.sufficiency,
+                    stats.discipline,
+                    stats.integrity,
+                    stats.gratitude
                 ],
                 backgroundColor: [
-                    'rgba(108, 92, 231, 0.8)', // Purple for T
-                    'rgba(243, 156, 18, 0.8)', // Orange for R
-                    'rgba(231, 76, 60, 0.8)'  // Red for D
+                    '#ff7675', // Volunteer
+                    '#55efc4', // Sufficiency
+                    '#fab1a0', // Discipline
+                    '#6c5ce7', // Integrity
+                    '#ffeaa7'  // Gratitude
                 ],
-                borderRadius: 8,
-                barThickness: 45, // ปรับขนาดแท่งให้แคบลงตามคำขอ
+                borderRadius: 8
             }]
         },
+        plugins: [{
+            // 🌟 [NEW] แสดงตัวเลขยอดบนหัวแท่ง (ตัวย่อ)
+            afterDraw: (chart) => {
+                const ctx = chart.ctx;
+                chart.data.datasets.forEach((dataset, i) => {
+                    const meta = chart.getDatasetMeta(i);
+                    meta.data.forEach((bar, index) => {
+                        const data = dataset.data[index];
+                        const displayValue = typeof formatCompactNumber === 'function' ? formatCompactNumber(data) : data;
+                        ctx.fillStyle = textColor;
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'bottom';
+                        ctx.font = 'bold 12px Kanit';
+                        ctx.fillText(displayValue, bar.x, bar.y - 5);
+                    });
+                });
+            }
+        }],
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: {
+            plugins: { 
                 legend: { display: false },
                 tooltip: {
                     titleFont: { family: 'Kanit' },
-                    bodyFont: { family: 'Kanit' },
-                    callbacks: {
-                        title: function (context) {
-                            const fullLabels = ['Transparent (สุจริต)', 'Responsible (วินัย+พอเพียง)', 'Dedicated (อาสา+กตัญญู)'];
-                            return fullLabels[context[0].dataIndex];
-                        }
-                    }
+                    bodyFont: { family: 'Kanit' }
                 }
             },
             scales: {
-                y: {
-                    beginAtZero: true,
+                y: { 
+                    beginAtZero: true, 
                     grid: { color: gridColor },
-                    ticks: { color: textColor, font: { family: 'Kanit' } }
+                    ticks: { color: textColor, font: { family: 'Kanit' }, display: false } 
                 },
-                x: {
+                x: { 
                     grid: { display: false },
-                    ticks: { color: textColor, font: { family: 'Kanit', size: 16, weight: 'bold' } }
+                    ticks: { color: textColor, font: { family: 'Kanit', size: 14, weight: 'bold' } }
                 }
             }
         }
     });
+
+    // 🌟 [NEW] แสดงยอดรวมกิจกรรมทั้งหมด 5 หมวดไว้ด้านล่าง (ตัวเลขเต็ม)
+    const grandTotal = stats.volunteer + stats.sufficiency + stats.discipline + stats.integrity + stats.gratitude;
+    const totalBox = document.getElementById('trdGrandTotalBox');
+    if (totalBox) {
+        totalBox.innerHTML = `
+            <div class="mt-3 p-2 rounded-4 text-center shadow-sm" style="background: rgba(108, 92, 231, 0.1); border: 1px dashed var(--primary-color);">
+                <div class="small fw-bold text-muted mb-1">คะแนนกิจกรรมรวม (5 หมวด)</div>
+                <div class="h4 fw-bold text-primary mb-0">${grandTotal.toLocaleString()} <small style="font-size:0.8rem">XP</small></div>
+            </div>
+        `;
+    }
 }
 
 function renderDashboard(appUsers) {
@@ -792,32 +1055,50 @@ function renderDashboard(appUsers) {
             avgHappy: happyRaw, virtueStats: u.virtueStats || {},
             postsMade: parseInt(u.totalCount || 0), taggedIn: parseInt(u.taggedIn || u.taggedCount || 0),
             witnessCount: parseInt(u.witnessCount || 0), topFriends: u.topFriends || [],
-            firstActive: u.firstActive || null
+            firstActive: u.firstActive || null,
+            status: u.status || 'active'
         };
 
         // 🌟 กรองออก: ถ้าเป็น Guest หรือ ศิษย์เก่า ไม่ต้องนำมาคำนวณ KPI รวม
         if (!shouldIncludeInStats(role)) return;
 
-        if (happyRaw > 0) { totalHappy += happyRaw; userWithData++; if (happyRaw < 5.0) issueCount++; }
+        if (happyRaw > 0) {
+            totalHappy += happyRaw;
+            userWithData++;
+        }
+
+        // 🌟 นับกลุ่มเสี่ยง: ต่ำกว่า 5.0 (รวมคนที่เป็น 0 ด้วย)
+        if (happyRaw < 5.0) {
+            issueCount++;
+        }
     });
 
     // Merge live feed data if available
-    // Merge live feed data if available for accurate counting
     if (globalFeedData?.length) {
         const live = {};
+        const relations = {}; // { uid: { friendId: count } }
+
         globalFeedData.forEach(p => {
             const pid = String(p.user_line_id);
             if (!live[pid]) live[pid] = { posts: 0, tagged: 0, witness: 0 };
             live[pid].posts++;
 
-            // Count tagged friends
+            // Count tagged friends and relations
             if (p.taggedFriends) {
-                const tags = Array.isArray(p.taggedFriends) ? p.taggedFriends : String(p.taggedFriends).split(',');
+                const tags = Array.isArray(p.taggedFriends) ? p.taggedFriends : String(p.taggedFriends || "").split(',');
                 tags.forEach(tid => {
                     const id = String(tid).trim();
                     if (id.length > 5) {
+                        // Regular counts
                         if (!live[id]) live[id] = { posts: 0, tagged: 0, witness: 0 };
                         live[id].tagged++;
+
+                        // Relation tracking
+                        if (!relations[pid]) relations[pid] = {};
+                        relations[pid][id] = (relations[pid][id] || 0) + 1;
+                        
+                        if (!relations[id]) relations[id] = {};
+                        relations[id][pid] = (relations[id][pid] || 0) + 1;
                     }
                 });
             }
@@ -834,14 +1115,21 @@ function renderDashboard(appUsers) {
             }
         });
 
-        // Merge back to map
-        Object.keys(live).forEach(uid => {
-            if (globalUserStatsMap[uid]) {
-                const u = globalUserStatsMap[uid];
-                // Prefer feed data for accuracy if it's higher
+        // Merge back to map and calculate topFriends
+        Object.keys(globalUserStatsMap).forEach(uid => {
+            const u = globalUserStatsMap[uid];
+            if (live[uid]) {
                 u.postsMade = Math.max(u.postsMade || 0, live[uid].posts);
                 u.taggedIn = Math.max(u.taggedIn || 0, live[uid].tagged);
                 u.witnessCount = Math.max(u.witnessCount || 0, live[uid].witness);
+            }
+            
+            // Calculate Top Friends from relations
+            if (relations[uid]) {
+                const sorted = Object.entries(relations[uid])
+                    .map(([fid, count]) => ({ id: fid, name: globalUserStatsMap[fid]?.name || 'ไม่ทราบชื่อ', count }))
+                    .sort((a, b) => b.count - a.count);
+                u.topFriends = sorted;
             }
         });
     }
@@ -990,13 +1278,27 @@ function renderStaffRow(f, container, isHOF = false) {
         </div>`;
     }
 
+    let approvalHtml = '';
+    if (f.status === 'waiting_approval' && typeof canManageSystem === 'function' && canManageSystem()) {
+        approvalHtml = `
+            <div class="mt-2 d-flex gap-2 p-2 rounded-4" style="background: rgba(108, 92, 231, 0.05); border: 1px dashed var(--primary-color);">
+                <button class="btn btn-xs btn-primary flex-grow-1 rounded-pill fw-bold" onclick="event.stopPropagation(); approveUser('${f.id}')">
+                    <i class="fas fa-check-circle me-1"></i>อนุมัติ
+                </button>
+                <button class="btn btn-xs btn-outline-danger rounded-pill" onclick="event.stopPropagation(); rejectUser('${f.id}')">
+                    <i class="fas fa-times-circle me-1"></i>ปฏิเสธ
+                </button>
+            </div>
+        `;
+    }
+
     const div = document.createElement('div');
     div.className = `p-3 staff-row border-bottom ${status}`;
     div.onclick = () => showStaffModal(f.id);
     div.innerHTML = `
         <div class="d-flex align-items-center mb-2">
             <div class="position-relative">
-                <img src="${f.img || 'https://dummyimage.com/55x55/ccc/fff'}" style="width:55px;height:55px;border-radius:50%;margin-right:15px;border:3px solid #fff;box-shadow:0 3px 6px rgba(0,0,0,0.1);object-fit:cover;">
+                <img src="${f.img || 'https://dummyimage.com/55x55/ccc/fff'}" onerror="this.src='https://dummyimage.com/55x55/ccc/fff&text=Profile'" style="width:55px;height:55px;border-radius:50%;margin-right:15px;border:3px solid #fff;box-shadow:0 3px 6px rgba(0,0,0,0.1);object-fit:cover;">
                 <span class="position-absolute bottom-0 end-0 badge rounded-pill bg-dark border border-white" style="font-size:0.6rem;right:10px;">Lv.${f.level}</span>
             </div>
             <div class="flex-grow-1">
@@ -1009,11 +1311,31 @@ function renderStaffRow(f, container, isHOF = false) {
                         <div class="fw-bold" style="font-size: 1.1rem; color:${isHOF ? '#f39c12' : (score < 5 ? '#e74c3c' : (score < 7 ? '#f39c12' : '#27ae60'))}">
                             ${formatCompactNumber(f.score)} / ${score > 0 ? score.toFixed(1) : '-'}
                         </div>
+                        <div class="progress mt-1" style="height: 4px; width: 80px; margin-left: auto; background: rgba(0,0,0,0.05); border-radius: 10px;">
+                            <div class="progress-bar" style="width: ${isFinite(score) ? ((f.score || 0) % 500 === 0 && (f.score || 0) >= 500) ? 100 : (((f.score || 0) % 500) / 500 * 100) : 0}%; background-color: ${isHOF ? '#f39c12' : (score < 5 ? '#e74c3c' : (score < 7 ? '#f39c12' : '#27ae60'))}; border-radius: 10px;"></div>
+                        </div>
                         <small class="text-muted" style="font-size:0.65rem;">คะแนน / ความสุข</small>
                     </div>
                 </div>
             </div>
-        </div>${rescueHtml}`;
+        </div>
+        <div class="mt-2 d-flex flex-wrap gap-2">
+            ${f.topFriends && f.topFriends.length > 0 ? `
+                <div class="px-2 py-1 rounded border small d-flex align-items-center" style="background: rgba(108,92,231,0.05); border-color: rgba(108,92,231,0.2) !important; font-size: 0.7rem;">
+                    <i class="fas fa-user-friends text-primary me-2"></i>
+                    <span class="text-muted">เพื่อนสนิท:</span>
+                    <span class="fw-bold text-primary ms-1">${f.topFriends[0].name}</span>
+                    <span class="text-muted ms-1">(${f.topFriends[0].count} ครั้ง)</span>
+                </div>
+            ` : ''}
+            ${f.witnessCount > 0 ? `
+                <div class="px-2 py-1 rounded border small d-flex align-items-center" style="background: rgba(255,159,67,0.05); border-color: rgba(255,159,67,0.2) !important; font-size: 0.7rem;">
+                    <i class="fas fa-check-double text-warning me-2"></i>
+                    <span class="text-muted">พยาน:</span>
+                    <span class="fw-bold text-warning ms-1">${f.witnessCount}</span>
+                </div>
+            ` : ''}
+        </div>${rescueHtml}${approvalHtml}`;
     container.appendChild(div);
 }
 
@@ -1068,7 +1390,7 @@ function showStaffModal(uid) {
         html: `
             <div style="text-align:left;" class="staff-modal-content">
                 <div class="d-flex align-items-center mb-4">
-                    <img src="${user.img || 'https://via.placeholder.com/60'}" style="width:70px;height:70px;border-radius:20px;margin-right:15px;border:3px solid var(--border-color);box-shadow:0 8px 20px rgba(0,0,0,0.1);object-fit:cover;">
+                    <img src="${user.img || 'https://via.placeholder.com/60'}" style="width:70px;height:70px;border-radius:20px;margin-right:15px;border:3px solid var(--border-color);box-shadow:0 8px 20px rgba(0,0,0,0.1);object-fit:cover;" onerror="this.src='https://via.placeholder.com/60'; this.onerror=null;">
                     <div>
                         <h5 class="fw-bold mb-1">${user.name}</h5>
                         <div class="badge px-3 py-1 rounded-pill" style="background:rgba(108,92,231,0.1); color:#6c5ce7; font-size:0.75rem; border:1px solid rgba(108,92,231,0.2);">${user.role}</div>
@@ -1079,7 +1401,10 @@ function showStaffModal(uid) {
                     <div class="col-6">
                         <div class="staff-stat-card">
                             <small class="staff-stat-label">ความสุข</small>
-                            <span class="staff-stat-val ${happyColor}">${user.avgHappy.toFixed(1)}</span>
+                            <span class="staff-stat-val ${happyColor}">${user.avgHappy.toFixed(1)} / 10</span>
+                            <div class="progress mt-1" style="height: 6px; background: rgba(0,0,0,0.05); border-radius: 10px;">
+                                <div class="progress-bar" style="width: ${isFinite(user.avgHappy) ? Math.min(Math.max((user.avgHappy / 10) * 100, 0), 100) : 0}%; background-color: ${user.avgHappy < 5 ? '#e74c3c' : (user.avgHappy < 7 ? '#f39c12' : '#27ae60')}; border-radius: 10px;"></div>
+                            </div>
                         </div>
                     </div>
                     <div class="col-6">
@@ -1194,7 +1519,7 @@ function promoteToAlumni(uid) {
             const selectedCategory = result.value;
             const staffData = globalUserStatsMap[uid] || allUsersMap[uid];
             const currentScore = staffData ? (staffData.score || 0) : 0;
-            
+
             // 🌟 ตรวจสอบสิทธิเดิม ถ้าเป็นผู้บริหาร ให้พ่วงคำว่า "ผู้บริหาร" ไว้หน้าชื่อทำเนียบด้วย
             let finalLabel = selectedCategory;
             const originalRole = staffData ? (staffData.role || '').toLowerCase() : '';
@@ -1214,6 +1539,25 @@ function promoteToAlumni(uid) {
                 didOpen: () => { Swal.showLoading(); }
             });
 
+            // ☁️ [Supabase ONLY Mode]
+            if (READ_FROM_SUPABASE && supabaseClient) {
+                (async () => {
+                    try {
+                        const { error } = await supabaseClient.from('Users').update({ "Role": finalLabel, "Score": currentScore }).eq('LineID', uid);
+                        if (error) throw error;
+
+                        Swal.fire({ icon: 'success', title: 'ขึ้นทำเนียบสำเร็จ!', text: 'รายชื่อถูกส่งขึ้นทำเนียบผู้ผูกพันแล้ว', timer: 3000, showConfirmButton: false });
+                        fetchManagerData();
+                        if (document.getElementById('page-relation')?.classList.contains('active')) renderRelationTab();
+                        if (typeof fetchFriendsList === 'function') fetchFriendsList();
+                    } catch (e) {
+                        console.error("☁️ Supabase Promote Error:", e);
+                        Swal.fire({ icon: 'error', title: 'การเชื่อมต่อมีปัญหา', text: 'ไม่สามารถบันทึกลง Supabase ได้: ' + e.message });
+                    }
+                })();
+                return;
+            }
+
             fetch(GAS_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -1221,25 +1565,12 @@ function promoteToAlumni(uid) {
             })
                 .then(async (res) => {
                     const text = await res.text();
-                    console.log("Promote Response:", text);
-
                     if (!res.ok || text.startsWith('<')) throw new Error("Server Error (HTML/CORS)");
-
                     const data = JSON.parse(text);
                     if (data.status === 'success') {
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'ขึ้นทำเนียบสำเร็จ!',
-                            text: data.message,
-                            timer: 3000,
-                            showConfirmButton: false
-                        });
-
-                        // รีเฟรชข้อมูลทั้งหมด
+                        Swal.fire({ icon: 'success', title: 'ขึ้นทำเนียบสำเร็จ!', text: data.message, timer: 3000, showConfirmButton: false });
                         fetchManagerData();
-                        if (document.getElementById('page-relation')?.classList.contains('active')) {
-                            renderRelationTab();
-                        }
+                        if (document.getElementById('page-relation')?.classList.contains('active')) renderRelationTab();
                         if (typeof fetchFriendsList === 'function') fetchFriendsList();
                     } else {
                         Swal.fire({ icon: 'warning', title: 'ไม่สามารถบันทึกได้', text: data.message });
@@ -1247,11 +1578,7 @@ function promoteToAlumni(uid) {
                 })
                 .catch((e) => {
                     console.error("Promote Error:", e);
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'การเชื่อมต่อมีปัญหา',
-                        text: 'ไม่สามารถส่งข้อมูลได้: ' + e.message
-                    });
+                    Swal.fire({ icon: 'error', title: 'การเชื่อมต่อมีปัญหา', text: 'ไม่สามารถส่งข้อมูลได้: ' + e.message });
                 });
         }
     });
@@ -1320,6 +1647,22 @@ function changeUserRole(uid) {
                 didOpen: () => { Swal.showLoading(); }
             });
 
+            // ☁️ [Supabase ONLY Mode]
+            if (READ_FROM_SUPABASE && supabaseClient) {
+                (async () => {
+                    try {
+                        const { error } = await supabaseClient.from('Users').update({ "Role": newRole }).eq('LineID', uid);
+                        if (error) throw error;
+                        Swal.fire({ icon: 'success', title: 'บันทึกสำเร็จ!', text: 'สิทธิ์ผู้ใช้งานถูกอัปเดตแล้ว', timer: 2000, showConfirmButton: false });
+                        fetchManagerData();
+                    } catch (e) {
+                        console.error("☁️ Supabase Update Role Error:", e);
+                        Swal.fire({ icon: 'error', title: 'การเชื่อมต่อมีปัญหา', text: 'ไม่สามารถบันทึกลง Supabase ได้: ' + e.message });
+                    }
+                })();
+                return;
+            }
+
             fetch(GAS_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -1327,30 +1670,18 @@ function changeUserRole(uid) {
             })
                 .then(async res => {
                     const text = await res.text();
-                    console.log("Backend Raw Response:", text);
-
-                    if (!res.ok || text.startsWith('<')) {
-                        throw new Error("Server Error: " + (text.substring(0, 50) || 'Unknown'));
-                    }
-
-                    let data;
-                    try { data = JSON.parse(text); }
-                    catch (je) { throw new Error("Invalid JSON: " + text.substring(0, 50)); }
-
+                    if (!res.ok || text.startsWith('<')) throw new Error("Server Error: " + (text.substring(0, 50) || 'Unknown'));
+                    let data = JSON.parse(text);
                     if (data.status === 'success') {
                         Swal.fire({ icon: 'success', title: 'บันทึกสำเร็จ!', text: data.message, timer: 2000, showConfirmButton: false });
                         fetchManagerData();
                     } else {
-                        Swal.fire({ icon: 'warning', title: 'ข้อมูลไม่เปลี่ยนในตาราง', text: data.message + (data.samplesInSheet ? '\n\nเช็คข้อมูลในระบบ: ' + data.samplesInSheet.join('\n') : '') });
+                        Swal.fire({ icon: 'warning', title: 'ข้อมูลไม่เปลี่ยนในตาราง', text: data.message });
                     }
                 })
                 .catch(e => {
                     console.error("Update Role Error:", e);
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'การเชื่อมต่อมีปัญหา',
-                        text: 'ไม่สามารถบันทึกได้: ' + e.message + '\n(โปรดเช็ค Deployment หรือสิทธิ์การเขียนไฟล์)'
-                    });
+                    Swal.fire({ icon: 'error', title: 'การเชื่อมต่อมีปัญหา', text: 'ไม่สามารถบันทึกได้: ' + e.message });
                 });
         }
     });
@@ -1424,29 +1755,96 @@ function drawPremiumRadar(ctxId, data, isAlumni = false, options = {}) {
 }
 
 function initUserRadar() {
-    const ctx = document.getElementById('userRadarChart');
-    if (!ctx || !currentUser) return;
+    const canvas = document.getElementById('userRadarChart');
+    if (!canvas || !currentUser) return;
+
+    // 🌟 [INSTANT FIX] บังคับขนาดพิกเซลทันที ไม่ต้องรอ Browser คำนวณ เพื่อให้วาดได้ทันที
+    const width = 350;
+    const height = 350;
+    canvas.width = width;
+    canvas.height = height;
+    canvas.style.width = width + 'px';
+    canvas.style.height = height + 'px';
+    canvas.style.display = 'block';
+
+    window._radarRetryCount = 0; // Reset count
+
+    window._radarRetryCount = 0; // Reset count
+
+    // 🌟 [CRITICAL FIX] ถ้าฐานข้อมูลสถิติรวมยังว่างเปล่า ให้ดึงจากข้อมูลพื้นฐานที่ Cache ไว้ก่อน
+    if (!Object.keys(globalUserStatsMap || {}).length && Object.keys(allUsersMap || {}).length) {
+        Object.values(allUsersMap).forEach(u => {
+            const uid = String(u.lineId || u.userId || u.LineID || u.userId || '').trim();
+            if (!uid) return;
+            globalUserStatsMap[uid] = {
+                id: uid, name: u.name || u.Name, img: u.img || u.Image, role: u.role || u.Role || 'Staff',
+                score: parseInt(u.score || u.Score) || 0,
+                level: parseInt(u.level || u.Level) || 1,
+                avgHappy: parseFloat(u.happyScore || u.happy || u.HappyScore || 0),
+                virtueStats: u.virtueStats || u.VirtueStats || {},
+                postsMade: parseInt(u.totalCount || u.TotalCount || 0),
+                taggedIn: parseInt(u.taggedCount || u.TaggedCount || 0),
+                witnessCount: parseInt(u.witnessCount || u.WitnessCount || 0),
+                topFriends: u.topFriends || u.TopFriends || []
+            };
+        });
+        console.log("📊 initUserRadar: Populated globalUserStatsMap from baseline cache.");
+    }
+
+    // 🌟 บังคับสไตล์ให้ Canvas มีตัวตนแน่นอน
+    canvas.style.display = 'block';
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+
     if (window.myRadarChart) window.myRadarChart.destroy();
 
-    const v = currentUser.virtueStats || {};
+    // 🌟 ดึงข้อมูลสถิติด้วยความแม่นยำสูงขึ้น
+    const uid = String(currentUser.userId || currentUser.id || "").trim();
+    let stats = currentUser;
+
+    if (globalUserStatsMap) {
+        // ลองหาแบบตรงๆ หรือหาแบบ Case-insensitive
+        stats = globalUserStatsMap[uid] ||
+            Object.values(globalUserStatsMap).find(u => String(u.id).trim() === uid) ||
+            currentUser;
+    }
+
+    const v = stats.virtueStats || {};
+    const getV = (key) => {
+        const val = v[key] || v[key.charAt(0).toUpperCase() + key.slice(1)] || 0;
+        return parseFloat(val);
+    };
+
     const dataPoints = [
-        parseFloat(v.volunteer || 0),
-        parseFloat(v.sufficiency || 0),
-        parseFloat(v.discipline || 0),
-        parseFloat(v.integrity || 0),
-        parseFloat(v.gratitude || 0)
+        getV('volunteer'),
+        getV('sufficiency'),
+        getV('discipline'),
+        getV('integrity'),
+        getV('gratitude')
     ];
 
-    // 🌗 เช็ค Dark Mode เพื่อปรับสีเส้นให้ชัดขึ้น
+    // 🌟 [DATA CHECK] ถ้าคะแนนเป็น 0 ทั้งหมด ให้ลองโหลดข้อมูลใหม่จาก Supabase
+    const totalScore = dataPoints.reduce((a, b) => a + b, 0);
+    if (totalScore === 0 && !window._radarFetching) {
+        window._radarFetching = true;
+        console.log("📡 Radar data is empty, fetching from Supabase...");
+        if (typeof fetchManagerData === 'function') {
+            fetchManagerData(true).then(() => {
+                window._radarFetching = false;
+                setTimeout(initUserRadar, 500); // วาดใหม่เมื่อข้อมูลมา
+            });
+        }
+    }
+
+    // 🌗 สีสำหรับ Dark/Light Mode
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
     const gridColor = isDark ? 'rgba(255, 255, 255, 0.25)' : 'rgba(0, 0, 0, 0.1)';
-    const labelColor = isDark ? '#a29bfe' : '#6c5ce7'; // สีตัวหนังสือ
+    const labelColor = isDark ? '#a29bfe' : '#6c5ce7';
 
-    // 🌟 คำนวณค่าสูงสุดเพื่อปรับสเกลให้สวยงาม ไม่รวน
     const maxVal = Math.max(...dataPoints, 5);
     const suggestedMax = Math.ceil(maxVal * 1.2 / 5) * 5;
 
-    window.myRadarChart = new Chart(ctx, {
+    window.myRadarChart = new Chart(canvas, {
         type: 'radar',
         data: {
             // เพิ่มไอคอนหมวดหมู่หน้าชื่อ
@@ -1503,8 +1901,8 @@ function renderManagerChart() {
     const ctx = document.getElementById('managerLineChart');
     if (!ctx) return;
     if (window.myManagerChart) window.myManagerChart.destroy();
-    
-    const range = document.getElementById('chartRangeSelector')?.value || '15d';
+
+    const range = document.getElementById('chartRangeSelector')?.value || 'all';
     const indexValEl = document.getElementById('current-index-val');
     const indexChangeEl = document.getElementById('index-change-val');
     const indexBadgeEl = document.getElementById('index-status-badge');
@@ -1515,10 +1913,10 @@ function renderManagerChart() {
 
     // --- 📊 Update Index Summary (SET Style) ---
     if (raw.length > 0) {
-        const currentVal = raw[raw.length - 1];
-        const prevVal = raw.length > 1 ? raw[raw.length - 2] : 1000;
+        const currentVal = raw[raw.length - 1].val || raw[raw.length - 1];
+        const prevVal = raw.length > 1 ? (raw[raw.length - 2].val || raw[raw.length - 2]) : 0;
         const diff = (currentVal - prevVal).toFixed(2);
-        const percent = ((diff / prevVal) * 100).toFixed(2);
+        const percent = prevVal !== 0 ? ((diff / prevVal) * 100).toFixed(2) : (diff > 0 ? 100 : 0);
         const sign = diff >= 0 ? '+' : '';
         const colorClass = diff >= 0 ? 'text-success' : 'text-danger';
         const caret = diff >= 0 ? 'fa-caret-up' : 'fa-caret-down';
@@ -1538,34 +1936,63 @@ function renderManagerChart() {
         }
     }
 
-    if (range === '15d') {
-        let items = raw.slice(-15);
-        for (let i = 0; i < items.length; i++) {
-            let d = new Date(); d.setDate(d.getDate() - (items.length - 1 - i));
+    if (range === 'all') {
+        const twoYearsAgo = new Date();
+        twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+        const filtered = raw.filter(item => new Date(item.date) >= twoYearsAgo);
+        
+        filtered.forEach(item => {
+            const d = new Date(item.date);
             labels.push(d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' }));
-        }
-        dataPoints = items;
+            dataPoints.push(item.val);
+        });
+    } else if (range === '15d') {
+        let items = raw.slice(-15);
+        items.forEach(item => {
+            const d = new Date(item.date || new Date());
+            labels.push(d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' }));
+            dataPoints.push(item.val || item);
+        });
     } else if (range === '30d') {
         let items = raw.slice(-30);
-        for (let i = 0; i < items.length; i++) {
-            let d = new Date(); d.setDate(d.getDate() - (items.length - 1 - i));
+        items.forEach(item => {
+            const d = new Date(item.date || new Date());
             labels.push(d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' }));
-        }
-        dataPoints = items;
+            dataPoints.push(item.val || item);
+        });
     } else if (range === '1y') {
-        const months = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
-        for (let i = 11; i >= 0; i--) {
-            let d = new Date(); d.setMonth(d.getMonth() - i);
-            labels.push(months[d.getMonth()]);
-            let chunk = raw.slice(raw.length - ((i + 1) * 30), raw.length - (i * 30));
-            dataPoints.push((chunk.reduce((a, b) => a + b, 0) / (chunk.length || 1)).toFixed(1));
+        // Weekly for 1 year (52 weeks)
+        for (let i = 51; i >= 0; i--) {
+            let d = new Date();
+            d.setDate(d.getDate() - (i * 7));
+            
+            // Set to start of week (Monday)
+            const day = d.getDay() || 7;
+            d.setHours(-24 * (day - 1), 0, 0, 0);
+            
+            labels.push(d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' }));
+            
+            const weekEnd = new Date(d);
+            weekEnd.setDate(d.getDate() + 6);
+            weekEnd.setHours(23, 59, 59, 999);
+            
+            let chunk = raw.filter(item => {
+                const id = new Date(item.date);
+                return id >= d && id <= weekEnd;
+            });
+            
+            if (chunk.length > 0) {
+                dataPoints.push(chunk[chunk.length - 1].val);
+            } else {
+                dataPoints.push(dataPoints.length > 0 ? dataPoints[dataPoints.length - 1] : 0);
+            }
         }
     }
 
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark' || localStorage.getItem('theme') === 'dark';
     const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)';
     const textColor = isDark ? '#a29bfe' : '#6c5ce7';
-    
+
     // Determine gradient color based on trend
     const isUp = dataPoints.length > 1 ? (dataPoints[dataPoints.length - 1] >= dataPoints[0]) : true;
     const chartColor = isUp ? '#00b894' : '#ff7675';
@@ -1593,10 +2020,15 @@ function renderManagerChart() {
             scales: {
                 y: {
                     grid: { color: gridColor, drawBorder: false },
-                    ticks: { 
-                        color: textColor, 
+                    ticks: {
+                        color: textColor,
                         font: { family: 'Kanit', size: 10 },
-                        callback: function(value) { return value.toLocaleString(); }
+                        callback: function (value) { 
+                            if (typeof Intl !== 'undefined' && Intl.NumberFormat) {
+                                return new Intl.NumberFormat('en', { notation: 'compact' }).format(value);
+                            }
+                            return value.toLocaleString(); 
+                        }
                     }
                 },
                 x: {
@@ -1629,25 +2061,9 @@ function triggerNotificationEffects() {
         bell.classList.remove('bell-shake');
         void bell.offsetWidth;
         bell.classList.add('bell-shake');
-        
+
         // 📱 เพิ่มการสั่นสะเทือน (Haptic Feedback) ถ้าเครื่องรองรับ
         if ('vibrate' in navigator) navigator.vibrate([100, 50, 100]);
-    }
-
-    // 🌟 เล่นเสียงแจ้งเตือน
-    const sound = document.getElementById('notifSound');
-    if (sound) {
-        // เช็คว่าไม่ได้ปิดเสียงแอปอยู่
-        if (localStorage.getItem('notif_muted') !== 'true') {
-            sound.currentTime = 0;
-            const playPromise = sound.play();
-            if (playPromise !== undefined) {
-                playPromise.catch(e => {
-                    console.warn("🔊 Sound play blocked by browser. iOS requires a user gesture first.");
-                    // เราจะพยายามเล่นอีกครั้งเมื่อมีการคลิกครั้งถัดไปผ่าน unlockAudio
-                });
-            }
-        }
     }
 }
 
@@ -1738,14 +2154,46 @@ function processAnnounceData(data, silent = false) {
     } catch (e) { console.error('🔔 processAnnounceData Error:', e); }
 }
 
-function fetchAnnouncements(silent = false) {
+async function fetchAnnouncements(silent = false) {
+    if (READ_FROM_SUPABASE && supabaseClient) {
+        try {
+            const { data, error } = await supabaseClient
+                .from('Announcements')
+                .select('*')
+                .order('Date', { ascending: false })
+                .order('Time', { ascending: false })
+                .limit(50);
+
+            if (error) throw error;
+
+            // Mapping Supabase schema to GAS schema
+            const mappedAnnouncements = (data || []).map(row => ({
+                id: row.ID,
+                title: row.Title,
+                body: row.Body,
+                date: row.EventDate,
+                displayDate: row.EventDate ? new Date(row.EventDate).toLocaleDateString('th-TH') : '',
+                eventTime: row.EventTime || '',
+                category: row.Category || 'general',
+                postedBy: row.PostedBy || '',
+                ts: row.Date + 'T' + (row.Time || '00:00:00')
+            }));
+
+            processAnnounceData({ announcements: mappedAnnouncements }, silent === true);
+            return;
+        } catch (e) {
+            console.warn('☁️ Supabase fetchAnnouncements failed, falling back to GAS:', e);
+        }
+    }
+
+    // 🚀 Fallback: GAS Fetch Logic
     const url = GAS_URL + '?action=get_announcements&t=' + Date.now();
     fetch(url)
         .then(r => r.json())
         .then(data => {
             if (data && data.status === 'error') {
                 console.warn('📢 Server returned error for announcements:', data.message);
-                renderNotifList(); // Render empty/error state
+                renderNotifList();
                 return;
             }
             processAnnounceData(data, silent === true);
@@ -1923,9 +2371,9 @@ function readNotif(id) {
                     }
                 }
             }
-            
+
             renderNotifList();
-            closeNotifPanel(); 
+            closeNotifPanel();
 
             // 🌟 แสดงรายละเอียดข่าวแบบเต็มหน้าจอ (SweetAlert)
             const color = (typeof CATEGORY_COLORS !== 'undefined') ? CATEGORY_COLORS[item.category] : '#6c5ce7';
@@ -2001,7 +2449,20 @@ function safetyResumeMusic() {
 }
 function switchTab(pageId, el) {
     if (!currentUser) { Swal.fire('เตือน', 'กรุณาเข้าสู่ระบบ', 'warning'); return; }
-    if (pageId === 'manager' && getUserLevel(currentUser) > 2) {
+
+    // 🌟 [Access Control] ถ้ากำลังรออนุมัติ ให้เข้าได้แค่หน้าเรื่องราว (Feed) เท่านั้น
+    if (currentUser.status === 'waiting_approval' && pageId !== 'feed') {
+        Swal.fire({
+            icon: 'info',
+            title: 'รอการอนุมัติ',
+            text: 'บัญชีของคุณกำลังรอ Admin ตรวจสอบข้อมูล ระหว่างนี้คุณสามารถดู "เรื่องราว" ได้อย่างเดียวนะครับ',
+            timer: 3000,
+            showConfirmButton: false
+        });
+        return;
+    }
+
+    if (pageId === 'manager' && getUserLevel(currentUser) > 2 && !isCommittee(currentUser.role)) {
         Swal.fire({ toast: true, icon: 'error', title: '🚫 ไม่มีสิทธิ์เข้าถึง', position: 'top', timer: 3000, showConfirmButton: false });
         return;
     }
@@ -2017,11 +2478,26 @@ function switchTab(pageId, el) {
 
     window.scrollTo({ top: 0, behavior: 'auto' });
 
+    // 🌟 [NEW] ล้างตัวเลขแจ้งเตือนเมื่อกดเข้าหน้า "เรื่องราว"
+    if (pageId === 'stories' || pageId === 'feed') {
+        const badge = document.getElementById('nav-stories-badge');
+        if (badge) {
+            badge.style.display = 'none';
+            badge.innerText = '0';
+        }
+        // บันทึกว่าเราอ่านถึงโพสต์ล่าสุดแล้ว
+        if (window.globalFeedTotal) {
+            localStorage.setItem('last_seen_feed_count', window.globalFeedTotal);
+        }
+    }
+
     if (pageId === 'stats') {
+        // วาดหลังจากหน้าจอกางเสร็จเล็กน้อย เพื่อความนิ่งและสเกลที่ถูกต้อง
         setTimeout(() => {
-            initUserRadar();
+            if (typeof initUserRadar === 'function') initUserRadar();
             if (typeof renderManagerChart === 'function') renderManagerChart();
-        }, 100);
+            window.dispatchEvent(new Event('resize'));
+        }, 400);
     }
     if (pageId === 'badges' || pageId === 'manager') {
         if (pageId === 'manager') {
@@ -2113,12 +2589,12 @@ function updateNavigationVisibility() {
             switchTab('stories', storiesTab);
         }
     } else {
-        // Active members (Staff/Officer/NewsEditor/Manager/Admin)
+        // Active members (Staff/Officer/NewsEditor/Manager/Admin/Committee)
         if (headerUser) headerUser.style.display = 'block';
-        [storiesTab, statsTab, badgesTab, relTab, recordTab].forEach(t => t && (t.style.display = 'flex'));
-        if (mgrTab) mgrTab.style.display = (level <= 2) ? 'flex' : 'none';
-
-        // Final sanity check for record tab (Officer/Staff only)
+        [mgrTab, relTab, statsTab, badgesTab, recordTab, storiesTab].forEach(t => t && (t.style.display = 'flex'));
+        
+        // Visibility logic based on level/role
+        if (mgrTab) mgrTab.style.display = (level <= 2 || isCommittee(currentUser.role)) ? 'flex' : 'none';
         if (recordTab) recordTab.style.display = (level <= 4) ? 'flex' : 'none';
     }
 
@@ -2206,8 +2682,8 @@ function renderRelationTab() {
 
             // ดึงเฉพาะปีมาโชว์ ถ้ามี
             const yearMatch = u.role.match(/ปี\s*(\d{1,4})/);
-            let roleDisplay = u.role; 
-            
+            let roleDisplay = u.role;
+
             if (u.role.includes('ผู้บริหาร (')) {
                 const parts = u.role.match(/ผู้บริหาร\s*\((.*?)\)\s*(ปี\s*\d{1,4})?/);
                 if (parts) {
@@ -2274,7 +2750,12 @@ function openRelationDetail(uid) {
 
     // 🌟 1. ดันข้อมูลจาก Cache (globalFeedData) ขึ้นแสดงทันที เพื่อความรวดเร็ว (Instant Load)
     currentRelationVisibleCount = 10;
-    window.currentRelationPosts = (window.globalFeedData || []).filter(p => String(p.user_line_id || p.userId || '') === targetId);
+    window.currentRelationPosts = (window.globalFeedData || []).filter(p => {
+        const isOwner = String(p.user_line_id || p.userId || '') === targetId;
+        const taggedIds = String(p.taggedFriends || '').split(',').map(s => s.trim());
+        const isTagged = taggedIds.includes(targetId);
+        return isOwner || isTagged;
+    });
 
     // แสดงโครงร่างเบื้องต้น (ที่มีประวัติเบื้องต้นจาก Cache)
     renderRelationHeader(user, virtueLabel, virtueDesc, postCount, tagCount, witnessCount);
@@ -2469,7 +2950,7 @@ function getActivityRange(uid) {
     // 🌟 1. ลองใช้ข้อมูลที่ Backend ส่งมาให้ (แม่นยำที่สุด เพราะดูจากประวัติทั้งหมดในชีต)
     if (userStat && userStat.firstActive) {
         firstDate = new Date(userStat.firstActive);
-    } 
+    }
     // 🌟 2. Fallback: ถ้าไม่มีข้อมูลจาก Backend ให้ลองหาจาก globalFeedData (ที่มีอยู่ใน Cache)
     else if (globalFeedData && globalFeedData.length > 0) {
         const userPosts = globalFeedData.filter(p => String(p.user_line_id) === String(uid));
@@ -2517,26 +2998,62 @@ function closeAnnounceModal() {
 function saveAnnouncement() {
     const title = document.getElementById('ann-title').value.trim();
     const date = document.getElementById('ann-date').value;
+    const body = document.getElementById('ann-body').value.trim();
+    const category = document.getElementById('ann-category').value;
+
     if (!title || !date) { Swal.fire({ toast: true, icon: 'warning', title: 'กรุณากรอกข้อมูล', position: 'top', timer: 3000 }); return; }
 
     Swal.fire({ title: 'กำลังบันทึก...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+    // ☁️ [Supabase ONLY Mode]
+    if (READ_FROM_SUPABASE && supabaseClient) {
+        (async () => {
+            try {
+                const now = new Date();
+                const announceId = 'ann_' + Date.now();
+                const payload = {
+                    ID: announceId,
+                    Title: title,
+                    Body: body,
+                    EventDate: date,
+                    EventTime: '',
+                    Category: category,
+                    PostedBy: currentUser.userId,
+                    Date: now.toISOString().split('T')[0],
+                    Time: now.toTimeString().split(' ')[0],
+                    Status: 'active'
+                };
+                const { error } = await supabaseClient.from('Announcements').insert(payload);
+                if (error) throw error;
+
+                closeAnnounceModal();
+                Swal.fire({ toast: true, icon: 'success', title: '✅ บันทึกประกาศสำเร็จ!', position: 'top', timer: 3000, showConfirmButton: false });
+                setTimeout(() => toggleNotifPanel(), 1500);
+                if (typeof fetchAnnouncements === 'function') fetchAnnouncements();
+            } catch (e) {
+                console.error("☁️ Supabase Save Announcement Error:", e);
+                Swal.fire('Error', 'ไม่สามารถบันทึกลง Supabase ได้: ' + e.message, 'error');
+            }
+        })();
+        return;
+    }
+
     fetch(GAS_URL, {
         method: 'POST', body: JSON.stringify({
             action: 'save_announcement', title, eventDate: date,
-            body: document.getElementById('ann-body').value.trim(),
-            category: document.getElementById('ann-category').value, postedBy: currentUser.userId
+            body: body,
+            category: category, postedBy: currentUser.userId
         })
-    }).then(r => r.json()).then(data => {
+    }).then(r => r.json()).then(async data => {
         if (data.status === 'success') {
             closeAnnounceModal();
             Swal.fire({ toast: true, icon: 'success', title: '✅ บันทึกประกาศสำเร็จ!', position: 'top', timer: 3000, showConfirmButton: false });
             setTimeout(() => toggleNotifPanel(), 1500);
+            fetchAnnouncements();
         } else throw new Error(data.message);
     }).catch(err => {
-        // Fallback if status not success but data might be saved
         closeAnnounceModal();
-        Swal.fire({ toast: true, icon: 'success', title: '✅ บันทึกประกาศสำเร็จ!', position: 'top', timer: 3000, showConfirmButton: false });
-        setTimeout(() => toggleNotifPanel(), 2000);
+        Swal.fire({ toast: true, icon: 'error', title: 'บันทึกไม่สำเร็จ: ' + err.message, position: 'top', timer: 3000 });
     });
 }
 
@@ -2584,7 +3101,7 @@ function renderThumbnails() {
         const reader = new FileReader();
         reader.onload = function (e) {
             const div = document.createElement('div');
-            div.className = 'thumb-item';
+            div.className = 'thumb-item'; // 🌟 [FIX] เพิ่มคลาสเพื่อให้ปุ่มกากบาทแสดงตำแหน่งถูกต้อง
             div.draggable = true;
             div.dataset.index = idx;
             div.ondragstart = (ev) => dragImage(ev, idx);
@@ -2639,6 +3156,12 @@ async function submitData() {
     const note = document.getElementById('noteInput').value.trim();
     if (!virtue) { Swal.fire('แจ้งเตือน', 'กรุณาเลือกหมวดความดี', 'warning'); return; }
 
+    // 🛡️ [READ-ONLY] กฎกรรมการ: ห้ามบันทึกข้อมูล
+    if (currentUser && isCommittee(currentUser.role)) {
+        Swal.fire('โหมดเยี่ยมชม', 'สิทธิ์กรรมการใช้สำหรับตรวจประเมินเท่านั้น ไม่สามารถบันทึกกิจกรรมได้ค่ะ', 'info');
+        return;
+    }
+
     const tagged = Array.from(document.querySelectorAll('.friend-item.selected')).map(el => el.dataset.id);
     const privacy = document.querySelector('input[name="privacyOption"]:checked').value;
 
@@ -2674,28 +3197,92 @@ async function submitData() {
 
     Swal.fire({ title: 'กำลังบันทึกข้อมูล...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 
-    fetch(GAS_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-            action: 'save_activity',
-            userId: currentUser.userId,
-            userName: currentUser.name,
-            virtueTag: virtue,
-            virtue,
-            note,
-            happyLevel: selectedMood,
-            image: finalImageUrl,
-            taggedFriends: tagged.join(','),
-            privacy
-        })
-    }).then(res => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-    }).then(data => {
-        if (data.status === 'success') {
+    // ☁️ [Supabase ONLY Test Mode] - บันทึกตรงลง Supabase ข้าม GAS
+    if (supabaseClient) {
+        try {
+            Swal.fire({ title: 'กำลังบันทึกลง Supabase...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+            const now = new Date();
+            const uuid = 'sup_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+            const dateStr = now.toLocaleDateString('en-CA'); // YYYY-MM-DD
+            const timeStr = now.toTimeString().split(' ')[0]; // HH:mm:ss
+
+            // 1. คำนวณคะแนนเบื้องต้น
+            let scoreToAdd = 0;
+            let finalStatus = "waiting_verify";
+            if (privacy === 'private') {
+                scoreToAdd = 0;
+                finalStatus = "private";
+            } else {
+                // 🌟 [ENFORCE] เริ่มต้นที่ 0 คะแนน ต้องรอยืนยันให้ครบตามเงื่อนไขก่อนถึงจะได้ 10 คะแนน
+                scoreToAdd = 0;
+                const activeStaffCount = globalAppUsers.filter(u => !isAlumni(u.role) && !isGuest(u.role)).length || 1;
+                const totalOthers = activeStaffCount - 1;
+
+                // เงื่อนไข: แท็กทุกคน (All) หรือ แท็กมากกว่าครึ่งนึงของสมาชิกทั้งหมด ให้ Approved ทันที
+                const isTagAll = (tagged.length > 0 && tagged.length >= totalOthers);
+                const isMoreThanHalf = (tagged.length > (activeStaffCount * 0.5));
+
+                if (isTagAll || isMoreThanHalf) {
+                    scoreToAdd = 10;
+                    finalStatus = "approved";
+                }
+            }
+
+            // 2. บันทึกลง Supabase
+            const { error: activityError } = await supabaseClient.from('Activities').insert({
+                "UUID": uuid,
+                "Date": dateStr,
+                "Time": timeStr,
+                "UserId": currentUser.userId,
+                "UserName": currentUser.name,
+                "Virtue": virtue,
+                "Note": note,
+                "Happy": parseInt(selectedMood),
+                "Image": finalImageUrl,
+                "Tagged": tagged.join(','),
+                "Privacy": privacy,
+                "JSON": { likes: [], verifies: [] },
+                "Status": finalStatus,
+                "Score": scoreToAdd
+            });
+
+            if (activityError) throw activityError;
+
+            // 3. อัปเดตคะแนนและสถิติใน Supabase (ถ้ามี)
+            if (scoreToAdd > 0) {
+                const targetIds = [currentUser.userId, ...tagged];
+                for (const tid of targetIds) {
+                    const { data: userData } = await supabaseClient.from('Users').select('Score, VirtueStats').eq('LineID', tid).maybeSingle();
+                    if (!userData) continue;
+
+                    let currentScore = userData.Score || 0;
+                    let vStats = userData.VirtueStats || {};
+                    if (typeof vStats === 'string') vStats = JSON.parse(vStats);
+
+                    let updateData = { "Score": currentScore + scoreToAdd };
+
+                    // อัปเดตสถิติตามประเภทความดี
+                    if (virtue && vStats[virtue] !== undefined || true) {
+                        vStats[virtue] = (vStats[virtue] || 0) + scoreToAdd;
+                        updateData.VirtueStats = vStats;
+                    }
+
+                    // อัปเดตจำนวนโพสต์ / จำนวนที่ถูกแท็ก
+                    if (tid === currentUser.userId) {
+                        // updateData.TotalCount = (userData.TotalCount || 0) + 1;
+                    } else {
+                        // updateData.TaggedCount = (userData.TaggedCount || 0) + 1;
+                    }
+
+                    const { error: userUpdateErr } = await supabaseClient.from('Users').update(updateData).eq('LineID', tid);
+                    if (userUpdateErr) console.error(`❌ [Supabase] Score Update Error for ${tid}:`, userUpdateErr);
+                }
+            }
+
+            console.log('☁️ Supabase Test Mode: Data saved directly to Supabase');
+
             // 🌪️ ตรวจสอบระบบ Auto Rescue (ความห่วงใยอัตโนมัติ)
-            // ถ้าเลือกระดับความสุขเป็น 1 (เศร้า) ให้ถามว่าต้องการส่งสัญญาเรียกเพื่อนมาช่วยหรือไม่
             if (parseInt(selectedMood) === 1) {
                 Swal.fire({
                     title: '💓 พลังใจของคุณดูเหนื่อยล้า...',
@@ -2713,27 +3300,47 @@ async function submitData() {
                 });
             }
 
+            // 🛡️ [AUTHORITATIVE SYNC] ลบการคำนวณแต้มเองในเครื่องออก แล้วใช้การคำนวณจริงจากฐานข้อมูลแทน
+            localStorage.removeItem('last_post_time');
+            const targetIds = [currentUser.userId, ...tagged];
+            if (typeof syncUserScore === 'function') {
+                targetIds.forEach(tid => syncUserScore(tid));
+            }
+
+            // 🌟 [BACKGROUND UPDATE] อัปเดตข้อมูลภาพรวมเบื้องหลังทันที
+            if (typeof fetchManagerData === 'function') {
+                fetchManagerData(true); 
+            }
+
+            let successTitle = 'บันทึกสำเร็จ 🥳';
+            let successHtml = `คุณได้รับ <b>+${scoreToAdd} XP</b><br><small class="text-muted">ขอบคุณที่แบ่งปันเรื่องราวดีๆ นะครับ</small>`;
+            
+            if (scoreToAdd === 0 && finalStatus === 'waiting_verify') {
+                successTitle = 'โพสต์สำเร็จ! 🌸';
+                successHtml = `กำลัง <b>รอเพื่อนมายืนยัน</b> เพื่อรับ 10 XP นะคะ<br><small class="text-muted">เรื่องราวของคุณถูกส่งไปยังฟีดแล้วครับ</small>`;
+            } else if (finalStatus === 'private') {
+                successTitle = 'บันทึกส่วนตัวแล้ว 🔒';
+                successHtml = `ขอบคุณที่บันทึกความรู้สึกดีๆ เก็บไว้นะครับ<br><small class="text-muted">(โพสต์นี้จะไม่แสดงในฟีดสาธารณะ)</small>`;
+            }
+
             Swal.fire({
                 icon: 'success',
-                title: 'บันทึกสำเร็จ!',
-                text: 'บันทึกความดีของคุณเรียบร้อยแล้ว',
-                timer: 2000,
+                title: successTitle,
+                html: successHtml,
+                timer: 3000,
                 showConfirmButton: false
             }).then(() => {
                 // เคลียร์ค่าในฟอร์ม
                 const noteEl = document.getElementById('noteInput');
                 if (noteEl) noteEl.value = '';
-
                 const virtueEl = document.getElementById('virtueSelect');
                 if (virtueEl) virtueEl.value = '';
-
                 const mediaEl = document.getElementById('mediaLinkInput');
                 if (mediaEl) mediaEl.value = '';
 
                 currentImageFiles = [];
                 const fileCam = document.getElementById('fileCam');
                 if (fileCam) fileCam.value = '';
-
                 if (typeof renderThumbnails === 'function') renderThumbnails();
 
                 // 🌟 กลับไปหน้าเรื่องราว และโหลด Feed ใหม่
@@ -2741,27 +3348,25 @@ async function submitData() {
                     const navStories = document.getElementById('nav-stories-btn');
                     switchTab('stories', navStories);
                 }
-
-                // 🔄 โหลด Feed ใหม่ (หน่วงเวลานิดหน่วยเพื่อให้ GAS ประมวลผลเสร็จชัวร์ๆ)
-                setTimeout(() => {
-                    if (typeof fetchFeed === 'function') {
-                        // ปลดล็อก flag เผื่อมีค้าง
-                        isFetchingFeed = false;
-                        fetchFeed(false, true); // ✅ ใช้โหมด Silent เพื่อไม่ให้กระพริบ Skeleton
-                    }
-                    // อัปเดตข้อมูลผู้ใช้ (คะแนนและกราฟ)
-                    if (typeof checkUser === 'function' && currentUser) {
-                        checkUser(currentUser.userId, currentUser);
-                    }
-                }, 300);
+                if (typeof closeRecordModal === 'function') closeRecordModal();
+                if (typeof fetchFeed === 'function') {
+                    isFetchingFeed = false;
+                    fetchFeed(false, true);
+                }
+                // 🌟 [FIX] รีเฟรชสถิติและ Dashboard ทันทีเพื่อให้คะแนน/ความสุขเปลี่ยนตามที่โพสต์
+                if (typeof fetchManagerData === 'function') {
+                    fetchManagerData(true);
+                }
             });
-        } else {
-            Swal.fire('ผิดพลาด', data.message || 'บันทึกไม่สำเร็จ', 'error');
+
+            return;
+
+        } catch (e) {
+            console.error('☁️ Supabase Sync Exception:', e);
+            Swal.fire('Error', 'ไม่สามารถบันทึกลง Supabase ได้: ' + (e.message || e), 'error');
+            return;
         }
-    }).catch(err => {
-        console.error('❌ Save Error:', err);
-        Swal.fire('ผิดพลาด', 'บันทึกไม่สำเร็จ: ' + err.message, 'error');
-    });
+    }
 }
 
 // =====================================================
@@ -3165,9 +3770,9 @@ window.addEventListener('scroll', () => {
 function unlockAudio() {
     const sound = document.getElementById('notifSound');
     const bgMusic = document.getElementById('bgMusic');
-    
+
     // พยายามเล่นเสียงสั้นๆ เพื่อเปิดทางให้ระบบ (Unlock)
-    if (sound) {
+    if (sound && typeof sound.play === 'function') {
         sound.muted = true;
         sound.play().then(() => {
             sound.pause();
@@ -3175,12 +3780,12 @@ function unlockAudio() {
             console.log('🔊 Notification audio unlocked');
         }).catch(e => console.log('Audio unlock pending...'));
     }
-    
+
     // ทำเช่นเดียวกับเพลงพื้นหลัง
     if (bgMusic && bgMusic.paused && !userMutedMusic) {
         bgMusic.play().then(() => {
             console.log('🎵 Background music unlocked');
-        }).catch(e => {});
+        }).catch(e => { });
     }
 
     // เมื่อปลดล็อกแล้วให้ถอน Event Listener ออกเพื่อประหยัดทรัพยากร
@@ -3200,7 +3805,7 @@ function setViewportHeight() {
 // ==========================================
 // 📈 ระบบควบคุมกราฟ HMI (Momentum Index)
 // ==========================================
-window.updateChartScrollButtons = function() {
+window.updateChartScrollButtons = function () {
     const wrapper = document.getElementById('hmiScrollWrapper');
     const leftBtn = document.getElementById('hmiScrollBtnLeft');
     const rightBtn = document.getElementById('hmiScrollBtnRight');
@@ -3213,13 +3818,13 @@ window.updateChartScrollButtons = function() {
     rightBtn.style.display = scrollLeft < maxScroll - 5 ? 'flex' : 'none';
 };
 
-window.scrollHMI = function(direction) {
+window.scrollHMI = function (direction) {
     const wrapper = document.getElementById('hmiScrollWrapper');
     if (!wrapper) return;
-    
+
     // Use responsive scroll amount (70% of view width) or fixed 300px if very wide
     const scrollAmount = Math.min(300, wrapper.clientWidth * 0.8);
-    
+
     if (direction === 'left') {
         wrapper.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
     } else {
@@ -3232,23 +3837,40 @@ window.scrollHMI = function(direction) {
 // ==========================================
 async function trackAppVisit() {
     if (!currentUser || !currentUser.userId) return;
-    
+
     // ป้องกันการบันทึกซ้ำในเซสชันสั้นๆ (Throttle)
     const lastVisit = sessionStorage.getItem('last_visit_tracked');
     const now = Date.now();
     if (lastVisit && (now - parseInt(lastVisit)) < 600000) return; // 10 นาที
 
     try {
+        // ☁️ [Supabase] บันทึกเวลาเข้าใช้งานล่าสุด
+        if (supabaseClient) {
+            const now = new Date();
+            (async () => {
+                try {
+                    const { data: uData } = await supabaseClient.from('Users').select('VisitCount').eq('LineID', currentUser.userId).single();
+                    const currentVisitCount = (uData ? uData.VisitCount : 0) || 0;
+                    await supabaseClient.from('Users').update({
+                        "LastDate": now.toISOString().split('T')[0],
+                        "LastTime": now.toTimeString().split(' ')[0],
+                        "VisitCount": currentVisitCount + 1
+                    }).eq('LineID', currentUser.userId);
+                    console.log('☁️ Supabase: User Visit updated');
+                } catch (e) { console.warn('☁️ Supabase Visit Track Error:', e); }
+            })();
+            if (READ_FROM_SUPABASE) {
+                sessionStorage.setItem('last_visit_tracked', now.toString());
+                return;
+            }
+        }
+
         await fetch(GAS_URL, {
             method: 'POST',
-            body: JSON.stringify({
-                action: 'track_visit',
-                userId: currentUser.userId,
-                userName: currentUser.name || ''
-            })
+            body: JSON.stringify({ action: 'track_visit', userId: currentUser.userId, userName: currentUser.name || '' })
         });
         sessionStorage.setItem('last_visit_tracked', now.toString());
-        console.log("✅ บันทึกการเข้าใช้งานแล้ว");
+        console.log("✅ บันทึกการเข้าใช้งานแล้ว (GAS)");
     } catch (e) { console.warn("Visit tracking failed", e); }
 }
 
@@ -3259,16 +3881,47 @@ async function trackAppVisit() {
 async function openReportModal() {
     document.getElementById('reportModalBackdrop').style.display = 'block';
     document.getElementById('reportModal').style.display = 'block';
-    
+
     const select = document.getElementById('reportMonthSelect');
     if (select) select.innerHTML = '<option value="">กำลังโหลดข้อมูลประวัติ...</option>';
-    
+
     try {
-        // ดึงข้อมูล Feed ย้อนหลังมากขึ้น (2000 รายการ) เพื่อให้มีข้อมูลย้อนหลัง 12 เดือน
-        const res = await fetch(`${GAS_URL}?action=get_feed&limit=2000&t=${Date.now()}`);
-        const data = await res.json();
-        const feed = data.feed || [];
-        
+        let feed = [];
+        if (READ_FROM_SUPABASE && supabaseClient) {
+            const { data: usersData } = await supabaseClient.from('Users').select('LineID, Name, Image');
+            const userMap = {};
+            (usersData || []).forEach(u => { userMap[u.LineID] = { name: u.Name, img: u.Image }; });
+
+            const { data, error } = await supabaseClient
+                .from('Activities')
+                .select('*')
+                .order('Date', { ascending: false })
+                .order('Time', { ascending: false })
+                .limit(2000);
+
+            if (error) throw error;
+            feed = (data || []).map(p => {
+                const poster = userMap[p.UserId] || { name: 'Unknown', img: null };
+                return {
+                    id: p.id,
+                    uuid: p.UUID,
+                    timestamp: p.Date + 'T' + (p.Time || '00:00:00'),
+                    user_line_id: p.UserId,
+                    user_name: poster.name,
+                    user_img: poster.img,
+                    score: p.Score,
+                    virtue: p.Virtue,
+                    note: p.Note,
+                    status: p.Status
+                };
+            });
+        } else {
+            // ดึงข้อมูล Feed ย้อนหลังมากขึ้น (2000 รายการ) เพื่อให้มีข้อมูลย้อนหลัง 12 เดือน
+            const res = await fetch(`${GAS_URL}?action=get_feed&limit=2000&t=${Date.now()}`);
+            const gasData = await res.json();
+            feed = gasData.feed || [];
+        }
+
         // อัปเดต Cache กลางเพื่อให้หน้าจออื่นๆ ได้ใช้ข้อมูลที่ดึงมาใหม่ด้วย
         if (feed.length > (window.globalFeedData || []).length) {
             window.globalFeedData = feed;
@@ -3276,7 +3929,7 @@ async function openReportModal() {
 
         if (select) {
             select.innerHTML = '<option value="all">ข้อมูลทั้งหมด (All Time)</option>';
-            
+
             if (feed.length > 0) {
                 const months = new Set();
                 feed.forEach(p => {
@@ -3288,15 +3941,15 @@ async function openReportModal() {
                         }
                     }
                 });
-                
+
                 const sortedMonths = Array.from(months).sort().reverse(); // ใหม่ไปเก่า
                 // กรองเอาเฉพาะ 12 เดือนล่าสุดที่มีข้อมูล
                 const displayMonths = sortedMonths.slice(0, 12);
-                
+
                 displayMonths.forEach(m => {
                     const [y, mm] = m.split('-');
-                    const thaiMonths = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-                    const label = thaiMonths[parseInt(mm)-1] + ' ' + (parseInt(y)+543);
+                    const thaiMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+                    const label = thaiMonths[parseInt(mm) - 1] + ' ' + (parseInt(y) + 543);
                     select.innerHTML += `<option value="${m}">${label}</option>`;
                 });
             }
@@ -3305,7 +3958,7 @@ async function openReportModal() {
         console.error("Report Deep Fetch failed", e);
         if (select) select.innerHTML = '<option value="all">ข้อมูลทั้งหมด (All Time)</option>';
     }
-    
+
     if (typeof generateMonthlyReport === 'function') generateMonthlyReport();
 }
 
@@ -3314,17 +3967,17 @@ function closeReportModal() {
     document.getElementById('reportModal').style.display = 'none';
 }
 
-window.generateMonthlyReport = function() {
+window.generateMonthlyReport = function () {
     const month = document.getElementById('reportMonthSelect').value;
     const content = document.getElementById('reportContentArea');
     content.innerHTML = '<div class="text-center py-4 text-muted"><i class="fas fa-spinner fa-spin me-2"></i>กำลังวิเคราะห์ข้อมูลเชิงลึก...</div>';
-    
+
     setTimeout(() => {
         let filteredFeed = window.globalFeedData || [];
         let previousFeed = window.globalFeedData || [];
         let monthLabel = 'ข้อมูลทั้งหมดจนถึงปัจจุบัน';
         let hasPrevious = false;
-        
+
         if (month && month !== 'all') {
             const [y, m] = month.split('-');
             filteredFeed = filteredFeed.filter(p => {
@@ -3332,7 +3985,7 @@ window.generateMonthlyReport = function() {
                 const d = new Date(p.timestamp);
                 return d.getFullYear() == y && (d.getMonth() + 1) == m;
             });
-            
+
             let prevM = parseInt(m) - 1;
             let prevY = parseInt(y);
             if (prevM === 0) { prevM = 12; prevY -= 1; }
@@ -3342,29 +3995,29 @@ window.generateMonthlyReport = function() {
                 return d.getFullYear() == prevY && (d.getMonth() + 1) == prevM;
             });
             hasPrevious = true;
-            
-            const thaiMonths = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-            monthLabel = `ประจำเดือน ${thaiMonths[parseInt(m)-1]} ${parseInt(y)+543}`;
+
+            const thaiMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+            monthLabel = `ประจำเดือน ${thaiMonths[parseInt(m) - 1]} ${parseInt(y) + 543}`;
         } else {
             hasPrevious = false;
         }
-        
+
         const totalPosts = filteredFeed.filter(p => p.status === 'approved' || Number(p.score) > 0).length;
         let teamwork = 0;
         let virtueCounts = { volunteer: 0, sufficiency: 0, discipline: 0, integrity: 0, gratitude: 0 };
         let virtueXP = { volunteer: 0, sufficiency: 0, discipline: 0, integrity: 0, gratitude: 0 };
         let pendingCount = { volunteer: 0, sufficiency: 0, discipline: 0, integrity: 0, gratitude: 0 };
         let pendingXP = { volunteer: 0, sufficiency: 0, discipline: 0, integrity: 0, gratitude: 0 };
-        
+
         filteredFeed.forEach(p => {
             const isApproved = (p.status === 'approved' || Number(p.score) > 0);
             const tags = Array.isArray(p.taggedFriends) ? p.taggedFriends : String(p.taggedFriends || "").split(',');
             const isTeam = tags.filter(id => String(id).trim().length > 0).length > 0;
-            
+
             if (isApproved) {
                 if (isTeam) teamwork++;
             }
-            
+
             if (p.virtue && virtueCounts[p.virtue] !== undefined) {
                 const isApproved = (p.status === 'approved' || Number(p.score) > 0);
                 if (isApproved) {
@@ -3376,34 +4029,34 @@ window.generateMonthlyReport = function() {
                 }
             }
         });
-        
+
         const teamworkRate = totalPosts > 0 ? ((teamwork / totalPosts) * 100).toFixed(0) : 0;
-        const virtueNameMap = { 
+        const virtueNameMap = {
             volunteer: { name: 'จิตอาสา', code: 'D', color: '#6c5ce7' },
             sufficiency: { name: 'พอเพียง', code: 'R', color: '#00b894' },
             discipline: { name: 'วินัย', code: 'R', color: '#0984e3' },
             integrity: { name: 'สุจริต', code: 'T', color: '#e17055' },
             gratitude: { name: 'กตัญญู', code: 'D', color: '#fd79a8' }
         };
-        
-        let sortedVirtues = Object.entries(virtueCounts).sort((a,b) => b[1]-a[1]);
+
+        let sortedVirtues = Object.entries(virtueCounts).sort((a, b) => b[1] - a[1]);
         const topVirtue = sortedVirtues[0];
         const lowestVirtue = sortedVirtues[sortedVirtues.length - 1];
-        
+
         // --- ส่วนคะแนน T R D 5 หมวด ---
         let trdHtml = `
             <div class="mb-4">
                 <div class="fw-bold mb-2 small text-muted"><i class="fas fa-chart-pie me-1"></i> สรุปคะแนนแยกตามหมวดหมู่ (TRD Score)</div>
                 <div class="d-flex flex-column gap-2">
         `;
-        
+
         Object.entries(virtueNameMap).forEach(([key, info]) => {
             const count = virtueCounts[key];
             const xp = virtueXP[key];
             const pCount = pendingCount[key];
             const pXP = pendingXP[key];
             const pct = totalPosts > 0 ? Math.round((count / totalPosts) * 100) : 0;
-            
+
             trdHtml += `
                 <div class="p-2 rounded-3 border bg-white shadow-sm d-flex align-items-center" style="border-left: 5px solid ${info.color} !important;">
                     <div class="me-3 text-center" style="width: 40px;">
@@ -3426,14 +4079,14 @@ window.generateMonthlyReport = function() {
             `;
         });
         trdHtml += `</div></div>`;
-        
+
         let insightText = '';
-        if (totalPosts === 0 && Object.values(pendingCount).reduce((a,b)=>a+b,0) === 0) {
+        if (totalPosts === 0 && Object.values(pendingCount).reduce((a, b) => a + b, 0) === 0) {
             insightText = 'ไม่มีข้อมูลกิจกรรมในระบบสำหรับช่วงเวลานี้';
         } else {
             let trendVolText = '';
             let trendTeamText = '';
-            
+
             if (hasPrevious) {
                 const prevTotal = previousFeed.length;
                 let prevTeamwork = 0;
@@ -3447,7 +4100,7 @@ window.generateMonthlyReport = function() {
                 if (diffVol > 0) trendVolText = `<b>เพิ่มขึ้น ${diffVol} รายการ</b> จากเดือนที่แล้ว สะท้อนถึงโมเมนตัมระดับองค์กรเชิงบวก`;
                 else if (diffVol < 0) trendVolText = `<b>ลดลง ${Math.abs(diffVol)} รายการ</b> จากเดือนที่แล้ว ควรมีการกระตุ้นกิจกรรมเพิ่มเติม`;
                 else trendVolText = `มีจำนวนทรงตัวเท่ากับเดือนที่แล้ว`;
-                
+
                 const diffTeam = teamworkRate - prevTeamRate;
                 if (diffTeam > 0) trendTeamText = `และมีสัดส่วนการทำกิจกรรมร่วมกันสูงขึ้น <b>+${diffTeam}%</b> บ่งชี้ว่าบุคลากรมีการบูรณาการข้ามสายงานที่ดีขึ้น`;
                 else if (diffTeam < 0) trendTeamText = `แต่สัดส่วนการทำกิจกรรมร่วมกันลดลง <b>${diffTeam}%</b> ซึ่งอาจบ่งบอกถึงความรู้สึกโดดเดี่ยวในการทำงาน (Silo Effect)`;
@@ -3456,7 +4109,7 @@ window.generateMonthlyReport = function() {
                 trendVolText = `มีการกระจายตัวอยู่ในหลายหมวดหมู่`;
                 trendTeamText = `โดยเน้นไปที่${teamworkRate > 50 ? 'การทำกิจกรรมร่วมกับผู้อื่น' : 'การทำกิจกรรมส่วนบุคคล'}เป็นหลัก`;
             }
-            
+
             insightText = `
                 <p>ใน ${monthLabel} องค์กรมีการขับเคลื่อนกิจกรรมความดีที่ได้รับอนุมัติแล้ว <b>${totalPosts} รายการ</b> 
                 โดย ${trendVolText} ${trendTeamText}</p>
@@ -3470,7 +4123,7 @@ window.generateMonthlyReport = function() {
                 <p>จากกิจกรรมทั้งหมด มีถึง <b>${teamworkRate}%</b> ที่เกิดการ Tag เพื่อนร่วมงาน ถือเป็นสัญญาณของจิตวิญญาณแห่งการทำงานเป็นทีม (Team Spirit) การมีส่วนร่วมระดับนี้จะช่วยลดปัญหาความขัดแย้งและเพิ่มบรรยากาศที่น่าทำงาน (Happy Workplace)</p>
             `;
         }
-        
+
         const html = `
             <div class="p-1" style="color:#333; font-family:'Kanit',sans-serif; text-align:left;">
                 <p class="text-center text-muted small border-bottom pb-2 mb-3">${monthLabel}</p>
@@ -3500,7 +4153,7 @@ window.generateMonthlyReport = function() {
                 </div>
             </div>
         `;
-        content.innerHTML = html;        content.innerHTML = html;
+        content.innerHTML = html; content.innerHTML = html;
     }, 600);
 };
 
@@ -3513,9 +4166,49 @@ setViewportHeight();
 
 window.globalRewardsData = [];
 window.globalClaimsData = [];
-window.currentRewardFile = null; // เก็บไฟล์ไว้ชั่วคราวก่อนกดบันทึก
+window.currentRewardFile = null; // เก็บไฟล์ไว้ชั่วคราว
 
-window.fetchRewards = async function() {
+window.fetchRewards = async function () {
+    if (READ_FROM_SUPABASE && supabaseClient) {
+        try {
+            // ดึงทั้ง Rewards และ Claims ในคราวเดียว
+            const [rwRes, clRes] = await Promise.all([
+                supabaseClient.from('Rewards').select('*').order('Date', { ascending: false }),
+                supabaseClient.from('Claims').select('*').order('Date', { ascending: false })
+            ]);
+
+            if (rwRes.error) throw rwRes.error;
+
+            const mappedRewards = (rwRes.data || []).map(r => ({
+                id: r.ID,
+                name: r.Name,
+                image: r.Image,
+                mode: r.Mode,
+                targetVal: Number(r.TargetVal) || 0,
+                createdTs: (r.Date && r.Time) ? new Date(r.Date + 'T' + r.Time).getTime() : 0,
+                endDate: r.EndDate || '',
+                status: r.Status || 'active'
+            }));
+
+            const mappedClaims = (clRes.data || []).map(cl => ({
+                rewardId: cl.RewardID,
+                userId: cl.UserID,
+                userName: cl.UserName,
+                timestamp: (cl.Date && cl.Time) ? new Date(cl.Date + 'T' + cl.Time).getTime() : 0
+            }));
+
+            window.globalRewardsData = mappedRewards;
+            window.globalClaimsData = mappedClaims;
+
+            if (typeof renderExecutiveRewards === 'function') renderExecutiveRewards();
+            if (typeof renderUserRewards === 'function') renderUserRewards();
+            return;
+        } catch (e) {
+            console.warn('☁️ Supabase fetchRewards failed, falling back to GAS:', e);
+        }
+    }
+
+    // 🚀 Fallback: GAS Fetch Logic
     try {
         const res = await fetch(GAS_URL + '?action=get_rewards');
         const data = await res.json();
@@ -3530,26 +4223,26 @@ window.fetchRewards = async function() {
     }
 };
 
-window.renderExecutiveRewards = function() {
+window.renderExecutiveRewards = function () {
     const list = document.getElementById('executiveRewardList');
     if (!list) return;
-    
+
     if (!window.globalRewardsData || window.globalRewardsData.length === 0) {
         list.innerHTML = '<div class="text-center text-muted small py-3">ยังไม่ได้ตั้งของรางวัล</div>';
         return;
     }
-    
+
     let html = '';
     window.globalRewardsData.forEach(r => {
         let claimants = [];
         let eligible = [];
-        
+
         (window.globalClaimsData || []).forEach(cl => {
             if (cl.rewardId === r.id) {
                 const statsMap = window.globalUserStatsMap || {};
                 let u = statsMap[cl.userId];
                 if (!u) { const found = Object.values(statsMap).find(x => String(x.id) === String(cl.userId)); if (found) u = found; }
-                if (!u) { const fu = (window.allUsersMap||{})[cl.userId]; u = fu ? {name:fu.name,userId:cl.userId,img:fu.img} : {name:cl.userName,userId:cl.userId,img:null}; }
+                if (!u) { const fu = (window.allUsersMap || {})[cl.userId]; u = fu ? { name: fu.name, userId: cl.userId, img: fu.img } : { name: cl.userName, userId: cl.userId, img: null }; }
                 claimants.push(u);
             }
         });
@@ -3581,13 +4274,13 @@ window.renderExecutiveRewards = function() {
                 if (isEligible) eligible.push(u);
             });
         }
-        
+
         let achieversHtml = '';
         if (claimants.length > 0 || eligible.length > 0) {
             const combined = [...claimants, ...eligible];
             const faceHtml = combined.slice(0, 5).map(a => `<img src="${a.img || 'https://dummyimage.com/30x30/ccc/fff'}" class="rounded-circle border" style="width:24px; height:24px; margin-right:-8px;" title="${a.name}">`).join('');
             const moreCount = combined.length > 5 ? `<span class="badge bg-secondary ms-2" style="font-size:0.6rem;">+${combined.length - 5}</span>` : '';
-            
+
             achieversHtml = `
             <div class="mt-2 pt-2 border-top">
                 <button class="btn btn-sm btn-light w-100 text-start d-flex justify-content-between align-items-center rounded-3" onclick="document.getElementById('achievers_${r.id}').classList.toggle('d-none')">
@@ -3597,16 +4290,16 @@ window.renderExecutiveRewards = function() {
                 <div id="achievers_${r.id}" class="d-none mt-2 p-2 bg-light rounded-3 small border" style="max-height: 180px; overflow-y: auto;">
                     ${claimants.length > 0 ? `<div class="fw-bold mb-1 text-primary"><i class="fas fa-check-circle"></i> แจ้งรับรางวัลแล้ว:</div>` : ''}
                     ${claimants.map(a => {
-                        const cl = window.globalClaimsData.find(c => c.rewardId === r.id && String(c.userId) === String(a.userId || a.id));
-                        const dateStr = cl && cl.timestamp ? new Date(cl.timestamp).toLocaleString('th-TH', { hour:'2-digit', minute:'2-digit', day:'numeric', month:'short' }) : '';
-                        return `<div class="d-flex align-items-center mb-1 ms-2 justify-content-between">
+                const cl = window.globalClaimsData.find(c => c.rewardId === r.id && String(c.userId) === String(a.userId || a.id));
+                const dateStr = cl && cl.timestamp ? new Date(cl.timestamp).toLocaleString('th-TH', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' }) : '';
+                return `<div class="d-flex align-items-center mb-1 ms-2 justify-content-between">
                             <div class="d-flex align-items-center">
                                 <img src="${a.img || 'https://dummyimage.com/30x30/ccc/fff'}" class="rounded-circle me-2" style="width:20px; height:20px;"> 
                                 <span>${a.name}</span>
                             </div>
                             <span class="text-muted" style="font-size:0.65rem;">${dateStr}</span>
                         </div>`;
-                    }).join('')}
+            }).join('')}
                     
                     ${eligible.length > 0 ? `<div class="fw-bold mt-2 mb-1 text-muted"><i class="fas fa-clock"></i> ยังไม่ได้กดแจ้งรับ:</div>` : ''}
                     ${eligible.map(a => `<div class="d-flex align-items-center mb-1 ms-2 opacity-75"><img src="${a.img || 'https://dummyimage.com/30x30/ccc/fff'}" class="rounded-circle me-2" style="width:20px; height:20px;"> <span>${a.name}</span></div>`).join('')}
@@ -3618,7 +4311,7 @@ window.renderExecutiveRewards = function() {
 
         const modeBadge = r.mode == 1 ? '<span class="badge bg-success ms-1" style="font-size:0.6rem;">เป้าหมายรวม</span>' : '<span class="badge" style="background:#ff9f43; font-size:0.6rem; margin-left:4px;">ภารกิจพิเศษ</span>';
         const imgStr = r.image ? `<img src="${r.image}" style="width:50px; height:50px; object-fit:cover; border-radius:10px;">` : `<div class="bg-light rounded d-flex align-items-center justify-content-center" style="width:50px; height:50px;"><i class="fas fa-gift text-muted"></i></div>`;
-        
+
         html += `
         <div class="d-flex flex-column p-2 rounded-3 shadow-sm bg-white border mb-2">
             <div class="d-flex align-items-center" style="gap: 12px;">
@@ -3642,12 +4335,12 @@ window.renderExecutiveRewards = function() {
     list.innerHTML = html;
 };
 
-window.renderUserRewards = function() {
+window.renderUserRewards = function () {
     const challengeList = document.getElementById('challengeRewardList');
     const milestoneList = document.getElementById('milestoneRewardList');
     const challengeZone = document.getElementById('rewardChallengeZone');
     const milestoneZone = document.getElementById('rewardMilestoneZone');
-    const noRewardsMsg  = document.getElementById('noRewardsMessage');
+    const noRewardsMsg = document.getElementById('noRewardsMessage');
     if (!challengeList || !milestoneList) return;
     const rewards = window.globalRewardsData || [];
     if (rewards.length === 0) {
@@ -3658,7 +4351,7 @@ window.renderUserRewards = function() {
     }
     if (noRewardsMsg) noRewardsMsg.style.display = 'none';
     const challenges = rewards.filter(r => r.mode == 2);
-    const milestones  = rewards.filter(r => r.mode == 1);
+    const milestones = rewards.filter(r => r.mode == 1);
     let lifetimeXP = 0;
     if (window.currentUser) {
         if (window.globalUserStatsMap && window.globalUserStatsMap[window.currentUser.userId]) {
@@ -3684,11 +4377,11 @@ window.renderUserRewards = function() {
         document.head.appendChild(st);
     }
     function buildCard(r, xp, color, isChallenge) {
-        const target   = r.targetVal;
-        const pct      = Math.min(100, Math.round((xp / target) * 100));
+        const target = r.targetVal;
+        const pct = Math.min(100, Math.round((xp / target) * 100));
         const unlocked = xp >= target;
-        const claimed  = (window.globalClaimsData || []).some(
-            c => c.rewardId === r.id && String(c.userId) === String((window.currentUser||{}).userId));
+        const claimed = (window.globalClaimsData || []).some(
+            c => c.rewardId === r.id && String(c.userId) === String((window.currentUser || {}).userId));
         const glow = color === '#28a745' ? 'rwGlowGreen' : 'rwGlow';
         let box;
         if (claimed) {
@@ -3701,7 +4394,7 @@ window.renderUserRewards = function() {
         }
         const dateStr = r.endDate ? `<div class="small text-danger text-center mt-1" style="font-size:.68rem;"><i class="far fa-clock"></i> ${new Date(r.endDate).toLocaleDateString('th-TH')}</div>` : '';
         const displayName = claimed ? r.name : '🎁 รางวัลปริศนา';
-        return `<div class="reward-gift-card" style="border-radius:20px;padding:20px 10px 14px;text-align:center;transition:transform .2s;${unlocked && !claimed ? 'border:2px solid '+color+'!important;box-shadow:0 6px 24px '+color+'30!important;' : ''}">${box}<div class="fw-bold mt-3 mb-1 px-1" style="font-size:.85rem;color:${unlocked ? color : '#666'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${displayName}</div><div class="d-flex justify-content-between" style="color:#aaa;font-size:.65rem;margin-bottom:4px;"><span>${isChallenge ? 'ใหม่: ' : 'รวม: '}${xp} XP</span><span>${target} XP</span></div><div style="height:8px;background:#ececec;border-radius:10px;overflow:hidden;"><div style="height:100%;width:${pct}%;background:${unlocked ? color : '#b0bec5'};border-radius:10px;${unlocked && !claimed ? 'animation:rwShine 2s linear infinite;' : ''}transition:width .8s ease;"></div></div><div style="font-size:.6rem;color:#bbb;margin-top:3px;">${pct}%</div>${dateStr}</div>`;
+        return `<div class="reward-gift-card" style="border-radius:20px;padding:20px 10px 14px;text-align:center;transition:transform .2s;${unlocked && !claimed ? 'border:2px solid ' + color + '!important;box-shadow:0 6px 24px ' + color + '30!important;' : ''}">${box}<div class="fw-bold mt-3 mb-1 px-1" style="font-size:.85rem;color:${unlocked ? color : '#666'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${displayName}</div><div class="d-flex justify-content-between" style="color:#aaa;font-size:.65rem;margin-bottom:4px;"><span>${isChallenge ? 'ใหม่: ' : 'รวม: '}${xp} XP</span><span>${target} XP</span></div><div style="height:8px;background:#ececec;border-radius:10px;overflow:hidden;"><div style="height:100%;width:${pct}%;background:${unlocked ? color : '#b0bec5'};border-radius:10px;${unlocked && !claimed ? 'animation:rwShine 2s linear infinite;' : ''}transition:width .8s ease;"></div></div><div style="font-size:.6rem;color:#bbb;margin-top:3px;">${pct}%</div>${dateStr}</div>`;
     }
     if (milestones.length > 0) {
         if (milestoneZone) milestoneZone.style.display = 'block';
@@ -3731,14 +4424,17 @@ window.renderUserRewards = function() {
         });
         challengeList.innerHTML = h + '</div>';
     } else if (challengeZone) { challengeZone.style.display = 'none'; }
+
+    // 🌟 [UI UPDATE] อัปเดตตัวเลขแจ้งเตือนบนแท็บ (Badge Count)
+    if (typeof updateNavBadgesBadge === 'function') updateNavBadgesBadge();
 };
 
-window.openRewardBox = function(id) {
+window.openRewardBox = function (id) {
     const r = (window.globalRewardsData || []).find(x => x.id === id);
     if (!r) return;
     const isChallenge = r.mode == 2;
     const accentColor = isChallenge ? '#ff9f43' : '#28a745';
-    const glow        = isChallenge ? 'rwGlow' : 'rwGlowGreen';
+    const glow = isChallenge ? 'rwGlow' : 'rwGlowGreen';
     let currentXP = 0;
     if (isChallenge) {
         if (window.currentUser && window.globalFeedData) {
@@ -3769,48 +4465,48 @@ window.openRewardBox = function(id) {
     overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:99999;background:rgba(0,0,0,0.72);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;flex-direction:column;animation:fadeIn .3s ease;';
     overlay.innerHTML = `<style>@keyframes fadeIn{from{opacity:0}to{opacity:1}}@keyframes boxReveal{0%{transform:scale(.4) rotate(-8deg);opacity:0}60%{transform:scale(1.1) rotate(2deg)}100%{transform:scale(1) rotate(0deg);opacity:1}}</style><button onclick="document.getElementById('rwOverlay').remove()" style="position:fixed;top:18px;right:18px;width:40px;height:40px;border:none;background:rgba(255,255,255,.15);border-radius:50%;color:#fff;font-size:1.2rem;cursor:pointer;z-index:100000;display:flex;align-items:center;justify-content:center;"><i class="fas fa-times"></i></button><div class="reward-overlay-card" style="border-radius:28px;padding:30px 24px 24px;max-width:320px;width:88%;text-align:center;box-shadow:0 20px 80px rgba(0,0,0,.4);animation:boxReveal .5s cubic-bezier(.22,1,.36,1) both;"><div style="width:200px;height:200px;margin:0 auto 18px;border-radius:20px;overflow:hidden;border:3px solid ${accentColor};box-shadow:0 0 40px ${accentColor}70;display:flex;align-items:center;justify-content:center;animation:${glow} 1.5s ease-in-out infinite alternate;">${imgHtml}</div><div style="font-size:1.2rem;font-weight:700;color:${accentColor};margin-bottom:6px;">${r.name}</div><div style="font-size:.78rem;color:#888;margin-bottom:18px;">${isChallenge ? 'ภารกิจพิเศษ' : 'รางวัลกิจกรรมทำความดี'}</div><div class="reward-progress-bg" style="border-radius:14px;padding:12px 14px;margin-bottom:18px;text-align:left;"><div class="d-flex justify-content-between" style="font-size:.72rem;color:#888;margin-bottom:6px;"><span>คะแนน${isChallenge ? 'ใหม่' : 'สะสม'}</span><span style="font-weight:700;color:${accentColor};">${currentXP} / ${r.targetVal} XP</span></div><div style="height:12px;background:#e0e0e0;border-radius:10px;overflow:hidden;"><div style="height:100%;width:${pct}%;background:${accentColor};border-radius:10px;animation:rwShine 2s linear infinite;transition:width .8s ease;"></div></div><div style="text-align:right;font-size:.62rem;color:#bbb;margin-top:4px;">${pct}%</div></div><button onclick="document.getElementById('rwOverlay').remove(); claimReward('${r.id}');" style="width:100%;padding:13px;border:none;border-radius:14px;font-size:1rem;font-weight:700;color:#fff;background:${accentColor};cursor:pointer;box-shadow:0 4px 14px ${accentColor}50;letter-spacing:.4px;"><i class="fas fa-star me-2"></i> แจ้งรับรางวัล</button><button onclick="document.getElementById('rwOverlay').remove();" style="margin-top:10px;width:100%;padding:10px;border:1.5px solid #ddd;background:#fff;border-radius:12px;cursor:pointer;font-size:.85rem;color:#888;">ปิด</button></div>`;
     document.body.appendChild(overlay);
-    overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.remove(); });
 };
 
-window.openAddRewardModal = function() {
+window.openAddRewardModal = function () {
     if (typeof closeRewardModal === 'function') closeRewardModal();
     const title = document.getElementById('rewardModalTitle');
     if (title) title.innerHTML = '<i class="fas fa-plus me-2"></i>เพิ่มของรางวัลใหม่';
-    
+
     ['rewardName', 'rewardImageUrl', 'rewardImage', 'rewardTargetVal', 'rewardEndDate', 'editRewardId'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
     });
-    
+
     window.currentRewardFile = null; // ล้างไฟล์ที่เลือกไว้
-    
+
     const preview = document.getElementById('rewardImagePreview');
     if (preview) preview.src = '';
     const previewContainer = document.getElementById('rewardImagePreviewContainer');
     if (previewContainer) previewContainer.style.display = 'none';
-    
+
     const mode = document.getElementById('rewardMode');
     if (mode) { mode.value = '1'; mode.disabled = false; }
     const targetVal = document.getElementById('rewardTargetVal');
     if (targetVal) targetVal.disabled = false;
-    
+
     if (typeof toggleRewardModeFields === 'function') toggleRewardModeFields();
-    
+
     const backdrop = document.getElementById('rewardModalBackdrop');
     if (backdrop) backdrop.style.display = 'block';
     const modal = document.getElementById('rewardModal');
     if (modal) modal.style.display = 'block';
 };
 
-window.editReward = function(id) {
+window.editReward = function (id) {
     const r = (window.globalRewardsData || []).find(x => x.id === id);
     if (!r) return;
     const title = document.getElementById('rewardModalTitle');
     if (title) title.innerHTML = '<i class="fas fa-pen me-2"></i>แก้ไขของรางวัล';
-    
+
     const nameEl = document.getElementById('rewardName'); if (nameEl) nameEl.value = r.name;
     const urlEl = document.getElementById('rewardImageUrl'); if (urlEl) urlEl.value = r.image || '';
-    
+
     window.currentRewardFile = null; // ล้างไฟล์ที่อาจค้างอยู่
 
     const preview = document.getElementById('rewardImagePreview');
@@ -3822,11 +4518,11 @@ window.editReward = function(id) {
         preview.src = '';
         previewContainer.style.display = 'none';
     }
-    
+
     const imgEl = document.getElementById('rewardImage'); if (imgEl) imgEl.value = '';
     const modeEl = document.getElementById('rewardMode'); if (modeEl) { modeEl.value = r.mode; modeEl.disabled = true; }
     const targetEl = document.getElementById('rewardTargetVal'); if (targetEl) { targetEl.value = r.targetVal; targetEl.disabled = false; }
-    
+
     const endEl = document.getElementById('rewardEndDate');
     if (endEl) {
         if (r.endDate) {
@@ -3837,25 +4533,25 @@ window.editReward = function(id) {
             endEl.value = '';
         }
     }
-    
+
     const editIdEl = document.getElementById('editRewardId'); if (editIdEl) editIdEl.value = r.id;
     if (typeof toggleRewardModeFields === 'function') toggleRewardModeFields();
-    
+
     const backdrop = document.getElementById('rewardModalBackdrop'); if (backdrop) backdrop.style.display = 'block';
     const modal = document.getElementById('rewardModal'); if (modal) modal.style.display = 'block';
 };
 
-window.closeRewardModal = function() {
+window.closeRewardModal = function () {
     const backdrop = document.getElementById('rewardModalBackdrop'); if (backdrop) backdrop.style.display = 'none';
     const modal = document.getElementById('rewardModal'); if (modal) modal.style.display = 'none';
 };
 
-window.toggleRewardModeFields = function() {
+window.toggleRewardModeFields = function () {
     const modeEl = document.getElementById('rewardMode');
     const labelEl = document.getElementById('rewardTargetLabel');
     const helpEl = document.getElementById('rewardModeHelp');
     if (!modeEl || !labelEl || !helpEl) return;
-    
+
     if (modeEl.value === '1') {
         labelEl.innerHTML = 'เป้าหมายคะแนนรวม (Lifetime XP)';
         helpEl.innerHTML = 'พนักงานทุกคนที่สะสมคะแนนจากอดีตถึงปัจจุบันจนถึงเป้าจะได้รับรางวัลนี้';
@@ -3865,14 +4561,14 @@ window.toggleRewardModeFields = function() {
     }
 };
 
-document.getElementById('rewardImage')?.addEventListener('change', function(e) {
+document.getElementById('rewardImage')?.addEventListener('change', function (e) {
     const file = e.target.files[0];
     if (!file) return;
-    
+
     window.currentRewardFile = file; // เก็บไฟล์ไว้ก่อน ยังไม่บันทึก
 
     const reader = new FileReader();
-    reader.onload = function(evt) {
+    reader.onload = function (evt) {
         const preview = document.getElementById('rewardImagePreview');
         const container = document.getElementById('rewardImagePreviewContainer');
         if (preview && container) {
@@ -3883,18 +4579,18 @@ document.getElementById('rewardImage')?.addEventListener('change', function(e) {
     reader.readAsDataURL(file);
 });
 
-window.removeRewardImage = function() {
+window.removeRewardImage = function () {
     window.currentRewardFile = null; // ล้างไฟล์ที่เลือกไว้
-    
+
     // หมายเหตุ: เราจะไม่สั่งลบจาก Cloudinary ทันทีตามที่ผู้ใช้แจ้ง 
     // เพราะถ้าเขายังไม่กดบันทึก รูปเดิมในฐานข้อมูลยังต้องคงอยู่
-    
+
     ['rewardImage', 'rewardImageUrl'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     const preview = document.getElementById('rewardImagePreview'); if (preview) preview.src = '';
     const container = document.getElementById('rewardImagePreviewContainer'); if (container) container.style.display = 'none';
 };
 
-window.saveReward = async function() {
+window.saveReward = async function () {
     const nameEl = document.getElementById('rewardName');
     const modeEl = document.getElementById('rewardMode');
     const targetEl = document.getElementById('rewardTargetVal');
@@ -3908,17 +4604,17 @@ window.saveReward = async function() {
     const targetVal = targetEl.value;
     const endDate = endEl ? endEl.value : '';
     const editId = editIdEl ? editIdEl.value : '';
-    
+
     if (!name || !targetVal) {
         Swal.fire('แจ้งเตือน', 'กรุณากรอกชื่อและคะแนนเป้าหมายให้ครบถ้วน', 'warning');
         return;
     }
-    
-    Swal.fire({title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading(), allowOutsideClick: false});
-    
+
+    Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+
     try {
         let finalImageUrl = urlEl ? urlEl.value : '';
-        
+
         // อัปโหลดรูปภาพไปยัง Cloudinary เฉพาะตอนกดบันทึกเท่านั้น
         if (window.currentRewardFile && typeof uploadImageToCloudinary === 'function') {
             Swal.update({ title: 'กำลังอัปโหลดรูปภาพไปยัง Cloudinary...' });
@@ -3927,6 +4623,36 @@ window.saveReward = async function() {
                 finalImageUrl = uploadedUrl;
             } else {
                 Swal.fire('ข้อผิดพลาด', 'อัปโหลดรูปภาพไม่สำเร็จ', 'error');
+                return;
+            }
+        }
+
+        // ☁️ [Supabase ONLY Mode]
+        if (READ_FROM_SUPABASE && supabaseClient) {
+            try {
+                const now = new Date();
+                const rwId = editId || ('rw_' + Date.now());
+                const rwPayload = {
+                    ID: rwId,
+                    Name: name,
+                    Mode: mode,
+                    TargetVal: Number(targetVal) || 0,
+                    EndDate: endDate || null,
+                    Image: finalImageUrl,
+                    Status: 'active',
+                    Date: now.toISOString().split('T')[0],
+                    Time: now.toTimeString().split(' ')[0]
+                };
+                await supabaseClient.from('Rewards').upsert(rwPayload);
+                console.log('☁️ Supabase: Reward updated/inserted');
+                window.currentRewardFile = null;
+                Swal.fire('สำเร็จ', editId ? 'แก้ไขรางวัลเรียบร้อย' : 'เพิ่มรางวัลใหม่เรียบร้อยแล้ว', 'success');
+                if (typeof closeRewardModal === 'function') closeRewardModal();
+                if (typeof fetchRewards === 'function') fetchRewards();
+                return;
+            } catch (e) {
+                console.error('☁️ Supabase Reward Save Error:', e);
+                Swal.fire('Error', 'ไม่สามารถบันทึกลง Supabase ได้: ' + e.message, 'error');
                 return;
             }
         }
@@ -3940,10 +4666,10 @@ window.saveReward = async function() {
             endDate: endDate,
             image: finalImageUrl
         };
-        
+
         const res = await fetch(GAS_URL, { method: 'POST', body: JSON.stringify(payload) });
         const data = await res.json();
-        
+
         if (data.status === 'success') {
             window.currentRewardFile = null; // ล้างค่าหลังบันทึกสำเร็จ
             Swal.fire('สำเร็จ', editId ? 'แก้ไขรางวัลเรียบร้อย' : 'เพิ่มรางวัลใหม่เรียบร้อยแล้ว', 'success');
@@ -3952,13 +4678,13 @@ window.saveReward = async function() {
         } else {
             Swal.fire('ข้อผิดพลาด', data.message || 'บันทึกไม่สำเร็จ', 'error');
         }
-    } catch(err) {
+    } catch (err) {
         console.error(err);
         Swal.fire('ข้อผิดพลาด', 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์', 'error');
     }
 };
 
-window.deleteReward = function(id) {
+window.deleteReward = function (id) {
     Swal.fire({
         title: 'ยืนยันการลบ?',
         text: 'รางวัลนี้จะถูกยกเลิกและลบออกจากระบบทันที',
@@ -3970,9 +4696,39 @@ window.deleteReward = function(id) {
         cancelButtonText: 'ยกเลิก'
     }).then(async (result) => {
         if (result.isConfirmed) {
-            Swal.fire({title: 'กำลังลบ...', didOpen: () => Swal.showLoading()});
+            Swal.fire({ title: 'กำลังลบ...', didOpen: () => Swal.showLoading() });
+            // ☁️ [Supabase ONLY Mode]
+            if (READ_FROM_SUPABASE && supabaseClient) {
+                try {
+                    // 1. ดึง URL รูปภาพออกมาก่อนลบ (เพื่อไปลบใน Cloudinary)
+                    const { data: rwData } = await supabaseClient.from('Rewards').select('Image').eq('ID', id).single();
+                    const imageUrl = rwData?.Image;
+
+                    // 2. ลบข้อมูลใน Supabase
+                    await supabaseClient.from('Claims').delete().eq('RewardID', id);
+                    await supabaseClient.from('Rewards').delete().eq('ID', id);
+
+                    // 3. ถ้ามีรูป ให้สั่ง GAS ลบรูปใน Cloudinary ด้วย
+                    if (imageUrl) {
+                        fetch(GAS_URL, { 
+                            method: 'POST', 
+                            mode: 'no-cors', 
+                            body: JSON.stringify({ action: 'delete_image', urls: imageUrl }) 
+                        }).catch(e => console.warn("Cloudinary cleanup failed", e));
+                    }
+
+                    Swal.fire('ลบสำเร็จ', '', 'success');
+                    if (typeof fetchRewards === 'function') fetchRewards();
+                    return;
+                } catch (e) {
+                    console.error('☁️ Supabase Reward Delete Error:', e);
+                    Swal.fire('Error', 'ไม่สามารถลบจาก Supabase ได้: ' + e.message, 'error');
+                    return;
+                }
+            }
+
             try {
-                const res = await fetch(GAS_URL, { method: 'POST', body: JSON.stringify({action: 'delete_reward', rewardId: id}) });
+                const res = await fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'delete_reward', rewardId: id }) });
                 const data = await res.json();
                 if (data.status === 'success') {
                     Swal.fire('ลบสำเร็จ', '', 'success');
@@ -3980,14 +4736,14 @@ window.deleteReward = function(id) {
                 } else {
                     Swal.fire('ผิดพลาด', data.message || '', 'error');
                 }
-            } catch(e) {
+            } catch (e) {
                 Swal.fire('ผิดพลาด', 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้', 'error');
             }
         }
     });
 };
 
-window.claimReward = function(id) {
+window.claimReward = function (id) {
     if (!window.currentUser) return;
     Swal.fire({
         title: 'ยืนยันการรับรางวัล 🎉',
@@ -4000,6 +4756,33 @@ window.claimReward = function(id) {
     }).then(async (result) => {
         if (result.isConfirmed) {
             Swal.fire({ title: 'กำลังบันทึกข้อมูล...', didOpen: () => Swal.showLoading() });
+            // ☁️ [Supabase ONLY Mode]
+            if (READ_FROM_SUPABASE && supabaseClient) {
+                try {
+                    const now = new Date();
+                    await supabaseClient.from('Claims').insert({
+                        ClaimID: 'clm_' + Date.now(),
+                        RewardID: id,
+                        UserID: window.currentUser.userId,
+                        UserName: window.currentUser.name,
+                        Date: now.toISOString().split('T')[0],
+                        Time: now.toTimeString().split(' ')[0]
+                    });
+                    Swal.fire({
+                        title: 'สำเร็จ! 🥳',
+                        html: `แจ้งรับรางวัลเรียบร้อยแล้ว!<br><br><small class="text-muted">กรุณาติดต่อรับรางวัลกับทาง HR หรือผู้ดูแลระบบครับ</small>`,
+                        icon: 'success',
+                        confirmButtonColor: '#ff9f43'
+                    });
+                    if (typeof fetchRewards === 'function') fetchRewards();
+                    return;
+                } catch (e) {
+                    console.error('☁️ Supabase Reward Claim Error:', e);
+                    Swal.fire('Error', 'ไม่สามารถแจ้งรับใน Supabase ได้: ' + e.message, 'error');
+                    return;
+                }
+            }
+
             try {
                 const payload = {
                     action: 'claim_reward',
@@ -4026,3 +4809,382 @@ window.claimReward = function(id) {
         }
     });
 };
+
+
+// =====================================================
+// ✅ ระบบอนุมัติผู้ใช้งานใหม่ (Admin/Manager Only)
+// =====================================================
+async function approveUser(lineId) {
+    const result = await Swal.fire({
+        title: 'ยืนยันการอนุมัติ?',
+        text: `ต้องการอนุมัติผู้ใช้รายนี้เข้าระบบใช่หรือไม่?`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'ยืนยัน',
+        cancelButtonText: 'ยกเลิก'
+    });
+
+    if (!result.isConfirmed) return;
+
+    Swal.fire({ title: 'กำลังดำเนินการ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+    try {
+        if (READ_FROM_SUPABASE && supabaseClient) {
+            const { error } = await supabaseClient
+                .from('Users')
+                .update({ Status: 'active', Role: 'Staff' })
+                .eq('LineID', lineId);
+            if (error) throw error;
+        }
+
+        // แจ้งไปยัง GAS ด้วย (เพื่อ Sync ข้อมูล)
+        await fetch(GAS_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ action: 'approve_user', userId: lineId, status: 'active', role: 'Staff' })
+        });
+
+        Swal.fire({ icon: 'success', title: 'อนุมัติสำเร็จ', timer: 1500, showConfirmButton: false });
+        if (typeof fetchManagerData === 'function') fetchManagerData(true);
+    } catch (e) {
+        console.error('Approve User Error:', e);
+        Swal.fire('Error', e.message, 'error');
+    }
+}
+
+async function rejectUser(lineId) {
+    const result = await Swal.fire({
+        title: 'ปฏิเสธคำขอ?',
+        text: `ต้องการปฏิเสธการขอเข้าระบบของผู้ใช้รายนี้ใช่หรือไม่?`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ff7675',
+        confirmButtonText: 'ใช่, ปฏิเสธ',
+        cancelButtonText: 'ยกเลิก'
+    });
+
+    if (!result.isConfirmed) return;
+
+    Swal.fire({ title: 'กำลังดำเนินการ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+    try {
+        if (READ_FROM_SUPABASE && supabaseClient) {
+            const { error } = await supabaseClient
+                .from('Users')
+                .update({ Status: 'rejected' })
+                .eq('LineID', lineId);
+            if (error) throw error;
+        }
+
+        await fetch(GAS_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ action: 'approve_user', userId: lineId, status: 'rejected' })
+        });
+
+        Swal.fire({ icon: 'info', title: 'ปฏิเสธคำขอเรียบร้อย', timer: 1500, showConfirmButton: false });
+        if (typeof fetchManagerData === 'function') fetchManagerData(true);
+    } catch (e) {
+        console.error('Reject User Error:', e);
+        Swal.fire('Error', e.message, 'error');
+    }
+}
+
+/**
+ * 🔄 ซิงค์คะแนนและสถิติของผู้ใช้ใหม่จากประวัติกิจกรรมทั้งหมด (Single User Sync)
+ * ช่วยแก้ปัญหาคะแนนไม่ลดเมื่อลบโพสต์ หรือสถิติไม่เปลี่ยนเมื่อแก้ไขหมวดหมู่
+ */
+async function syncUserScore(lineId) {
+    if (!lineId || !supabaseClient) return;
+    try {
+        // 1. ดึงข้อมูลผู้ใช้ปัจจุบัน
+        const { data: uData } = await supabaseClient.from('Users').select('Name').eq('LineID', lineId).maybeSingle();
+        if (!uData) return;
+
+        // 2. ดึงประวัติกิจกรรมที่เกี่ยวข้อง (เป็นเจ้าของ หรือ ถูกแท็ก)
+        const { data: acts } = await supabaseClient
+            .from('Activities')
+            .select('*')
+            .or(`UserId.eq.${lineId},Tagged.ilike.%${lineId}%`);
+
+        let score = 100; // 🌟 [BASE] คะแนนแรกเข้า 100 แต้ม
+        let vStats = { volunteer: 0, sufficiency: 0, discipline: 0, integrity: 0, gratitude: 0 };
+        let totalCount = 0;
+        let taggedCount = 0;
+
+        (acts || []).forEach(p => {
+            const status = (p.Status || "").toLowerCase();
+            const s = (status === 'approved') ? (parseInt(p.Score || p.score) || 10) : 0;
+            const isOwner = p.UserId === lineId;
+            
+            if (isOwner) totalCount++;
+            else taggedCount++;
+
+            // 🌟 [POLICY] ทั้งเจ้าของและคนถูกแท็ก ได้คะแนน 10 XP + โบนัสสุจริต 3 XP
+            if (s > 0) {
+                score += s;
+                if (p.Virtue && vStats[p.Virtue] !== undefined) vStats[p.Virtue] += s;
+
+                // 🌟 [BONUS] ทุกคนที่มีส่วนร่วม (Owner & Tagged) ได้ "สุจริต" +3
+                score += 3;
+                vStats.integrity += 3;
+            }
+        });
+
+        // 3. รวมคะแนนจากการเป็นพยาน (Witness)
+        const { data: witnessActs } = await supabaseClient
+            .from('Activities')
+            .select('JSON')
+            .ilike('JSON', `%${lineId}%`);
+            
+        let witnessCount = 0;
+        (witnessActs || []).forEach(p => {
+            let json = p.JSON;
+            if (typeof json === 'string') try { json = JSON.parse(json); } catch(e){}
+            const verifies = json.verifies || [];
+            verifies.forEach((v, idx) => {
+                // 🌟 [LEGACY SUPPORT] รองรับทั้งแบบ Object {userId} และแบบ String ID ตรงๆ
+                const vid = (typeof v === 'object' ? (v.userId || v.lineId || "") : v).toString().trim();
+                
+                if (idx < 2 && vid === lineId) {
+                    score += 1;
+                    vStats.volunteer += 1; // 🌟 พยานได้ "จิตอาสา" (+1 เพื่อความสมดุล)
+                    witnessCount++;
+                }
+            });
+        });
+
+        const level = Math.floor(score / 500) + 1;
+
+        // 5. คำนวณ Happiness Score (Legacy Model: sumHappy * 0.5)
+        let sumHappy = 0;
+        let lastActiveDate = null;
+        (acts || []).forEach(p => {
+            if (p.UserId === lineId) {
+                const h = parseInt(p.Happy || p.HappyLevel || p.happy_level || 0);
+                if (h > 0) sumHappy += h;
+                
+                const pDate = new Date(p.Date + 'T' + (p.Time || '00:00:00'));
+                if (!lastActiveDate || pDate > lastActiveDate) lastActiveDate = pDate;
+            }
+        });
+
+        const baseHappyScore = sumHappy * 0.5;
+        let penalty = 0;
+        if (lastActiveDate) {
+            const diffDays = Math.floor((Date.now() - lastActiveDate.getTime()) / (1000 * 60 * 60 * 24));
+            penalty = Math.floor(diffDays / 3) * 0.5;
+        }
+        const finalHappy = Math.min(10, Math.max(0, baseHappyScore - penalty));
+        
+        // 6. บันทึกกลับลงตาราง Users ให้เป็นปัจจุบันที่สุด
+        const updatePayload = {
+            "Score": score,
+            "Level": level,
+            "HappyScore": finalHappy,
+            "VirtueStats": vStats,
+            "TotalCount": totalCount,
+            "TaggedCount": taggedCount,
+            "WitnessCount": witnessCount,
+            "LastDate": lastActiveDate ? lastActiveDate.toISOString().split('T')[0] : null,
+            "LastTime": lastActiveDate ? lastActiveDate.toTimeString().split(' ')[0] : null
+        };
+
+        const { error: finalErr } = await supabaseClient.from('Users').update(updatePayload).eq('LineID', lineId);
+        if (finalErr) {
+            console.error(`❌ [Sync] Update Failed for ${lineId}:`, finalErr);
+        } else {
+            console.log(`✅ [Sync] Updated scores for ${uData.Name} (${lineId}): ${score} XP`);
+        }
+
+        // ถ้าเป็นตัวเราเอง ให้รีเฟรช State ในเครื่องด้วย
+        if (currentUser && lineId === currentUser.userId) {
+            Object.assign(currentUser, {
+                score: score,
+                level: level,
+                happyScore: finalHappy,
+                virtueStats: vStats,
+                totalCount: totalCount,
+                taggedCount: taggedCount,
+                witnessCount: witnessCount
+            });
+            saveUserSession(currentUser);
+            if (typeof renderProfile === 'function') renderProfile();
+        }
+    } catch (e) {
+        console.error(`❌ [Sync] Failed for ${lineId}:`, e);
+    }
+}
+
+/**
+ * 🛠️ ฟังก์ชันซ่อมแซมคะแนนผู้ใช้ทุกคน (สำหรับ Admin)
+ * คำนวณจาก Activities ทั้งหมดแล้วอัปเดตลงตาราง Users
+ */
+async function repairAllUserScores() {
+    const role = String(currentUser?.role || '').toLowerCase();
+    const isAdmin = role.includes('admin') || role.includes('executive') || role.includes('manager') || role.includes('ผู้บริหาร');
+    
+    if (!isAdmin) {
+        Swal.fire('สิทธิ์ไม่เพียงพอ', 'เฉพาะผู้บริหารหรือ Admin เท่านั้นที่สามารถใช้ฟังก์ชันนี้ได้ครับ', 'error');
+        return;
+    }
+
+    const res = await Swal.fire({
+        title: 'ยืนยันการรวมคะแนนใหม่?',
+        text: "ระบบจะอ่านประวัติโพสต์ทั้งหมดเพื่อรวมคะแนนให้ทุกคนใหม่ วิธีนี้จะช่วยแก้ปัญหาคะแนนไม่ตรงหลังการย้ายข้อมูลครับ",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'เริ่มคำนวณใหม่',
+        cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#ff7675'
+    });
+
+    if (!res.isConfirmed) return;
+
+    Swal.fire({
+        title: 'กำลังประมวลผล...',
+        html: 'โปรดอย่าปิดหน้าจอนี้ ระบบกำลังรวบรวมข้อมูลโพสต์ทั้งหมด...',
+        allowOutsideClick: false,
+        didOpen: () => { Swal.showLoading(); }
+    });
+
+    try {
+        // 1. ดึงข้อมูลทั้งหมดในครั้งเดียว
+        const { data: allActs, error: actErr } = await supabaseClient.from('Activities').select('*');
+        const { data: allUsers, error: userErr } = await supabaseClient.from('Users').select('LineID, Name');
+
+        if (actErr || userErr) throw new Error("ดึงข้อมูลจากฐานข้อมูลไม่สำเร็จ");
+
+        // 2. เตรียม Map สำหรับเก็บผลลัพธ์ของทุกคน
+        const userStats = {};
+        allUsers.forEach(u => {
+            if (u.LineID) {
+                userStats[u.LineID] = {
+                    score: 0, // 🌟 กลับมาเริ่มที่ 0 ตามข้อมูลจริง
+                    vStats: { volunteer: 0, sufficiency: 0, discipline: 0, integrity: 0, gratitude: 0 },
+                    totalCount: 0,
+                    taggedCount: 0,
+                    witnessCount: 0,
+                    lastActive: null,
+                    sumHappy: 0
+                };
+            }
+        });
+
+        // 3. ประมวลผลจากประวัติ Activities ทั้งหมด
+        allActs.forEach(p => {
+            const status = (p.Status || "").toLowerCase();
+            if (status === 'rejected') return;
+
+            const ownerId = String(p.UserId || "").trim();
+            const ownerImg = p.Image || p.image || "";
+            const tagged = (p.Tagged || "").split(',').map(s => s.trim()).filter(Boolean);
+            
+            // 🌟 [IMAGE RECOVERY] เก็บรูปที่ใหม่ที่สุดจากประวัติโพสต์ (เพิ่มตัวป้องกัน undefined)
+            if (ownerId && ownerImg && ownerImg.startsWith('http') && userStats[ownerId]) {
+                userStats[ownerId].latestImage = ownerImg;
+            }
+            const score = (status === 'approved') ? (parseInt(p.Score) || 10) : 0;
+            
+            // 🌟 [MAPPING HELPER] แปลงชื่อหมวดให้เป็น Key มาตรฐาน
+            const getVirtueKey = (v) => {
+                const str = String(v || "").trim().toLowerCase();
+                if (str.includes('จิตอาสา') || str.includes('volunteer')) return 'volunteer';
+                if (str.includes('พอเพียง') || str.includes('sufficiency')) return 'sufficiency';
+                if (str.includes('วินัย') || str.includes('discipline')) return 'discipline';
+                if (str.includes('สุจริต') || str.includes('integrity')) return 'integrity';
+                if (str.includes('กตัญญู') || str.includes('gratitude')) return 'gratitude';
+                return null;
+            };
+            const vKey = getVirtueKey(p.Virtue || p.virtue);
+            
+            const happy = parseInt(p.Happy || p.HappyLevel || 0);
+
+            // บันทึกสถิติเจ้าของโพสต์
+            if (ownerId && userStats[ownerId]) {
+                userStats[ownerId].totalCount++;
+                if (happy > 0) {
+                    userStats[ownerId].sumHappy += happy;
+                }
+                if (score > 0) {
+                    userStats[ownerId].score += (score + 3); // 10 + 3 (สุจริต)
+                    if (vKey && userStats[ownerId].vStats[vKey] !== undefined) {
+                        userStats[ownerId].vStats[vKey] += score;
+                    }
+                    userStats[ownerId].vStats.integrity += 3;
+                }
+                const pDate = new Date(p.Date + 'T' + (p.Time || '00:00:00'));
+                if (!userStats[ownerId].lastActive || pDate > userStats[ownerId].lastActive) {
+                    userStats[ownerId].lastActive = pDate;
+                }
+            }
+
+            // บันทึกสถิติคนถูกแท็ก
+            tagged.forEach(tid => {
+                if (userStats[tid]) {
+                    userStats[tid].taggedCount++;
+                    if (score > 0) {
+                        userStats[tid].score += (score + 3); // 10 + 3 (สุจริต)
+                        if (vKey && userStats[tid].vStats[vKey] !== undefined) {
+                            userStats[tid].vStats[vKey] += score;
+                        }
+                        userStats[tid].vStats.integrity += 3;
+                    }
+                }
+            });
+
+            // บันทึกสถิติพยาน (Witness)
+            let json = p.JSON || {};
+            if (typeof json === 'string') try { json = JSON.parse(json); } catch(e){}
+            const verifies = json.verifies || json.Verify || [];
+            verifies.forEach((v, idx) => {
+                if (!v || idx >= 2) return;
+                const vid = (typeof v === 'object' ? (v.userId || v.lineId || "") : v).toString().trim();
+                if (userStats[vid]) {
+                    userStats[vid].score += 1;
+                    userStats[vid].vStats.volunteer += 1;
+                    userStats[vid].witnessCount++;
+                }
+            });
+        });
+
+        // 4. บันทึกกลับลงฐานข้อมูล
+        let successCount = 0;
+        const totalUsers = allUsers.length;
+        
+        for (const uid of Object.keys(userStats)) {
+            const stat = userStats[uid];
+            const baseHappy = stat.sumHappy * 0.5;
+            let penalty = 0;
+            if (stat.lastActive) {
+                const diffDays = Math.floor((Date.now() - stat.lastActive.getTime()) / (1000 * 60 * 60 * 24));
+                penalty = Math.floor(diffDays / 3) * 0.5;
+            }
+            const finalHappy = Math.min(10, Math.max(0, baseHappy - penalty));
+            const level = Math.floor(stat.score / 500) + 1;
+
+            const updatePayload = {
+                "Score": stat.score,
+                "Level": level,
+                "HappyScore": finalHappy,
+                "VirtueStats": stat.vStats,
+                "TotalCount": stat.totalCount,
+                "TaggedCount": stat.taggedCount,
+                "WitnessCount": stat.witnessCount,
+                "LastDate": stat.lastActive ? stat.lastActive.toISOString().split('T')[0] : null,
+                "LastTime": stat.lastActive ? stat.lastActive.toTimeString().split(' ')[0] : null
+            };
+
+            await supabaseClient.from('Users').update(updatePayload).eq('LineID', uid);
+            successCount++;
+            Swal.update({ html: `กำลังบันทึกข้อมูล... (${successCount}/${totalUsers})` });
+        }
+
+        await Swal.fire({ icon: 'success', title: 'ซิงค์ข้อมูลสำเร็จ! 🎉', text: `ปรับปรุงข้อมูลพนักงาน ${successCount} รายชื่อเรียบร้อย` });
+        location.reload();
+
+    } catch (e) {
+        console.error("Repair Error:", e);
+        Swal.fire('Error', 'เกิดข้อผิดพลาด: ' + e.message, 'error');
+    }
+}
