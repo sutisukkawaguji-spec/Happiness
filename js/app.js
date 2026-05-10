@@ -254,31 +254,15 @@ function renderProfile() {
         else auraEl.classList.add('aura-lv-1');
     }
 
-    // วิเคราะห์จุดเด่น
-    const domVirtue = currentUser.dominantVirtue || 'none';
-    const statConfig = {
-        'volunteer': { title: '💖 จิตอาสาตัวจริง', desc: 'คุณโดดเด่นด้านการเสียสละ ชอบช่วยเหลือผู้อื่น เป็นที่รักของเพื่อนร่วมงาน', color: '#3498db', bg: '#e8f4fc' },
-        'sufficiency': { title: '🌱 ปราชญ์แห่งความพอเพียง', desc: 'คุณใช้ชีวิตอย่างสมดุล รู้จักความพอดี และใช้ทรัพยากรอย่างคุ้มค่า', color: '#2ecc71', bg: '#eafaf1' },
-        'discipline': { title: '⚡ เจ้าแห่งวินัย', desc: 'คุณมีความรับผิดชอบสูง ตรงต่อเวลา เป็นแบบอย่างที่ดีในองค์กร', color: '#9b59b6', bg: '#f5eef8' },
-        'integrity': { title: '🛡️ ผู้พิทักษ์ความถูกต้อง', desc: 'คุณยึดมั่นในความซื่อสัตย์ โปร่งใส และได้รับความไว้วางใจสูงสุด', color: '#00cec9', bg: '#e0fbfc' },
-        'gratitude': { title: '🙏 ยอดคนกตัญญู', desc: 'คุณให้ความสำคัญกับผู้มีพระคุณ อ่อนน้อมถ่อมตน และรู้จักตอบแทน', color: '#e84393', bg: '#fcecf5' },
-        'none': { title: '🌟 ผู้เริ่มต้นเดินทาง', desc: 'เริ่มสะสมความดีในด้านต่างๆ เพื่อค้นหาพลังที่ซ่อนอยู่ของคุณกันเถอะ!', color: '#95a5a6', bg: '#f4f6f6' }
-    };
-
-    const cfg = statConfig[domVirtue] || statConfig['none'];
-    const statBox = document.getElementById('statAnalysis');
-    if (statBox) {
-        const statTitle = document.getElementById('statTitle');
-        const statDesc = document.getElementById('statDesc');
-        if (statTitle) {
-            statTitle.innerHTML = `<i class="fas fa-quote-left fa-xs me-2 opacity-50"></i>${cfg.title}`;
-            statTitle.style.color = cfg.color;
-        }
-        if (statDesc) statDesc.innerText = cfg.desc;
-        statBox.style.backgroundColor = cfg.bg;
-        statBox.style.borderColor = cfg.color;
-        statBox.style.borderLeftWidth = '5px';
+    // ✨ วิเคราะห์จุดเด่น (คำคมใต้กราฟ)
+    const v = currentUser.virtueStats || {};
+    const getV = (key) => parseFloat(v[key] || v[key.charAt(0).toUpperCase() + key.slice(1)] || 0);
+    const dataPoints = [getV('volunteer'), getV('sufficiency'), getV('discipline'), getV('integrity'), getV('gratitude')];
+    
+    if (typeof updateStatAnalysis === 'function') {
+        updateStatAnalysis(dataPoints);
     }
+
 
     // 🌟 วาดกราฟแมงมุมเฉพาะเมื่อหน้าสถิติเปิดอยู่เท่านั้น เพื่อป้องกันกราฟกระจุกเป็นจุด (Zero-size canvas)
     const statsPage = document.getElementById('page-stats');
@@ -1769,7 +1753,6 @@ function initUserRadar() {
 
     window._radarRetryCount = 0; // Reset count
 
-    window._radarRetryCount = 0; // Reset count
 
     // 🌟 [CRITICAL FIX] ถ้าฐานข้อมูลสถิติรวมยังว่างเปล่า ให้ดึงจากข้อมูลพื้นฐานที่ Cache ไว้ก่อน
     if (!Object.keys(globalUserStatsMap || {}).length && Object.keys(allUsersMap || {}).length) {
@@ -1896,6 +1879,63 @@ function initUserRadar() {
 
     if (typeof updateStatAnalysis === 'function') updateStatAnalysis(dataPoints);
 }
+
+/**
+ * 🌟 [NEW] วิเคราะห์และแสดงคำคม/คำแนะนำใต้กราฟแมงมุมแบบไดนามิก
+ * @param {Array} dataPoints - [volunteer, sufficiency, discipline, integrity, gratitude]
+ */
+function updateStatAnalysis(dataPoints) {
+    if (!dataPoints || !Array.isArray(dataPoints)) return;
+
+    const keys = ['volunteer', 'sufficiency', 'discipline', 'integrity', 'gratitude'];
+    let maxIdx = -1;
+    let maxVal = -1;
+
+    dataPoints.forEach((val, idx) => {
+        if (val > maxVal) {
+            maxVal = val;
+            maxIdx = idx;
+        }
+    });
+
+    // ถ้ายังไม่มีคะแนนเลย ให้เป็น none
+    const dominant = (maxVal > 0) ? keys[maxIdx] : 'none';
+    
+    const statConfig = {
+        'volunteer': { title: '💖 จิตอาสาตัวจริง', desc: 'คุณโดดเด่นด้านการเสียสละ ชอบช่วยเหลือผู้อื่น เป็นที่รักของเพื่อนร่วมงาน', color: '#3498db', bg: '#e8f4fc' },
+        'sufficiency': { title: '🌱 ปราชญ์แห่งความพอเพียง', desc: 'คุณใช้ชีวิตอย่างสมดุล รู้จักความพอดี และใช้ทรัพยากรอย่างคุ้มค่า', color: '#2ecc71', bg: '#eafaf1' },
+        'discipline': { title: '⚡ เจ้าแห่งวินัย', desc: 'คุณมีความรับผิดชอบสูง ตรงต่อเวลา เป็นแบบอย่างที่ดีในองค์กร', color: '#9b59b6', bg: '#f5eef8' },
+        'integrity': { title: '🛡️ ผู้พิทักษ์ความถูกต้อง', desc: 'คุณยึดมั่นในความซื่อสัตย์ โปร่งใส และได้รับความไว้วางใจสูงสุด', color: '#00cec9', bg: '#e0fbfc' },
+        'gratitude': { title: '🙏 ยอดคนกตัญญู', desc: 'คุณให้ความสำคัญกับผู้มีพระคุณ อ่อนน้อมถ่อมตน และรู้จักตอบแทน', color: '#e84393', bg: '#fcecf5' },
+        'none': { title: '🌟 ผู้เริ่มต้นเดินทาง', desc: 'เริ่มสะสมความดีในด้านต่างๆ เพื่อค้นหาพลังที่ซ่อนอยู่ของคุณกันเถอะ!', color: '#95a5a6', bg: '#f4f6f6' }
+    };
+
+    const cfg = statConfig[dominant] || statConfig['none'];
+    const statBox = document.getElementById('statAnalysis');
+    
+    if (statBox) {
+        const statTitle = document.getElementById('statTitle');
+        const statDesc = document.getElementById('statDesc');
+        
+        // เพิ่ม Animation เล็กน้อยเมื่อเปลี่ยนข้อความ
+        statBox.style.opacity = '0';
+        
+        setTimeout(() => {
+            if (statTitle) {
+                statTitle.innerHTML = `<i class="fas fa-quote-left fa-xs me-2 opacity-50"></i>${cfg.title}`;
+                statTitle.style.color = cfg.color;
+            }
+            if (statDesc) statDesc.innerText = cfg.desc;
+            
+            statBox.style.backgroundColor = cfg.bg;
+            statBox.style.borderColor = cfg.color;
+            statBox.style.borderLeftWidth = '6px';
+            statBox.style.opacity = '1';
+            statBox.style.transform = 'translateY(0)';
+        }, 300);
+    }
+}
+
 
 function renderManagerChart() {
     const ctx = document.getElementById('managerLineChart');
